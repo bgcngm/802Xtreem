@@ -67,6 +67,11 @@ include/linux/version.h
 include/generated
 arch/*/include/generated
 
+#
+# Generated include files
+#
+build_result
+
 # stgit generated dirs
 patches-*
 
