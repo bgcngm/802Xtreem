@@ -183,5 +183,7 @@ extern void sweep2wake_setdev(struct input_dev * input_device);
 extern unsigned int phone_call_stat;
 #endif
 
+extern uint8_t touchscreen_is_on(void);  
+
 extern uint8_t getPowerKeyState(void);
 #endif 
