@@ -1174,8 +1174,14 @@ int usb_suspend(struct device *dev, pm_message_t msg)
 		}
 	}
 
-	if (udev->bus->skip_resume && udev->state == USB_STATE_SUSPENDED)
-		return 0;
+	if (udev->bus->skip_resume) {
+		if (udev->state == USB_STATE_SUSPENDED) {
+			return 0;
+		} else {
+			dev_err(dev, "abort suspend\n");
+			return -EBUSY;
+		}
+	}
 
 	unbind_no_pm_drivers_interfaces(udev);
 
