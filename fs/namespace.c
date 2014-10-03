@@ -1572,11 +1572,11 @@ static int do_new_mount(struct path *path, char *type, int flags,
 	err = do_add_mount(real_mount(mnt), path, mnt_flags);
 	if (err)
 		mntput(mnt);
-
-	
+#ifdef CONFIG_ASYNC_FSYNC
 	if (!err && ((!strcmp(type, "ext4") && !strcmp(path->dentry->d_name.name, "data"))
 		|| (!strcmp(type, "fuse") && !strcmp(path->dentry->d_name.name, "emulated"))))
 		mnt->mnt_sb->fsync_flags |= FLAG_ASYNC_FSYNC;
+#endif
 	return err;
 }
 
@@ -1996,9 +1996,9 @@ SYSCALL_DEFINE5(mount, char __user *, dev_name, char __user *, dir_name,
 		char __user *, type, unsigned long, flags, void __user *, data)
 {
 	int ret;
-	char *kernel_type = NULL;
+	char *kernel_type;
 	char *kernel_dir;
-	char *kernel_dev = NULL;
+	char *kernel_dev;
 	unsigned long data_page;
 
 	ret = copy_mount_string(type, &kernel_type);

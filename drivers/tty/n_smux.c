@@ -1448,7 +1448,7 @@ out:
 static int smux_handle_rx_status_cmd(struct smux_pkt_t *pkt)
 {
 	uint8_t lcid;
-	int ret;
+	int ret = 0;
 	struct smux_lch_t *ch;
 	union notifier_metadata meta;
 	unsigned long flags;

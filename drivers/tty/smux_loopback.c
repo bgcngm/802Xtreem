@@ -55,6 +55,14 @@ int smux_tx_loopback(struct smux_pkt_t *pkt_ptr)
 
 	
 	send_pkt = smux_alloc_pkt();
+
+	
+	if (!send_pkt) {
+		pr_err("%s: send_pkt alloc fail.\n", __func__);
+		ret = -ENOMEM;
+		goto out;
+	}
+
 	send_pkt->hdr = pkt_ptr->hdr;
 	if (pkt_ptr->hdr.payload_len) {
 		ret = smux_alloc_pkt_payload(send_pkt);

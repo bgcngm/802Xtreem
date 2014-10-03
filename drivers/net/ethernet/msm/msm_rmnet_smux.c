@@ -355,9 +355,11 @@ void rmnet_smux_notify(void *priv, int event_type, const void *metadata)
 	const struct smux_meta_write *write_meta_info = metadata;
 
 
-	if (!priv)
+	if (!priv){
 		DBG0("%s: priv(cookie) NULL, ignoring notification:"
-		     " %d\n", __func__, event_type);
+			 " %d\n", __func__, event_type);
+		return;
+	}
 
 	switch (event_type) {
 	case SMUX_CONNECTED:

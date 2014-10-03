@@ -366,6 +366,12 @@ void trigger_qsc_fatal_err(const char *reason)
 		pr_err("%s: reason <%s", __func__, "NULL");
 
 	pr_err("%s: Trigger QSC err fatal.\n", __func__);
+
+	if(!mdm_drv){
+		pr_err("%s: qsc driver is NULL.\n", __func__);
+		return;
+	}
+
 	mdm_drv->mdm_ready = 0;
 	if( mdm_drv && GPIO_IS_VALID(mdm_drv->ap2mdm_status_gpio) )
 		gpio_direction_output(mdm_drv->ap2mdm_status_gpio, 0);
