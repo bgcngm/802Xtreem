@@ -51,6 +51,8 @@ unsigned int wcnss_get_serial_number(void);
 void *wcnss_prealloc_get(unsigned int size);
 int wcnss_prealloc_put(void *ptr);
 void wcnss_reset_intr(void);
+int wcnss_device_ready(void);
+int wcnss_device_is_shutdown(void);
 #define wcnss_wlan_get_drvdata(dev) dev_get_drvdata(dev)
 #define wcnss_wlan_set_drvdata(dev, data) dev_set_drvdata((dev), (data))
 

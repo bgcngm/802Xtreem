@@ -118,7 +118,7 @@ enum bug_trap_type report_bug(unsigned long bugaddr, struct pt_regs *regs)
 		{
 			printk(KERN_WARNING "WARNING: at %s:%u\n",
 			       file, line);
-			snprintf(ramdump_buf, sizeof(ramdump_buf), "kernel BUG at %s:%u!", file, line);
+			sprintf(ramdump_buf, "kernel BUG at %s:%u!", file, line);
 		}
 		else
 		{

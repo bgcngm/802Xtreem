@@ -457,6 +457,18 @@ config MACH_ZARA_CL
 	help
 	  Support for the HTC ZARA_CL
 
+config MACH_ZARA_WL
+	depends on ARCH_MSM8930
+	bool "ZARA_WL"
+	help
+	  Support for the HTC ZARA_WL
+
+config MACH_CP5_WL
+	depends on ARCH_MSM8930
+	bool "CP5_WL"
+	help
+	  Support for the HTC CP5_WL
+
 config MACH_K2_UL
 	depends on ARCH_MSM8930
 	bool "K2_UL"
