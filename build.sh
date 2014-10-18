@@ -1,16 +1,35 @@
 #!/bin/bash
 
-DEFCONFIG_FILE=m7cdug_defconfig
-
-if [ -z "$DEFCONFIG_FILE" ]; then
-	echo "Need defconfig file(j1v-perf_defconfig)!"
-	exit -1
-fi
+clear
+# allow user to choose which variant to build
+PS3='Choose variant to build: '
+select variant in "802W" "802D" "802T"
+do
+	if [ -z $variant ] ; then
+		echo "Wrong selection!"
+		exit -1
+	else
+		if [ $variant = "802W" ] ; then
+			CODENAME=m7cdug
+		else
+			if [ $variant = "802D" ] ; then
+				CODENAME=m7cdwg
+			else
+				CODENAME=m7cdtu
+			fi
+		fi
+	fi
+	break
+done
+clear
+DEFCONFIG_FILE=$CODENAME"_defconfig"
 
 if [ ! -e arch/arm/configs/$DEFCONFIG_FILE ]; then
 	echo "No such file : arch/arm/configs/$DEFCONFIG_FILE"
 	exit -1
 fi
+
+echo "**** $variant variant ****"
 
 
 # define toolchain
@@ -21,6 +40,15 @@ if [ ! -e ./.config ]; then
 	echo "**** Creating .config file ****"
 	env KCONFIG_NOTIMESTAMP=true \
 	make ${DEFCONFIG_FILE}
+else
+	grep -q $CODENAME ./.config
+	if [ $? -ne 0 ]; then
+		echo "**** Discarding old .config file ****"
+		rm ./.config
+		echo "**** Creating .config file ****"
+		env KCONFIG_NOTIMESTAMP=true \
+		make ${DEFCONFIG_FILE}
+	fi
 fi
 
 # build the kernel
