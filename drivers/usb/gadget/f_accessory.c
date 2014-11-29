@@ -15,6 +15,8 @@
  *
  */
 
+/* #define DEBUG */
+/* #define VERBOSE_DEBUG */
 
 #include <linux/module.h>
 #include <linux/init.h>
@@ -31,8 +33,6 @@
 #include <linux/device.h>
 #include <linux/miscdevice.h>
 
-#include <linux/hid.h>
-#include <linux/hiddev.h>
 #include <linux/usb.h>
 #include <linux/usb/ch9.h>
 #include <linux/usb/f_accessory.h>
@@ -40,26 +40,14 @@
 #define BULK_BUFFER_SIZE    16384
 #define ACC_STRING_SIZE     256
 
-#define PROTOCOL_VERSION    2
+#define PROTOCOL_VERSION    1
 
+/* String IDs */
 #define INTERFACE_STRING_INDEX	0
 
+/* number of tx and rx requests to allocate */
 #define TX_REQ_MAX 4
 #define RX_REQ_MAX 2
-
-struct acc_hid_dev {
-	struct list_head	list;
-	struct hid_device *hid;
-	struct acc_dev *dev;
-	
-	int id;
-	
-	u8 *report_desc;
-	
-	int report_desc_len;
-	
-	int report_desc_offset;
-};
 
 struct acc_dev {
 	struct usb_function function;
@@ -69,11 +57,14 @@ struct acc_dev {
 	struct usb_ep *ep_in;
 	struct usb_ep *ep_out;
 
-	
+	/* set to 1 when we connect */
 	int online:1;
+	/* Set to 1 when we disconnect.
+	 * Not cleared until our file is closed.
+	 */
 	int disconnected:1;
 
-	
+	/* strings sent by the host */
 	char manufacturer[ACC_STRING_SIZE];
 	char model[ACC_STRING_SIZE];
 	char description[ACC_STRING_SIZE];
@@ -81,15 +72,13 @@ struct acc_dev {
 	char uri[ACC_STRING_SIZE];
 	char serial[ACC_STRING_SIZE];
 
-	
+	/* for acc_complete_set_string */
 	int string_index;
 
-	
+	/* set to 1 if we have a pending start request */
 	int start_requested;
 
-	int audio_mode;
-
-	
+	/* synchronize access to our device file */
 	atomic_t open_excl;
 
 	struct list_head tx_idle;
@@ -98,21 +87,7 @@ struct acc_dev {
 	wait_queue_head_t write_wq;
 	struct usb_request *rx_req[RX_REQ_MAX];
 	int rx_done;
-
-	
-	struct delayed_work start_work;
-
-	
-	struct work_struct hid_work;
-
-	
-	struct list_head	hid_list;
-
-	
-	struct list_head	new_hid_list;
-
-	
-	struct list_head	dead_hid_list;
+	struct delayed_work work;
 };
 
 static struct usb_interface_descriptor acc_interface_desc = {
@@ -124,41 +99,6 @@ static struct usb_interface_descriptor acc_interface_desc = {
 	.bInterfaceSubClass     = USB_SUBCLASS_VENDOR_SPEC,
 	.bInterfaceProtocol     = 0,
 };
-
-static struct usb_endpoint_descriptor acc_superspeed_in_desc = {
-	.bLength                = USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType        = USB_DT_ENDPOINT,
-	.bEndpointAddress       = USB_DIR_IN,
-	.bmAttributes           = USB_ENDPOINT_XFER_BULK,
-	.wMaxPacketSize         = __constant_cpu_to_le16(1024),
-};
-
-static struct usb_ss_ep_comp_descriptor acc_superspeed_in_comp_desc = {
-	.bLength =		sizeof acc_superspeed_in_comp_desc,
-	.bDescriptorType =	USB_DT_SS_ENDPOINT_COMP,
-
-	
-	
-	
-};
-
-static struct usb_endpoint_descriptor acc_superspeed_out_desc = {
-	.bLength                = USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType        = USB_DT_ENDPOINT,
-	.bEndpointAddress       = USB_DIR_OUT,
-	.bmAttributes           = USB_ENDPOINT_XFER_BULK,
-	.wMaxPacketSize         = __constant_cpu_to_le16(1024),
-};
-
-static struct usb_ss_ep_comp_descriptor acc_superspeed_out_comp_desc = {
-	.bLength =		sizeof acc_superspeed_out_comp_desc,
-	.bDescriptorType =	USB_DT_SS_ENDPOINT_COMP,
-
-	
-	
-	
-};
-
 
 static struct usb_endpoint_descriptor acc_highspeed_in_desc = {
 	.bLength                = USB_DT_ENDPOINT_SIZE,
@@ -204,22 +144,13 @@ static struct usb_descriptor_header *hs_acc_descs[] = {
 	NULL,
 };
 
-static struct usb_descriptor_header *ss_acc_descs[] = {
-	(struct usb_descriptor_header *) &acc_interface_desc,
-	(struct usb_descriptor_header *) &acc_superspeed_in_desc,
-	(struct usb_descriptor_header *) &acc_superspeed_in_comp_desc,
-	(struct usb_descriptor_header *) &acc_superspeed_out_desc,
-	(struct usb_descriptor_header *) &acc_superspeed_out_comp_desc,
-	NULL,
-};
-
 static struct usb_string acc_string_defs[] = {
 	[INTERFACE_STRING_INDEX].s	= "Android Accessory Interface",
-	{  },	
+	{  },	/* end of list */
 };
 
 static struct usb_gadget_strings acc_string_table = {
-	.language		= 0x0409,	
+	.language		= 0x0409,	/* en-US */
 	.strings		= acc_string_defs,
 };
 
@@ -228,6 +159,7 @@ static struct usb_gadget_strings *acc_strings[] = {
 	NULL,
 };
 
+/* temporary variable used between acc_open() and acc_gadget_bind() */
 static struct acc_dev *_acc_dev;
 
 static inline struct acc_dev *func_to_dev(struct usb_function *f)
@@ -241,7 +173,7 @@ static struct usb_request *acc_request_new(struct usb_ep *ep, int buffer_size)
 	if (!req)
 		return NULL;
 
-	
+	/* now allocate buffers for the requests */
 	req->buf = kmalloc(buffer_size, GFP_KERNEL);
 	if (!req->buf) {
 		usb_ep_free_request(ep, req);
@@ -259,6 +191,7 @@ static void acc_request_free(struct usb_request *req, struct usb_ep *ep)
 	}
 }
 
+/* add a request to the tail of a list */
 static void req_put(struct acc_dev *dev, struct list_head *head,
 		struct usb_request *req)
 {
@@ -269,6 +202,7 @@ static void req_put(struct acc_dev *dev, struct list_head *head,
 	spin_unlock_irqrestore(&dev->lock, flags);
 }
 
+/* remove a request from the head of a list */
 static struct usb_request *req_get(struct acc_dev *dev, struct list_head *head)
 {
 	unsigned long flags;
@@ -353,164 +287,13 @@ static void acc_complete_set_string(struct usb_ep *ep, struct usb_request *req)
 
 		spin_lock_irqsave(&dev->lock, flags);
 		memcpy(string_dest, req->buf, length);
-		
+		/* ensure zero termination */
 		string_dest[length] = 0;
 		spin_unlock_irqrestore(&dev->lock, flags);
 	} else {
 		pr_err("unknown accessory string index %d\n",
 			dev->string_index);
 	}
-}
-
-static void acc_complete_set_hid_report_desc(struct usb_ep *ep,
-		struct usb_request *req)
-{
-	struct acc_hid_dev *hid = req->context;
-	struct acc_dev *dev = hid->dev;
-	int length = req->actual;
-
-	if (req->status != 0) {
-		pr_err("acc_complete_set_hid_report_desc, err %d\n",
-			req->status);
-		return;
-	}
-
-	memcpy(hid->report_desc + hid->report_desc_offset, req->buf, length);
-	hid->report_desc_offset += length;
-	if (hid->report_desc_offset == hid->report_desc_len) {
-		schedule_work(&dev->hid_work);
-	}
-}
-
-static void acc_complete_send_hid_event(struct usb_ep *ep,
-		struct usb_request *req)
-{
-	struct acc_hid_dev *hid = req->context;
-	int length = req->actual;
-
-	if (req->status != 0) {
-		pr_err("acc_complete_send_hid_event, err %d\n", req->status);
-		return;
-	}
-
-	hid_report_raw_event(hid->hid, HID_INPUT_REPORT, req->buf, length, 1);
-}
-
-static int acc_hid_parse(struct hid_device *hid)
-{
-	struct acc_hid_dev *hdev = hid->driver_data;
-
-	hid_parse_report(hid, hdev->report_desc, hdev->report_desc_len);
-	return 0;
-}
-
-static int acc_hid_start(struct hid_device *hid)
-{
-	return 0;
-}
-
-static void acc_hid_stop(struct hid_device *hid)
-{
-}
-
-static int acc_hid_open(struct hid_device *hid)
-{
-	return 0;
-}
-
-static void acc_hid_close(struct hid_device *hid)
-{
-}
-
-static struct hid_ll_driver acc_hid_ll_driver = {
-	.parse = acc_hid_parse,
-	.start = acc_hid_start,
-	.stop = acc_hid_stop,
-	.open = acc_hid_open,
-	.close = acc_hid_close,
-};
-
-static struct acc_hid_dev *acc_hid_new(struct acc_dev *dev,
-		int id, int desc_len)
-{
-	struct acc_hid_dev *hdev;
-
-	hdev = kzalloc(sizeof(*hdev), GFP_ATOMIC);
-	if (!hdev)
-		return NULL;
-	hdev->report_desc = kzalloc(desc_len, GFP_ATOMIC);
-	if (!hdev->report_desc) {
-		kfree(hdev);
-		return NULL;
-	}
-	hdev->dev = dev;
-	hdev->id = id;
-	hdev->report_desc_len = desc_len;
-
-	return hdev;
-}
-
-static struct acc_hid_dev *acc_hid_get(struct list_head *list, int id)
-{
-	struct acc_hid_dev *hid;
-
-	list_for_each_entry(hid, list, list) {
-		if (hid->id == id)
-			return hid;
-	}
-	return NULL;
-}
-
-static int acc_register_hid(struct acc_dev *dev, int id, int desc_length)
-{
-	struct acc_hid_dev *hid;
-	unsigned long flags;
-
-	
-	if (desc_length <= 0)
-		return -EINVAL;
-
-	spin_lock_irqsave(&dev->lock, flags);
-	
-	hid = acc_hid_get(&dev->hid_list, id);
-	if (!hid)
-		hid = acc_hid_get(&dev->new_hid_list, id);
-	if (hid)
-		list_move(&hid->list, &dev->dead_hid_list);
-
-	hid = acc_hid_new(dev, id, desc_length);
-	if (!hid) {
-		spin_unlock_irqrestore(&dev->lock, flags);
-		return -ENOMEM;
-	}
-
-	list_add(&hid->list, &dev->new_hid_list);
-	spin_unlock_irqrestore(&dev->lock, flags);
-
-	
-	schedule_work(&dev->hid_work);
-	return 0;
-}
-
-static int acc_unregister_hid(struct acc_dev *dev, int id)
-{
-	struct acc_hid_dev *hid;
-	unsigned long flags;
-
-	spin_lock_irqsave(&dev->lock, flags);
-	hid = acc_hid_get(&dev->hid_list, id);
-	if (!hid)
-		hid = acc_hid_get(&dev->new_hid_list, id);
-	if (!hid) {
-		spin_unlock_irqrestore(&dev->lock, flags);
-		return -EINVAL;
-	}
-
-	list_move(&hid->list, &dev->dead_hid_list);
-	spin_unlock_irqrestore(&dev->lock, flags);
-
-	schedule_work(&dev->hid_work);
-	return 0;
 }
 
 static int create_bulk_endpoints(struct acc_dev *dev,
@@ -530,7 +313,7 @@ static int create_bulk_endpoints(struct acc_dev *dev,
 		return -ENODEV;
 	}
 	DBG(cdev, "usb_ep_autoconfig for ep_in got %s\n", ep->name);
-	ep->driver_data = dev;		
+	ep->driver_data = dev;		/* claim the endpoint */
 	dev->ep_in = ep;
 
 	ep = usb_ep_autoconfig(cdev->gadget, out_desc);
@@ -539,7 +322,7 @@ static int create_bulk_endpoints(struct acc_dev *dev,
 		return -ENODEV;
 	}
 	DBG(cdev, "usb_ep_autoconfig for ep_out got %s\n", ep->name);
-	ep->driver_data = dev;		
+	ep->driver_data = dev;		/* claim the endpoint */
 	dev->ep_out = ep;
 
 	ep = usb_ep_autoconfig(cdev->gadget, out_desc);
@@ -548,10 +331,10 @@ static int create_bulk_endpoints(struct acc_dev *dev,
 		return -ENODEV;
 	}
 	DBG(cdev, "usb_ep_autoconfig for ep_out got %s\n", ep->name);
-	ep->driver_data = dev;		
+	ep->driver_data = dev;		/* claim the endpoint */
 	dev->ep_out = ep;
 
-	
+	/* now allocate requests for our endpoints */
 	for (i = 0; i < TX_REQ_MAX; i++) {
 		req = acc_request_new(dev->ep_in, BULK_BUFFER_SIZE);
 		if (!req)
@@ -570,7 +353,7 @@ static int create_bulk_endpoints(struct acc_dev *dev,
 	return 0;
 
 fail:
-	pr_err("acc_bind() could not allocate requests\n");
+	printk(KERN_ERR "acc_bind() could not allocate requests\n");
 	while ((req = req_get(dev, &dev->tx_idle)))
 		acc_request_free(req, dev->ep_in);
 	for (i = 0; i < RX_REQ_MAX; i++)
@@ -594,7 +377,7 @@ static ssize_t acc_read(struct file *fp, char __user *buf,
 	if (count > BULK_BUFFER_SIZE)
 		count = BULK_BUFFER_SIZE;
 
-	
+	/* we will block until we're online */
 	pr_debug("acc_read: waiting for online\n");
 	ret = wait_event_interruptible(dev->read_wq, dev->online);
 	if (ret < 0) {
@@ -603,7 +386,7 @@ static ssize_t acc_read(struct file *fp, char __user *buf,
 	}
 
 requeue_req:
-	
+	/* queue a request */
 	req = dev->rx_req[0];
 	req->length = count;
 	dev->rx_done = 0;
@@ -615,7 +398,7 @@ requeue_req:
 		pr_debug("rx %p queue\n", req);
 	}
 
-	
+	/* wait for a request to complete */
 	ret = wait_event_interruptible(dev->read_wq, dev->rx_done);
 	if (ret < 0) {
 		r = ret;
@@ -623,7 +406,7 @@ requeue_req:
 		goto done;
 	}
 	if (dev->online) {
-		
+		/* If we got a 0-len packet, throw it back and try again. */
 		if (req->actual == 0)
 			goto requeue_req;
 
@@ -660,7 +443,7 @@ static ssize_t acc_write(struct file *fp, const char __user *buf,
 			break;
 		}
 
-		
+		/* get an idle tx request to use */
 		req = 0;
 		ret = wait_event_interruptible(dev->write_wq,
 			((req = req_get(dev, &dev->tx_idle)) || !dev->online));
@@ -689,7 +472,7 @@ static ssize_t acc_write(struct file *fp, const char __user *buf,
 		buf += xfer;
 		count -= xfer;
 
-		
+		/* zero this so we don't try to free it on error exit */
 		req = 0;
 	}
 
@@ -727,8 +510,6 @@ static long acc_ioctl(struct file *fp, unsigned code, unsigned long value)
 		break;
 	case ACCESSORY_IS_START_REQUESTED:
 		return dev->start_requested;
-	case ACCESSORY_GET_AUDIO_MODE:
-		return dev->audio_mode;
 	}
 	if (!src)
 		return -EINVAL;
@@ -759,6 +540,7 @@ static int acc_release(struct inode *ip, struct file *fp)
 	return 0;
 }
 
+/* file operations for /dev/acc_usb */
 static const struct file_operations acc_fops = {
 	.owner = THIS_MODULE,
 	.read = acc_read,
@@ -768,95 +550,41 @@ static const struct file_operations acc_fops = {
 	.release = acc_release,
 };
 
-static int acc_hid_probe(struct hid_device *hdev,
-		const struct hid_device_id *id)
-{
-	int ret;
-
-	ret = hid_parse(hdev);
-	if (ret)
-		return ret;
-	return hid_hw_start(hdev, HID_CONNECT_DEFAULT);
-}
-
 static struct miscdevice acc_device = {
 	.minor = MISC_DYNAMIC_MINOR,
 	.name = "usb_accessory",
 	.fops = &acc_fops,
 };
 
-static const struct hid_device_id acc_hid_table[] = {
-	{ HID_USB_DEVICE(HID_ANY_ID, HID_ANY_ID) },
-	{ }
-};
-
-static struct hid_driver acc_hid_driver = {
-	.name = "USB accessory",
-	.id_table = acc_hid_table,
-	.probe = acc_hid_probe,
-};
 
 static int acc_ctrlrequest(struct usb_composite_dev *cdev,
 				const struct usb_ctrlrequest *ctrl)
 {
 	struct acc_dev	*dev = _acc_dev;
 	int	value = -EOPNOTSUPP;
-	struct acc_hid_dev *hid;
-	int offset;
 	u8 b_requestType = ctrl->bRequestType;
 	u8 b_request = ctrl->bRequest;
 	u16	w_index = le16_to_cpu(ctrl->wIndex);
 	u16	w_value = le16_to_cpu(ctrl->wValue);
 	u16	w_length = le16_to_cpu(ctrl->wLength);
-	unsigned long flags;
 
+/*
+	printk(KERN_INFO "acc_ctrlrequest "
+			"%02x.%02x v%04x i%04x l%u\n",
+			b_requestType, b_request,
+			w_value, w_index, w_length);
+*/
 
 	if (b_requestType == (USB_DIR_OUT | USB_TYPE_VENDOR)) {
 		if (b_request == ACCESSORY_START) {
 			dev->start_requested = 1;
 			schedule_delayed_work(
-				&dev->start_work, msecs_to_jiffies(10));
+				&dev->work, msecs_to_jiffies(10));
 			value = 0;
 		} else if (b_request == ACCESSORY_SEND_STRING) {
 			dev->string_index = w_index;
 			cdev->gadget->ep0->driver_data = dev;
 			cdev->req->complete = acc_complete_set_string;
-			value = w_length;
-		} else if (b_request == ACCESSORY_SET_AUDIO_MODE &&
-				w_index == 0 && w_length == 0) {
-			dev->audio_mode = w_value;
-			value = 0;
-		} else if (b_request == ACCESSORY_REGISTER_HID) {
-			value = acc_register_hid(dev, w_value, w_index);
-		} else if (b_request == ACCESSORY_UNREGISTER_HID) {
-			value = acc_unregister_hid(dev, w_value);
-		} else if (b_request == ACCESSORY_SET_HID_REPORT_DESC) {
-			spin_lock_irqsave(&dev->lock, flags);
-			hid = acc_hid_get(&dev->new_hid_list, w_value);
-			spin_unlock_irqrestore(&dev->lock, flags);
-			if (!hid) {
-				value = -EINVAL;
-				goto err;
-			}
-			offset = w_index;
-			if (offset != hid->report_desc_offset
-				|| offset + w_length > hid->report_desc_len) {
-				value = -EINVAL;
-				goto err;
-			}
-			cdev->req->context = hid;
-			cdev->req->complete = acc_complete_set_hid_report_desc;
-			value = w_length;
-		} else if (b_request == ACCESSORY_SEND_HID_EVENT) {
-			spin_lock_irqsave(&dev->lock, flags);
-			hid = acc_hid_get(&dev->hid_list, w_value);
-			spin_unlock_irqrestore(&dev->lock, flags);
-			if (!hid) {
-				value = -EINVAL;
-				goto err;
-			}
-			cdev->req->context = hid;
-			cdev->req->complete = acc_complete_send_hid_event;
 			value = w_length;
 		}
 	} else if (b_requestType == (USB_DIR_IN | USB_TYPE_VENDOR)) {
@@ -864,7 +592,7 @@ static int acc_ctrlrequest(struct usb_composite_dev *cdev,
 			*((u16 *)cdev->req->buf) = PROTOCOL_VERSION;
 			value = sizeof(u16);
 
-			
+			/* clear any string left over from a previous session */
 			memset(dev->manufacturer, 0, sizeof(dev->manufacturer));
 			memset(dev->model, 0, sizeof(dev->model));
 			memset(dev->description, 0, sizeof(dev->description));
@@ -872,7 +600,6 @@ static int acc_ctrlrequest(struct usb_composite_dev *cdev,
 			memset(dev->uri, 0, sizeof(dev->uri));
 			memset(dev->serial, 0, sizeof(dev->serial));
 			dev->start_requested = 0;
-			dev->audio_mode = 0;
 		}
 	}
 
@@ -885,7 +612,6 @@ static int acc_ctrlrequest(struct usb_composite_dev *cdev,
 				__func__);
 	}
 
-err:
 	if (value == -EOPNOTSUPP)
 		VDBG(cdev,
 			"unknown class-specific control req "
@@ -905,25 +631,21 @@ acc_function_bind(struct usb_configuration *c, struct usb_function *f)
 
 	DBG(cdev, "acc_function_bind dev: %p\n", dev);
 
-	ret = hid_register_driver(&acc_hid_driver);
-	if (ret)
-		return ret;
-
 	dev->start_requested = 0;
 
-	
+	/* allocate interface ID(s) */
 	id = usb_interface_id(c, f);
 	if (id < 0)
 		return id;
 	acc_interface_desc.bInterfaceNumber = id;
 
-	
+	/* allocate endpoints */
 	ret = create_bulk_endpoints(dev, &acc_fullspeed_in_desc,
 			&acc_fullspeed_out_desc);
 	if (ret)
 		return ret;
 
-	
+	/* support high speed hardware */
 	if (gadget_is_dualspeed(c->cdev->gadget)) {
 		acc_highspeed_in_desc.bEndpointAddress =
 			acc_fullspeed_in_desc.bEndpointAddress;
@@ -931,48 +653,10 @@ acc_function_bind(struct usb_configuration *c, struct usb_function *f)
 			acc_fullspeed_out_desc.bEndpointAddress;
 	}
 
-	
-	if (gadget_is_superspeed(c->cdev->gadget)) {
-		acc_superspeed_in_desc.bEndpointAddress =
-			acc_fullspeed_in_desc.bEndpointAddress;
-		acc_superspeed_out_desc.bEndpointAddress =
-			acc_fullspeed_out_desc.bEndpointAddress;
-	}
-
 	DBG(cdev, "%s speed %s: IN/%s, OUT/%s\n",
 			gadget_is_dualspeed(c->cdev->gadget) ? "dual" : "full",
 			f->name, dev->ep_in->name, dev->ep_out->name);
 	return 0;
-}
-
-static void
-kill_all_hid_devices(struct acc_dev *dev)
-{
-	struct acc_hid_dev *hid;
-	struct list_head *entry, *temp;
-	unsigned long flags;
-
-	spin_lock_irqsave(&dev->lock, flags);
-	list_for_each_safe(entry, temp, &dev->hid_list) {
-		hid = list_entry(entry, struct acc_hid_dev, list);
-		list_del(&hid->list);
-		list_add(&hid->list, &dev->dead_hid_list);
-	}
-	list_for_each_safe(entry, temp, &dev->new_hid_list) {
-		hid = list_entry(entry, struct acc_hid_dev, list);
-		list_del(&hid->list);
-		list_add(&hid->list, &dev->dead_hid_list);
-	}
-	spin_unlock_irqrestore(&dev->lock, flags);
-
-	schedule_work(&dev->hid_work);
-}
-
-static void
-acc_hid_unbind(struct acc_dev *dev)
-{
-	hid_unregister_driver(&acc_hid_driver);
-	kill_all_hid_devices(dev);
 }
 
 static void
@@ -986,102 +670,12 @@ acc_function_unbind(struct usb_configuration *c, struct usb_function *f)
 		acc_request_free(req, dev->ep_in);
 	for (i = 0; i < RX_REQ_MAX; i++)
 		acc_request_free(dev->rx_req[i], dev->ep_out);
-
-	acc_hid_unbind(dev);
 }
 
-static void acc_start_work(struct work_struct *data)
+static void acc_work(struct work_struct *data)
 {
 	char *envp[2] = { "ACCESSORY=START", NULL };
 	kobject_uevent_env(&acc_device.this_device->kobj, KOBJ_CHANGE, envp);
-}
-
-static int acc_hid_init(struct acc_hid_dev *hdev)
-{
-	struct hid_device *hid;
-	int ret;
-
-	hid = hid_allocate_device();
-	if (IS_ERR(hid))
-		return PTR_ERR(hid);
-
-	hid->ll_driver = &acc_hid_ll_driver;
-	hid->dev.parent = acc_device.this_device;
-
-	hid->bus = BUS_USB;
-	hid->vendor = HID_ANY_ID;
-	hid->product = HID_ANY_ID;
-	hid->driver_data = hdev;
-	ret = hid_add_device(hid);
-	if (ret) {
-		pr_err("can't add hid device: %d\n", ret);
-		hid_destroy_device(hid);
-		return ret;
-	}
-
-	hdev->hid = hid;
-	return 0;
-}
-
-static void acc_hid_delete(struct acc_hid_dev *hid)
-{
-	kfree(hid->report_desc);
-	kfree(hid);
-}
-
-static void acc_hid_work(struct work_struct *data)
-{
-	struct acc_dev *dev = _acc_dev;
-	struct list_head	*entry, *temp;
-	struct acc_hid_dev *hid;
-	struct list_head	new_list, dead_list;
-	unsigned long flags;
-
-	INIT_LIST_HEAD(&new_list);
-
-	spin_lock_irqsave(&dev->lock, flags);
-
-	
-	list_for_each_safe(entry, temp, &dev->new_hid_list) {
-		hid = list_entry(entry, struct acc_hid_dev, list);
-		if (hid->report_desc_offset == hid->report_desc_len)
-			list_move(&hid->list, &new_list);
-	}
-
-	if (list_empty(&dev->dead_hid_list)) {
-		INIT_LIST_HEAD(&dead_list);
-	} else {
-		
-		dead_list.prev = dev->dead_hid_list.prev;
-		dead_list.next = dev->dead_hid_list.next;
-		dead_list.next->prev = &dead_list;
-		dead_list.prev->next = &dead_list;
-		INIT_LIST_HEAD(&dev->dead_hid_list);
-	}
-
-	spin_unlock_irqrestore(&dev->lock, flags);
-
-	
-	list_for_each_safe(entry, temp, &new_list) {
-		hid = list_entry(entry, struct acc_hid_dev, list);
-		if (acc_hid_init(hid)) {
-			pr_err("can't add HID device %p\n", hid);
-			acc_hid_delete(hid);
-		} else {
-			spin_lock_irqsave(&dev->lock, flags);
-			list_move(&hid->list, &dev->hid_list);
-			spin_unlock_irqrestore(&dev->lock, flags);
-		}
-	}
-
-	
-	list_for_each_safe(entry, temp, &dead_list) {
-		hid = list_entry(entry, struct acc_hid_dev, list);
-		list_del(&hid->list);
-		if (hid->hid)
-			hid_destroy_device(hid->hid);
-		acc_hid_delete(hid);
-	}
 }
 
 static int acc_function_set_alt(struct usb_function *f,
@@ -1125,7 +719,7 @@ static int acc_function_set_alt(struct usb_function *f,
 
 	dev->online = 1;
 
-	
+	/* readers may be blocked waiting for us to go online */
 	wake_up(&dev->read_wq);
 	return 0;
 }
@@ -1140,7 +734,7 @@ static void acc_function_disable(struct usb_function *f)
 	usb_ep_disable(dev->ep_in);
 	usb_ep_disable(dev->ep_out);
 
-	
+	/* readers may be blocked waiting for us to go online */
 	wake_up(&dev->read_wq);
 
 	VDBG(cdev, "%s disabled\n", dev->function.name);
@@ -1153,7 +747,7 @@ static int acc_bind_config(struct usb_configuration *c)
 
 	printk(KERN_INFO "acc_bind_config\n");
 
-	
+	/* allocate a string ID for our interface */
 	if (acc_string_defs[INTERFACE_STRING_INDEX].id == 0) {
 		ret = usb_string_id(c->cdev);
 		if (ret < 0)
@@ -1167,8 +761,6 @@ static int acc_bind_config(struct usb_configuration *c)
 	dev->function.strings = acc_strings,
 	dev->function.descriptors = fs_acc_descs;
 	dev->function.hs_descriptors = hs_acc_descs;
-	if (gadget_is_superspeed(c->cdev->gadget))
-		dev->function.ss_descriptors = ss_acc_descs;
 	dev->function.bind = acc_function_bind;
 	dev->function.unbind = acc_function_unbind;
 	dev->function.set_alt = acc_function_set_alt;
@@ -1191,13 +783,9 @@ static int acc_setup(void)
 	init_waitqueue_head(&dev->write_wq);
 	atomic_set(&dev->open_excl, 0);
 	INIT_LIST_HEAD(&dev->tx_idle);
-	INIT_LIST_HEAD(&dev->hid_list);
-	INIT_LIST_HEAD(&dev->new_hid_list);
-	INIT_LIST_HEAD(&dev->dead_hid_list);
-	INIT_DELAYED_WORK(&dev->start_work, acc_start_work);
-	INIT_WORK(&dev->hid_work, acc_hid_work);
+	INIT_DELAYED_WORK(&dev->work, acc_work);
 
-	
+	/* _acc_dev must be set before calling usb_gadget_register_driver */
 	_acc_dev = dev;
 
 	ret = misc_register(&acc_device);
@@ -1208,14 +796,8 @@ static int acc_setup(void)
 
 err:
 	kfree(dev);
-	pr_err("USB accessory gadget driver failed to initialize\n");
+	printk(KERN_ERR "USB accessory gadget driver failed to initialize\n");
 	return ret;
-}
-
-static void acc_disconnect(void)
-{
-	
-	kill_all_hid_devices(_acc_dev);
 }
 
 static void acc_cleanup(void)
