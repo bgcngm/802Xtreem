@@ -33,6 +33,7 @@
 
 int __init m7china_init_keypad(void);
 
+/* Platform dependent definition */
 #define LCD_TE			GPIO(0)
 #define RAW_RST			GPIO(1)
 #define CAM2_RSTz		GPIO(2)
@@ -182,6 +183,7 @@ int __init m7china_init_keypad(void);
 #define TP_RSTz			PMGPIO(43)
 #define LCD_ID1			PMGPIO(44)
 
+/* Macros assume PMIC GPIOs and MPPs start at 1 */
 #define PM8921_GPIO_BASE		NR_GPIO_IRQS
 #define PM8921_GPIO_PM_TO_SYS(pm_gpio)	(pm_gpio - 1 + PM8921_GPIO_BASE)
 #define PM8921_MPP_BASE			(PM8921_GPIO_BASE + PM8921_NR_GPIOS)
@@ -231,7 +233,7 @@ int m7china_wifi_init(void);
 void m7china_init_gpiomux(void);
 void m7evm_init_pmic(void);
 
-#if 1	
+#if 1	// for pre-evt no camera
 extern struct platform_device m7china_msm_rawchip_device;
 #endif
 void m7china_init_cam(void);

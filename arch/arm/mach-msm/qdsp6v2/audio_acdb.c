@@ -19,10 +19,12 @@
 #include <linux/mm.h>
 #include <mach/qdsp6v2/audio_acdb.h>
 
+//htc audio ++
 #undef pr_info
 #undef pr_err
 #define pr_info(fmt, ...) pr_aud_info(fmt, ##__VA_ARGS__)
 #define pr_err(fmt, ...) pr_aud_err(fmt, ##__VA_ARGS__)
+//htc audio --
 
 #define MAX_NETWORKS		12
 
@@ -35,38 +37,38 @@ struct sidetone_atomic_cal {
 struct acdb_data {
 	struct mutex		acdb_mutex;
 
-	
+	/* ANC Cal */
 	struct acdb_atomic_cal_block	anc_cal;
 
-	
+	/* AudProc Cal */
 	atomic_t			asm_topology;
 	atomic_t			adm_topology[MAX_AUDPROC_TYPES];
 	struct acdb_atomic_cal_block	audproc_cal[MAX_AUDPROC_TYPES];
 	struct acdb_atomic_cal_block	audstrm_cal[MAX_AUDPROC_TYPES];
 	struct acdb_atomic_cal_block	audvol_cal[MAX_AUDPROC_TYPES];
 
-	
+	/* VocProc Cal */
 	atomic_t			voice_rx_topology;
 	atomic_t			voice_tx_topology;
 	struct acdb_atomic_cal_block	vocproc_cal[MAX_NETWORKS];
 	struct acdb_atomic_cal_block	vocstrm_cal[MAX_NETWORKS];
 	struct acdb_atomic_cal_block	vocvol_cal[MAX_NETWORKS];
-	
+	/* size of cal block tables above*/
 	atomic_t			vocproc_cal_size;
 	atomic_t			vocstrm_cal_size;
 	atomic_t			vocvol_cal_size;
-	
+	/* Total size of cal data for all networks */
 	atomic_t			vocproc_total_cal_size;
 	atomic_t			vocstrm_total_cal_size;
 	atomic_t			vocvol_total_cal_size;
 
-	
+	/* AFE cal */
 	struct acdb_atomic_cal_block	afe_cal[MAX_AUDPROC_TYPES];
 
-	
+	/* Sidetone Cal */
 	struct sidetone_atomic_cal	sidetone_cal;
 
-	
+	/* Allocation information */
 	struct ion_client		*ion_client;
 	struct ion_handle		*ion_handle;
 	atomic_t			map_handle;

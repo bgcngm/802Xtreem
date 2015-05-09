@@ -17,7 +17,7 @@
 #include <linux/platform_device.h>
 #include <linux/rtc.h>
 #include <linux/suspend.h>
-#include <linux/syscalls.h> 
+#include <linux/syscalls.h> /* sys_sync */
 #include <linux/wakelock.h>
 #include <linux/syscore_ops.h>
 #include <mach/board_htc.h>
@@ -214,6 +214,7 @@ static void expire_wake_lock(struct wake_lock *lock)
 		pr_info("expired wake lock %s\n", lock->name);
 }
 
+/* Caller must acquire the list_lock spinlock */
 static void print_active_locks(int type)
 {
 	struct wake_lock *lock;
@@ -242,7 +243,7 @@ void htc_print_active_wake_locks(int type)
 	unsigned long irqflags;
 	spin_lock_irqsave(&list_lock, irqflags);
 	if((!list_empty(&active_wake_locks[type]))){
-#if 0 
+#if 0 /* Kernel 3.4 removes WAKE_LOCK_IDLE */
 		if(type==WAKE_LOCK_IDLE)
 			printk("idle lock: ");
 		else
@@ -324,6 +325,9 @@ void suspend_sys_sync_queue(void)
 static bool suspend_sys_sync_abort;
 static void suspend_sys_sync_handler(unsigned long);
 static DEFINE_TIMER(suspend_sys_sync_timer, suspend_sys_sync_handler, 0, 0);
+/* value should be less then half of input event wake lock timeout value
+ * which is currently set to 5*HZ (see drivers/input/evdev.c)
+ */
 #define SUSPEND_SYS_SYNC_TIMEOUT (HZ/4)
 static void suspend_sys_sync_handler(unsigned long arg)
 {

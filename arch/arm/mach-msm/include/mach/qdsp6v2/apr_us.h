@@ -15,6 +15,8 @@
 
 #include <mach/qdsp6v2/apr.h>
 
+/* ======================================================================= */
+/*  Session Level commands */
 #define USM_SESSION_CMD_MEMORY_MAP			0x00012304
 struct usm_stream_cmd_memory_map {
 	struct apr_hdr	hdr;
@@ -38,6 +40,7 @@ struct usm_stream_cmd_run {
 	u32            lsw_ts;
 } __packed;
 
+/* Stream level commands */
 #define USM_STREAM_CMD_OPEN_READ			0x00012309
 struct usm_stream_cmd_open_read {
 	struct apr_hdr hdr;
@@ -56,11 +59,16 @@ struct usm_stream_cmd_open_write {
 
 #define USM_STREAM_CMD_CLOSE				0x0001230A
 
+/* Encoder configuration definitions */
 #define USM_STREAM_CMD_SET_ENC_PARAM			0x0001230B
+/* Decoder configuration definitions */
 #define USM_DATA_CMD_MEDIA_FORMAT_UPDATE		0x00011272
 
+/* Encoder/decoder configuration block */
 #define USM_PARAM_ID_ENCDEC_ENC_CFG_BLK			0x0001230D
 
+/* Parameter structures used in  USM_STREAM_CMD_SET_ENCDEC_PARAM command */
+/* common declarations */
 struct usm_cfg_common {
 	u16 ch_cfg;
 	u16 bits_per_sample;
@@ -69,14 +77,15 @@ struct usm_cfg_common {
 	u32 data_map;
 } __packed;
 
+/* Max number of static located transparent data (bytes) */
 #define USM_MAX_CFG_DATA_SIZE 20
 struct usm_encode_cfg_blk {
 	u32 frames_per_buf;
 	u32 format_id;
-	
+	/* <cfg_size> = sizeof(usm_cfg_common)+|tarnsp_data| */
 	u32 cfg_size;
 	struct usm_cfg_common cfg_common;
-	
+	/* Transparent configuration data for specific encoder */
 	u8  transp_data[USM_MAX_CFG_DATA_SIZE];
 } __packed;
 
@@ -97,10 +106,10 @@ struct us_encdec_cfg {
 struct usm_stream_media_format_update {
 	struct apr_hdr hdr;
 	u32 format_id;
-	
+	/* <cfg_size> = sizeof(usm_cfg_common)+|tarnsp_data| */
 	u32 cfg_size;
 	struct usm_cfg_common cfg_common;
-	
+	/* Transparent configuration data for specific encoder */
 	u8  transp_data[USM_MAX_CFG_DATA_SIZE];
 } __packed;
 
@@ -129,6 +138,7 @@ struct usm_stream_cmd_write {
 
 #define USM_DATA_EVENT_WRITE_DONE			0x00011274
 
+/* Start/stop US signal detection */
 #define USM_SESSION_CMD_SIGNAL_DETECT_MODE		0x00012719
 
 struct usm_session_cmd_detect_info {
@@ -138,6 +148,7 @@ struct usm_session_cmd_detect_info {
 	u32 algorithm_cfg_size;
 } __packed;
 
+/* US signal detection result */
 #define USM_SESSION_EVENT_SIGNAL_DETECT_RESULT		0x00012720
 
-#endif 
+#endif /* __APR_US_H__ */

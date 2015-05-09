@@ -76,6 +76,12 @@ int mmc_card_sleepawake(struct mmc_host *host, int sleep)
 	if (err)
 		return err;
 
+	/*
+	 * If the host does not wait while the card signals busy, then we will
+	 * will have to wait the sleep/awake timeout.  Note, we cannot use the
+	 * SEND_STATUS command to poll the status because that command (and most
+	 * others) is invalid while the card sleeps.
+	 */
 	if (!(host->caps & MMC_CAP_WAIT_WHILE_BUSY))
 		mmc_delay(DIV_ROUND_UP(card->ext_csd.sa_timeout, 10000));
 
@@ -90,6 +96,15 @@ int mmc_go_idle(struct mmc_host *host)
 	int err;
 	struct mmc_command cmd = {0};
 
+	/*
+	 * Non-SPI hosts need to prevent chipselect going active during
+	 * GO_IDLE; that would put chips into SPI mode.  Remind them of
+	 * that in case of hardware that won't pull up DAT3/nCS otherwise.
+	 *
+	 * SPI hosts ignore ios.chip_select; it's managed according to
+	 * rules that must accommodate non-MMC slaves which this layer
+	 * won't even know about.
+	 */
 	if (!mmc_host_is_spi(host)) {
 		mmc_set_chip_select(host, MMC_CS_HIGH);
 		mmc_delay(1);
@@ -129,11 +144,11 @@ int mmc_send_op_cond(struct mmc_host *host, u32 ocr, u32 *rocr)
 		if (err)
 			break;
 
-		
+		/* if we're just probing, do a single pass */
 		if (ocr == 0)
 			break;
 
-		
+		/* otherwise wait until reset completes */
 		if (mmc_host_is_spi(host)) {
 			if (!(cmd.resp[0] & R1_SPI_IDLE))
 				break;
@@ -225,6 +240,9 @@ mmc_send_cxd_data(struct mmc_card *card, struct mmc_host *host,
 	struct scatterlist sg;
 	void *data_buf;
 
+	/* dma onto stack is unsafe/nonportable, but callers to this
+	 * routine normally provide temporary on-stack buffers ...
+	 */
 	data_buf = kmalloc(len, GFP_KERNEL);
 	if (data_buf == NULL)
 		return -ENOMEM;
@@ -235,6 +253,11 @@ mmc_send_cxd_data(struct mmc_card *card, struct mmc_host *host,
 	cmd.opcode = opcode;
 	cmd.arg = 0;
 
+	/* NOTE HACK:  the MMC_RSP_SPI_R1 is always correct here, but we
+	 * rely on callers to never use this with "native" calls for reading
+	 * CSD or CID.  Native versions of those commands use the R2 type,
+	 * not R1 plus a data block.
+	 */
 	cmd.flags = MMC_RSP_SPI_R1 | MMC_RSP_R1 | MMC_CMD_ADTC;
 
 	data.blksz = len;
@@ -246,6 +269,10 @@ mmc_send_cxd_data(struct mmc_card *card, struct mmc_host *host,
 	sg_init_one(&sg, data_buf, len);
 
 	if (opcode == MMC_SEND_CSD || opcode == MMC_SEND_CID) {
+		/*
+		 * The spec states that CSR and CID accesses have a timeout
+		 * of 64 clock cycles.
+		 */
 		data.timeout_ns = 0;
 		data.timeout_clks = 64;
 	} else
@@ -340,6 +367,17 @@ int mmc_spi_set_crc(struct mmc_host *host, int use_crc)
 	return err;
 }
 
+/**
+ *	mmc_switch - modify EXT_CSD register
+ *	@card: the MMC card associated with the data transfer
+ *	@set: cmd set values
+ *	@index: EXT_CSD register index
+ *	@value: value to program into EXT_CSD register
+ *	@timeout_ms: timeout (ms) for operation performed by register write,
+ *                   timeout of zero implies maximum possible timeout
+ *
+ *	Modifies the EXT_CSD register for selected card.
+ */
 int mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 	       unsigned int timeout_ms)
 {
@@ -370,12 +408,12 @@ int mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 	if (err)
 		return err;
 
-	
+	/* No need to check card status in case of BKOPS switch*/
 	if (index == EXT_CSD_BKOPS_START)
 		return 0;
 
 	mmc_delay(1);
-	
+	/* Must check status to be sure of no errors */
 	do {
 		err = mmc_send_status(card, &status);
 		if (err)
@@ -418,6 +456,9 @@ int mmc_send_status(struct mmc_card *card, u32 *status)
 	if (err)
 		return err;
 
+	/* NOTE: callers are required to understand the difference
+	 * between "native" and SPI format status words!
+	 */
 	if (status)
 		*status = cmd.resp[0];
 
@@ -478,6 +519,9 @@ int mmc_send_write_prot_type(struct mmc_card *card, void *buf, u32 address, int 
 	struct scatterlist sg;
 	void *data_buf;
 
+	/* dma onto stack is unsafe/nonportable, but callers to this
+	 * routine normally provide temporary on-stack buffers ...
+	 */
 	data_buf = kmalloc(len, GFP_KERNEL);
 	if (data_buf == NULL)
 		return -ENOMEM;
@@ -492,6 +536,11 @@ int mmc_send_write_prot_type(struct mmc_card *card, void *buf, u32 address, int 
 	cmd.opcode = MMC_SEND_WRITE_PROT_TYPE;
 	cmd.arg = address;
 
+	/* NOTE HACK:  the MMC_RSP_SPI_R1 is always correct here, but we
+	 * rely on callers to never use this with "native" calls for reading
+	 * CSD or CID.  Native versions of those commands use the R2 type,
+	 * not R1 plus a data block.
+	 */
 	cmd.flags = MMC_RSP_SPI_R1 | MMC_RSP_R1 | MMC_CMD_ADTC;
 
 	data.blksz = len;
@@ -531,6 +580,9 @@ mmc_send_bus_test(struct mmc_card *card, struct mmc_host *host, u8 opcode,
 	static u8 testdata_8bit[8] = { 0x55, 0xaa, 0, 0, 0, 0, 0, 0 };
 	static u8 testdata_4bit[4] = { 0x5a, 0, 0, 0 };
 
+	/* dma onto stack is unsafe/nonportable, but callers to this
+	 * routine normally provide temporary on-stack buffers ...
+	 */
 	data_buf = kmalloc(len, GFP_KERNEL);
 	if (!data_buf)
 		return -ENOMEM;
@@ -554,6 +606,11 @@ mmc_send_bus_test(struct mmc_card *card, struct mmc_host *host, u8 opcode,
 	cmd.opcode = opcode;
 	cmd.arg = 0;
 
+	/* NOTE HACK:  the MMC_RSP_SPI_R1 is always correct here, but we
+	 * rely on callers to never use this with "native" calls for reading
+	 * CSD or CID.  Native versions of those commands use the R2 type,
+	 * not R1 plus a data block.
+	 */
 	cmd.flags = MMC_RSP_SPI_R1 | MMC_RSP_R1 | MMC_CMD_ADTC;
 
 	data.blksz = len;
@@ -597,10 +654,14 @@ int mmc_bus_test(struct mmc_card *card, u8 bus_width)
 	else if (bus_width == MMC_BUS_WIDTH_4)
 		width = 4;
 	else if (bus_width == MMC_BUS_WIDTH_1)
-		return 0; 
+		return 0; /* no need for test */
 	else
 		return -EINVAL;
 
+	/*
+	 * Ignore errors from BUS_TEST_W.  BUS_TEST_R will fail if there
+	 * is a problem.  This improves chances that the test will work.
+	 */
 	mmc_send_bus_test(card, card->host, MMC_BUS_TEST_W, width);
 	err = mmc_send_bus_test(card, card->host, MMC_BUS_TEST_R, width);
 	return err;

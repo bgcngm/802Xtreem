@@ -26,6 +26,7 @@
 #include <mach/socinfo.h>
 #include <mach/msm_subsystem_map.h>
 
+/* dummy 64K for overmapping */
 char iommu_dummy[2*SZ_64K-4];
 
 struct msm_iova_data {
@@ -291,7 +292,7 @@ int msm_allocate_iova_address(unsigned int iommu_domain,
 	va = gen_pool_alloc_aligned(pool->gpool, size, ilog2(align));
 	if (va) {
 		pool->free -= size;
-		
+		/* Offset because genpool can't handle 0 addresses */
 		if (pool->paddr == 0)
 			va -= SZ_4K;
 		*iova = va;
@@ -329,7 +330,7 @@ void msm_free_iova_address(unsigned long iova,
 
 	pool->free += size;
 
-	
+	/* Offset because genpool can't handle 0 addresses */
 	if (pool->paddr == 0)
 		iova += SZ_4K;
 
@@ -368,6 +369,12 @@ int msm_register_domain(struct msm_iova_layout *layout)
 		pools[i].paddr = layout->partitions[i].start;
 		pools[i].size = layout->partitions[i].size;
 
+		/*
+		 * genalloc can't handle a pool starting at address 0.
+		 * For now, solve this problem by offsetting the value
+		 * put in by 4k.
+		 * gen pool address = actual address + 4k
+		 */
 		if (pools[i].paddr == 0)
 			layout->partitions[i].start += SZ_4K;
 

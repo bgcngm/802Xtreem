@@ -21,6 +21,8 @@
 #ifndef __REGULATOR_GPIO_H
 #define __REGULATOR_GPIO_H
 
+#include <linux/regulator/driver.h>
+
 struct regulator_init_data;
 
 enum regulator_type;
@@ -83,5 +85,27 @@ struct gpio_regulator_config {
 	enum regulator_type type;
 	struct regulator_init_data *init_data;
 };
+
+#include <linux/regulator/machine.h>
+
+#define GPIO_REGULATOR_DEV_NAME "gpio-regulator"
+
+/**
+ * struct gpio_regulator_platform_data - GPIO regulator platform data
+ * @init_data:		regulator constraints
+ * @gpio_label:		label to use when requesting the GPIO
+ * @regulator_name:	name for regulator used during registration
+ * @gpio:		gpio number
+ * @active_low:		0 = regulator is enabled when GPIO outputs high
+ *			1 = regulator is enabled when GPIO outputs low
+ */
+struct gpio_regulator_platform_data {
+	struct regulator_init_data	init_data;
+	char				*gpio_label;
+	char				*regulator_name;
+	unsigned			gpio;
+	int				active_low;
+};
+
 
 #endif

@@ -24,7 +24,12 @@
 
 #include <net/sock.h>
 
+/* definitions for the R2R wire protcol */
 #define IPC_ROUTER_V1		1
+/*
+ * Ambiguous definition but will enable multiplexing IPC_ROUTER_V2 packets
+ * with an existing alternate transport in user-space, if needed.
+ */
 #define IPC_ROUTER_V2		3
 
 #define IPC_ROUTER_ADDRESS			0x0000FFFF
@@ -74,6 +79,13 @@ enum {
 	MULTI_LINK_MODE,
 };
 
+/**
+ * rr_control_msg - Control message structure
+ * @cmd: Command identifier for HELLO message in Version 1.
+ * @hello: Message structure for HELLO message in Version 2.
+ * @srv: Message structure for NEW_SERVER/REMOVE_SERVER events.
+ * @cli: Message structure for REMOVE_CLIENT event.
+ */
 union rr_control_msg {
 	uint32_t cmd;
 	struct {
@@ -95,6 +107,17 @@ union rr_control_msg {
 	} cli;
 };
 
+/**
+ * rr_header_v1 - IPC Router header version 1
+ * @version: Version information.
+ * @type: IPC Router Message Type.
+ * @src_node_id: Source Node ID of the message.
+ * @src_port_id: Source Port ID of the message.
+ * @control_flag: Flag to indicate flow control.
+ * @size: Size of the IPC Router payload.
+ * @dst_node_id: Destination Node ID of the message.
+ * @dst_port_id: Destination Port ID of the message.
+ */
 struct rr_header_v1 {
 	uint32_t version;
 	uint32_t type;
@@ -106,6 +129,17 @@ struct rr_header_v1 {
 	uint32_t dst_port_id;
 };
 
+/**
+ * rr_header_v2 - IPC Router header version 2
+ * @version: Version information.
+ * @type: IPC Router Message Type.
+ * @control_flag: Flags to indicate flow control, optional header etc.
+ * @size: Size of the IPC Router payload.
+ * @src_node_id: Source Node ID of the message.
+ * @src_port_id: Source Port ID of the message.
+ * @dst_node_id: Destination Node ID of the message.
+ * @dst_port_id: Destination Port ID of the message.
+ */
 struct rr_header_v2 {
 	uint8_t version;
 	uint8_t type;
@@ -124,6 +158,13 @@ union rr_header {
 
 #define IPC_ROUTER_HDR_SIZE sizeof(union rr_header)
 
+/**
+ * rr_packet - Router to Router packet structure
+ * @list: Pointer to prev & next packets in a port's rx list.
+ * @hdr: Header information extracted from or prepended to a packet.
+ * @pkt_fragment_q: Queue of SKBs containing payload.
+ * @length: Length of data in the chain of SKBs
+ */
 struct rr_packet {
 	struct list_head list;
 	struct rr_header_v1 hdr;
@@ -137,6 +178,21 @@ struct msm_ipc_sock {
 	void *default_pil;
 };
 
+/**
+ * msm_ipc_router_xprt - Structure to hold XPRT specific information
+ * @name: Name of the XPRT.
+ * @link_id: Network cluster ID to which the XPRT belongs to.
+ * @priv: XPRT's private data.
+ * @get_version: Method to get header version supported by the XPRT.
+ * @get_option: Method to get XPRT specific options.
+ * @read_avail: Method to get data size available to be read from the XPRT.
+ * @read: Method to read data from the XPRT.
+ * @write_avail: Method to get write space available in the XPRT.
+ * @write: Method to write data to the XPRT.
+ * @close: Method to close the XPRT.
+ * @sft_close_done: Method to indicate to the XPRT that handling of reset
+ *                  event is complete.
+ */
 struct msm_ipc_router_xprt {
 	char *name;
 	uint32_t link_id;
@@ -203,7 +259,7 @@ static inline void msm_ipc_unload_default_node(void *pil) { }
 #endif
 
 
-#else
+#else//defined(CONFIG_MACH_M7_WLV)
 
 #include <linux/types.h>
 #include <linux/socket.h>
@@ -217,6 +273,7 @@ static inline void msm_ipc_unload_default_node(void *pil) { }
 
 #include <net/sock.h>
 
+/* definitions for the R2R wire protcol */
 #define IPC_ROUTER_VERSION			1
 #define IPC_ROUTER_PROCESSORS_MAX		4
 
@@ -283,6 +340,7 @@ struct rr_header {
 
 #define IPC_ROUTER_HDR_SIZE sizeof(struct rr_header)
 #define MAX_IPC_PKT_SIZE 66000
+/* internals */
 
 #define IPC_ROUTER_MAX_REMOTE_SERVERS		100
 #define MAX_WAKELOCK_NAME_SZ 32
@@ -388,7 +446,7 @@ int msm_ipc_router_lookup_server_name(struct msm_ipc_port_name *srv_name,
 				      struct msm_ipc_server_info *srv_info,
 				      int num_entries_in_array,
 				      uint32_t lookup_mask);
-#endif 
+#endif //CONFIG_MSM8960_ONLY
 int msm_ipc_router_close_port(struct msm_ipc_port *port_ptr);
 
 struct msm_ipc_port *msm_ipc_router_create_port(
@@ -418,5 +476,5 @@ static inline void *msm_ipc_load_default_node(void)
 static inline void msm_ipc_unload_default_node(void *pil) { }
 #endif
 
-#endif
+#endif//defined(CONFIG_MACH_M7_WLV)
 #endif

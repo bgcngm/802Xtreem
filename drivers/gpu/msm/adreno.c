@@ -464,7 +464,7 @@ static irqreturn_t adreno_irq_handler(struct kgsl_device *device)
 	mod_timer_pending(&device->idle_timer,
 		jiffies + device->pwrctrl.interval_timeout);
 	mod_timer_pending(&device->hang_timer,
-		(jiffies + msecs_to_jiffies(KGSL_TIMEOUT_PART)));
+		(jiffies + msecs_to_jiffies(KGSL_TIMEOUT_HANG_DETECT)));
 	return result;
 }
 
@@ -1536,7 +1536,7 @@ static int adreno_start(struct kgsl_device *device)
 	}
 
         mod_timer(&device->hang_timer,
-		(jiffies + msecs_to_jiffies(KGSL_TIMEOUT_PART)));
+		(jiffies + msecs_to_jiffies(KGSL_TIMEOUT_HANG_DETECT)));
 
 	device->reset_counter++;
 
@@ -2282,7 +2282,7 @@ done:
 			ft_data->ft_policy, ret);
 	return ret;
 }
-
+#if 0
 static int adreno_kill_suspect(struct kgsl_device *device, int pid)
 {
 	int ret = 1;
@@ -2338,6 +2338,7 @@ static int adreno_kill_suspect(struct kgsl_device *device, int pid)
 #endif
 	return ret;
 }
+#endif
 
 int
 adreno_dump_and_exec_ft(struct kgsl_device *device)
@@ -2401,7 +2402,7 @@ adreno_dump_and_exec_ft(struct kgsl_device *device)
 			mod_timer(&device->idle_timer, jiffies + FIRST_TIMEOUT);
 			mod_timer(&device->hang_timer,
 				(jiffies +
-				msecs_to_jiffies(KGSL_TIMEOUT_PART)));
+				msecs_to_jiffies(KGSL_TIMEOUT_HANG_DETECT)));
 		}
 		complete_all(&device->ft_gate);
 		
@@ -2409,11 +2410,13 @@ adreno_dump_and_exec_ft(struct kgsl_device *device)
 			if (result) {
 				msleep(10000);
 				panic("GPU Hang");
+#if 0
 			} else {
 				if (board_mfg_mode() || adreno_kill_suspect(device, gpu_hung_pid)) {
 					msleep(10000);
 					panic("Recoverable GPU Hang");
 				}
+#endif
 			}
 		}
 	}
@@ -2735,7 +2738,7 @@ static int adreno_ringbuffer_drain(struct kgsl_device *device,
 			if (adreno_ft_detect(device, regs))
 				return -ETIMEDOUT;
 
-			wait = jiffies + msecs_to_jiffies(KGSL_TIMEOUT_PART);
+			wait = jiffies + msecs_to_jiffies(KGSL_TIMEOUT_HANG_DETECT);
 		}
 		GSL_RB_GET_READPTR(rb, &rb->rptr);
 
@@ -2769,7 +2772,7 @@ retry:
 
 	
 	wait_time = jiffies + msecs_to_jiffies(ADRENO_IDLE_TIMEOUT);
-	wait_time_part = jiffies + msecs_to_jiffies(KGSL_TIMEOUT_PART);
+	wait_time_part = jiffies + msecs_to_jiffies(KGSL_TIMEOUT_HANG_DETECT);
 
 	while (time_before(jiffies, wait_time)) {
 		if (adreno_isidle(device))
@@ -2778,7 +2781,7 @@ retry:
 		
 		if (time_after(jiffies, wait_time_part)) {
 			wait_time_part = jiffies +
-				msecs_to_jiffies(KGSL_TIMEOUT_PART);
+				msecs_to_jiffies(KGSL_TIMEOUT_HANG_DETECT);
 			if ((adreno_ft_detect(device, prev_reg_val)))
 				goto err;
 		}
@@ -3106,7 +3109,7 @@ unsigned int adreno_ft_detect(struct kgsl_device *device,
 			return 0;
 	else
 		next_hang_detect_time = (jiffies +
-			msecs_to_jiffies(KGSL_TIMEOUT_PART-1));
+			msecs_to_jiffies(KGSL_TIMEOUT_HANG_DETECT));
 
 	
 	for (i = 0; i < FT_DETECT_REGS_COUNT; i++) {
@@ -3137,6 +3140,11 @@ unsigned int adreno_ft_detect(struct kgsl_device *device,
 
 			context = kgsl_context_get(device, curr_context_id);
 			if (context != NULL) {
+				if (context->devctxt == NULL) {
+					KGSL_DRV_ERR(device,
+						"Fault tolerance no context found\n");
+					return -EINVAL;
+				}
 				curr_context = context->devctxt;
 				curr_context->ib_gpu_time_used = 0;
 			} else {
@@ -3178,7 +3186,7 @@ unsigned int adreno_ft_detect(struct kgsl_device *device,
 
 		if (curr_context != NULL) {
 
-			curr_context->ib_gpu_time_used += KGSL_TIMEOUT_PART;
+			curr_context->ib_gpu_time_used += KGSL_TIMEOUT_HANG_DETECT;
 			KGSL_FT_INFO(device,
 			"Proc %s used GPU Time %d ms on timestamp 0x%X\n",
 			curr_context->pid_name, curr_context->ib_gpu_time_used,

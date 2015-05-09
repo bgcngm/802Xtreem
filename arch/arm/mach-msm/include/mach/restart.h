@@ -23,10 +23,15 @@ enum RAMDUMP_STATUS {
 };
 
 #if defined(CONFIG_MSM_NATIVE_RESTART)
+/* if arch_reset is called from userspace,
+   restart mode will be set to 'h' equal to 104.
+   As a result, we need MAX to know the mode is valid. */
 enum RESTART_MODE {
-	
+	/* for legecy cmd restart */
 	RESTART_MODE_LEGECY = 0,
 
+	/* all other restart rised by kernel.
+	   these modes will all enter ramdump. */
 	RESTART_MODE_Q6_WATCHDOG_BITE,
 
 	RESTART_MODE_MODEM_CRASH,
@@ -40,6 +45,8 @@ enum RESTART_MODE {
 
 	RESTART_MODE_APP_WATCHDOG_BARK,
 	RESTART_MODE_ERASE_EFS,
+	/* This is pseudo enum to indicate the maximum,
+	   add new restart mode before this one. */
 	RESTART_MODE_MAX
 };
 void msm_set_restart_mode(int mode);

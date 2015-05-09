@@ -29,6 +29,15 @@ enum pm8xxx_blink_type {
 	key_blink_off,
 };
 
+/**
+ * enum pm8xxx_leds - PMIC8XXX supported led ids
+ * @PM8XXX_ID_LED_KB_LIGHT - keyboard backlight led
+ * @PM8XXX_ID_LED_0 - First low current led
+ * @PM8XXX_ID_LED_1 - Second low current led
+ * @PM8XXX_ID_LED_2 - Third low current led
+ * @PM8XXX_ID_FLASH_LED_0 - First flash led
+ * @PM8XXX_ID_FLASH_LED_0 - Second flash led
+ */
 enum pm8xxx_leds {
 	PM8XXX_ID_LED_KB_LIGHT = 1,
 	PM8XXX_ID_LED_0,
@@ -43,6 +52,9 @@ enum pm8xxx_leds {
 	PM8XXX_ID_MAX,
 };
 
+/**
+ * pm8xxx_led_modes - Operating modes of LEDs
+ */
 enum pm8xxx_led_modes {
 	PM8XXX_LED_MODE_MANUAL,
 	PM8XXX_LED_MODE_PWM1,
@@ -54,6 +66,7 @@ enum pm8xxx_led_modes {
 	PM8XXX_LED_MODE_DTEST4
 };
 
+/* current boost limit */
 enum wled_current_bost_limit {
 	WLED_CURR_LIMIT_105mA,
 	WLED_CURR_LIMIT_385mA,
@@ -65,6 +78,7 @@ enum wled_current_bost_limit {
 	WLED_CURR_LIMIT_1680mA,
 };
 
+/* over voltage protection threshold */
 enum wled_ovp_threshold {
 	WLED_OVP_35V,
 	WLED_OVP_32V,
@@ -72,6 +86,17 @@ enum wled_ovp_threshold {
 	WLED_OVP_37V,
 };
 
+/**
+ *  wled_config_data - wled configuration data
+ *  @num_strings - number of wled strings supported
+ *  @ovp_val - over voltage protection threshold
+ *  @boost_curr_lim - boot current limit
+ *  @cp_select - high pole capacitance
+ *  @ctrl_delay_us - delay in activation of led
+ *  @dig_mod_gen_en - digital module generator
+ *  @cs_out_en - current sink output enable
+ *  @op_fdbck - selection of output as feedback for the boost
+ */
 struct wled_config_data {
 	u8	num_strings;
 	u8	ovp_val;
@@ -83,6 +108,16 @@ struct wled_config_data {
 	bool	op_fdbck;
 };
 
+/**
+ * pm8xxx_led_config - led configuration parameters
+ * @id - LED id
+ * @mode - LED mode
+ * @max_current - maximum current that LED can sustain
+ * @pwm_channel - PWM channel ID the LED is driven to
+ * @pwm_period_us - PWM period value in micro seconds
+ * @default_state - default state of the led
+ * @pwm_duty_cycles - PWM duty cycle information
+ */
 struct pm8xxx_led_config {
 	u8	id;
 	u8	mode;
@@ -96,6 +131,15 @@ struct pm8xxx_led_config {
 	int		lut_coefficient;
 };
 
+/**
+ * pm8xxx_led_platform_data - platform data for LED
+ * @led_core - array of LEDs. Each datum in array contains
+ *	core data for the LED
+ * @configs - array of platform configuration parameters
+ *	for each LED. It maps one-to-one with
+ *	array of LEDs
+ * @num_configs - count of members of configs array
+ */
 struct pm8xxx_led_platform_data {
 	struct	led_platform_data	*led_core;
 	struct	pm8xxx_led_config	*configs;
@@ -103,4 +147,4 @@ struct pm8xxx_led_platform_data {
 };
 void pm8xxx_led_current_set_for_key(int brightness_key);
 
-#endif 
+#endif /* __LEDS_PM8XXX_H__ */

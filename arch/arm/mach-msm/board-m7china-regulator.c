@@ -13,6 +13,7 @@
 
 #include <linux/regulator/pm8xxx-regulator.h>
 
+//include "board-m7china.h"
 #if defined(CONFIG_MACH_M7_DCG)
 #include "board-m7dcg.h"
 #elif defined(CONFIG_MACH_M7_DTU)
@@ -42,6 +43,10 @@
 #define VREG_CONSUMERS(_id) \
 	static struct regulator_consumer_supply vreg_consumers_##_id[]
 
+/*
+ * Consumer specific regulator names:
+ *			 regulator name		consumer dev_name
+ */
 VREG_CONSUMERS(L1) = {
 	REGULATOR_SUPPLY("8921_l1",		NULL),
 };
@@ -137,6 +142,8 @@ VREG_CONSUMERS(L22) = {
 VREG_CONSUMERS(L23) = {
 	REGULATOR_SUPPLY("8921_l23",		NULL),
 	REGULATOR_SUPPLY("tfa9887_vdd",		NULL),
+//	REGULATOR_SUPPLY("pll_vdd",		"pil_qdsp6v4.1"),
+//	REGULATOR_SUPPLY("pll_vdd",		"pil_qdsp6v4.2"),
 };
 #endif
 VREG_CONSUMERS(L24) = {
@@ -273,7 +280,7 @@ VREG_CONSUMERS(EXT_3P3V) = {
 	REGULATOR_SUPPLY("dsi1_vccs_3p3v",      "mipi_dsi.1"),
 };
 #endif
-#if 0 
+#if 0 /* HTC_BT del: remove PMIC GPIO conflict */
 VREG_CONSUMERS(EXT_TS_SW) = {
 	REGULATOR_SUPPLY("ext_ts_sw",		NULL),
 	REGULATOR_SUPPLY("vdd_ana",		"3-005b"),
@@ -355,6 +362,7 @@ VREG_CONSUMERS(EXT_TS_SW) = {
 		REGULATOR_CHANGE_VOLTAGE | REGULATOR_CHANGE_STATUS, 0, 0, \
 		_always_on, _supply_regulator, 0, _enable_time, _reg_id)
 
+/* Pin control initialization */
 #define PM8XXX_PC(_id, _name, _always_on, _pin_fn, _pin_ctrl, \
 		  _supply_regulator, _reg_id) \
 	{ \
@@ -481,6 +489,7 @@ VREG_CONSUMERS(EXT_TS_SW) = {
 		 RPM_VREG_STATE_OFF, _sleep_selectable, _always_on, \
 		 _supply_regulator, 0)
 
+/* Pin control initialization */
 #define RPM_PC_INIT(_id, _always_on, _pin_fn, _pin_ctrl, _supply_regulator) \
 	{ \
 		.init_data = { \
@@ -498,43 +507,50 @@ VREG_CONSUMERS(EXT_TS_SW) = {
 		.pin_ctrl = _pin_ctrl, \
 	}
 
+/* GPIO regulator constraints */
 struct gpio_regulator_platform_data
 m7china_gpio_regulator_pdata[] __devinitdata = {
-	
+	/*        ID      vreg_name gpio_label   gpio                  supply */
 	GPIO_VREG(EXT_5V, "ext_5v", "ext_5v_en", PM8921_MPP_PM_TO_SYS(7), NULL),
-	
-	
-	
-	
+	//GPIO_VREG(EXT_3P3V, "ext_3p3v", "ext_3p3v_en",
+	//	  m7china_EXT_3P3V_REG_EN_GPIO, NULL),
+	//GPIO_VREG(EXT_TS_SW, "ext_ts_sw", "ext_ts_sw_en",
+	//	  PM8921_GPIO_PM_TO_SYS(23), "ext_3p3v"),
 	GPIO_VREG(EXT_MPP8, "ext_mpp8", "ext_mpp8_en",
 			PM8921_MPP_PM_TO_SYS(8), NULL),
 };
 
+/* SAW regulator constraints */
 struct regulator_init_data m7china_saw_regulator_pdata_8921_s5 =
-	
+	/*	      ID  vreg_name	       min_uV   max_uV */
 	SAW_VREG_INIT(S5, "8921_s5",	       850000, 1300000);
 struct regulator_init_data m7china_saw_regulator_pdata_8921_s6 =
 	SAW_VREG_INIT(S6, "8921_s6",	       850000, 1300000);
 
 struct regulator_init_data m7china_saw_regulator_pdata_8821_s0 =
-	
+	/*	      ID       vreg_name	min_uV  max_uV */
 	SAW_VREG_INIT(8821_S0, "8821_s0",       850000, 1300000);
 struct regulator_init_data m7china_saw_regulator_pdata_8821_s1 =
 	SAW_VREG_INIT(8821_S1, "8821_s1",       850000, 1300000);
 
+/* PM8921 regulator constraints */
 struct pm8xxx_regulator_platform_data
 m7china_pm8921_regulator_pdata[] __devinitdata = {
+	/*
+	 *		ID   name always_on pd min_uV   max_uV   en_t supply
+	 *	system_uA reg_ID
+	 */
 	PM8XXX_NLDO1200(L26, "8921_l26", 0, 1, 375000, 1050000, 200, "8921_s7",
 		0, 1),
 
-	
+	/*           ID        name     always_on pd       en_t supply reg_ID */
 	PM8XXX_VS300(USB_OTG,  "8921_usb_otg",  0, 0,         0, "ext_5v", 2),
 	PM8XXX_VS300(HDMI_MVS, "8921_hdmi_mvs", 0, 1,         0, "ext_5v", 3),
 };
 
 static struct rpm_regulator_init_data
 m7china_rpm_regulator_init_data[] __devinitdata = {
-	
+	/*      ID a_on pd ss min_uV   max_uV  supply sys_uA  freq  fm  ss_fm */
 	RPM_SMPS(S1, 1, 1, 0, 1225000, 1225000, NULL, 100000, 3p20, NONE, NONE),
 	RPM_SMPS(S2, 0, 1, 0, 1300000, 1300000, NULL,      0, 1p60, NONE, NONE),
 	RPM_SMPS(S3, 0, 1, 1,  500000, 1150000, NULL, 100000, 4p80, NONE, NONE),
@@ -542,7 +558,7 @@ m7china_rpm_regulator_init_data[] __devinitdata = {
 	RPM_SMPS(S7, 0, 0, 0, 1300000, 1300000, NULL, 100000, 3p20, NONE, NONE),
 	RPM_SMPS(S8, 0, 1, 0, 2200000, 2200000, NULL,      0, 1p60, NONE, NONE),
 
-	
+	/*	ID a_on pd ss min_uV   max_uV   supply    sys_uA init_ip */
 	RPM_LDO(L1,  1, 1, 0, 1050000, 1050000, "8921_s4",     0,  1000),
 	RPM_LDO(L2,  0, 1, 0, 1200000, 1200000, "8921_s4",     0,     0),
 	RPM_LDO(L3,  0, 1, 0, 3075000, 3075000, NULL,          0,     0),
@@ -566,10 +582,10 @@ m7china_rpm_regulator_init_data[] __devinitdata = {
 	RPM_LDO(L24, 0, 1, 1,  750000, 1150000, "8921_s1", 10000, 10000),
 	RPM_LDO(L25, 1, 1, 0, 1225000, 1225000, "8921_s1", 10000, 10000),
 	RPM_LDO(L27, 0, 0, 0, 1050000, 1050000, "8921_s7",     0,     0),
-	
+	//RPM_LDO(L28, 0, 1, 0, 1050000, 1050000, "8921_s7",     0,     0),
 	RPM_LDO(L29, 0, 1, 0, 2000000, 3300000, NULL,          0,     0),
 
-	
+	/*     ID  a_on pd ss                   supply */
 	RPM_VS(LVS1, 0, 1, 0,                   "8921_s4"),
 	RPM_VS(LVS2, 0, 1, 0,                   "8921_s1"),
 	RPM_VS(LVS3, 0, 1, 0,                   "8921_s4"),
@@ -578,7 +594,7 @@ m7china_rpm_regulator_init_data[] __devinitdata = {
 	RPM_VS(LVS6, 0, 1, 0,                   "8921_s4"),
 	RPM_VS(LVS7, 0, 1, 1,                   "8921_s4"),
 
-	
+	/*	ID a_on    ss min_uV   max_uV   supply     freq */
 	RPM_NCP(NCP, 0,    0, 1800000, 1800000, "8921_l6", 1p60),
 };
 

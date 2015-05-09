@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,6 +15,7 @@
 #include <media/msm/vidc_type.h>
 #include <media/msm/vcd_api.h>
 
+/*HTC_START*/
 #define VCD_MSG_LOW(xx_fmt...)				\
 if (vidc_msg_debug) {				\
 		printk(KERN_INFO "\n\t* [VID] " xx_fmt);\
@@ -27,6 +28,7 @@ if (vidc_msg_debug) {				\
 	if (vidc_msg_debug) {				\
 		printk(KERN_WARNING "\n [VID] " xx_fmt);\
 	}
+/*HTC_END*/
 
 #define VCD_MSG_ERROR(xx_fmt...)	printk(KERN_ERR "\n [VID] err: " xx_fmt)
 #define VCD_MSG_FATAL(xx_fmt...)	printk(KERN_ERR "\n [VID] <FATAL> " xx_fmt)

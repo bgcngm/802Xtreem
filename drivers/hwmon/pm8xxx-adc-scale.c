@@ -17,6 +17,14 @@
 #include <linux/mfd/pm8xxx/pm8xxx-adc.h>
 #define KELVINMIL_DEGMIL	273160
 
+/* Units for temperature below (on x axis) is in 0.1DegC as
+   required by the battery driver. Note the resolution used
+   here to compute the table was done for DegC to milli-volts.
+   In consideration to limit the size of the table for the given
+   temperature range below, the result is linearly interpolated
+   and provided to the battery driver in the units desired for
+   their framework which is 0.1DegC. True resolution of 0.1DegC
+   will result in the below table size to increase by 10 times */
 static const struct pm8xxx_adc_map_pt adcmap_btm_threshold[] = {
 	{-300,	1642},
 	{-200,	1544},
@@ -103,11 +111,13 @@ static const struct pm8xxx_adc_map_pt adcmap_btm_threshold[] = {
 	{790,	203}
 };
 
+/* if board file doesn't assign map table, default one will be used */
 static struct pm8xxx_adc_map_table default_adcmap_btm = {
 	.table = adcmap_btm_threshold,
 	.size = ARRAY_SIZE(adcmap_btm_threshold),
 };
 
+/* pointer to map_table that driver uses to translate adc <-> batt temperature */
 static struct pm8xxx_adc_map_table *adcmap_btm_table = &default_adcmap_btm;
 
 static const struct pm8xxx_adc_map_pt adcmap_pa_therm[] = {
@@ -412,7 +422,7 @@ static int32_t pm8xxx_adc_map_linear(const struct pm8xxx_adc_map_pt *pts,
 	if ((pts == NULL) || (output == NULL))
 		return -EINVAL;
 
-	
+	/* Check if table is descending or ascending */
 	if (tablesize > 1) {
 		if (pts[0].x < pts[1].x)
 			descending = 0;
@@ -420,9 +430,13 @@ static int32_t pm8xxx_adc_map_linear(const struct pm8xxx_adc_map_pt *pts,
 
 	while (i < tablesize) {
 		if ((descending == 1) && (pts[i].x < input)) {
+			/* table entry is less than measured
+				value and table is descending, stop */
 			break;
 		} else if ((descending == 0) &&
 				(pts[i].x > input)) {
+			/* table entry is greater than measured
+				value and table is ascending, stop */
 			break;
 		} else {
 			i++;
@@ -434,8 +448,8 @@ static int32_t pm8xxx_adc_map_linear(const struct pm8xxx_adc_map_pt *pts,
 	else if (i == tablesize)
 		*output = pts[tablesize-1].y;
 	else {
-		
-		
+		/* result is between search_index and search_index-1 */
+		/* interpolate linearly */
 		*output = (((int32_t) ((pts[i].y - pts[i-1].y)*
 			(input - pts[i-1].x))/
 			(pts[i].x - pts[i-1].x))+
@@ -454,7 +468,7 @@ static int32_t pm8xxx_adc_map_batt_therm(const struct pm8xxx_adc_map_pt *pts,
 	if ((pts == NULL) || (output == NULL))
 		return -EINVAL;
 
-	
+	/* Check if table is descending or ascending */
 	if (tablesize > 1) {
 		if (pts[0].y < pts[1].y)
 			descending = 0;
@@ -462,8 +476,12 @@ static int32_t pm8xxx_adc_map_batt_therm(const struct pm8xxx_adc_map_pt *pts,
 
 	while (i < tablesize) {
 		if ((descending == 1) && (pts[i].y < input)) {
+			/* table entry is less than measured
+				value and table is descending, stop */
 			break;
 		} else if ((descending == 0) && (pts[i].y > input)) {
+			/* table entry is greater than measured
+				value and table is ascending, stop */
 			break;
 		} else {
 			i++;
@@ -475,8 +493,8 @@ static int32_t pm8xxx_adc_map_batt_therm(const struct pm8xxx_adc_map_pt *pts,
 	} else if (i == tablesize) {
 		*output = pts[tablesize-1].x;
 	} else {
-		
-		
+		/* result is between search_index and search_index-1 */
+		/* interpolate linearly */
 		*output = (((int32_t) ((pts[i].x - pts[i-1].x)*
 			(input - pts[i-1].y))/
 			(pts[i].y - pts[i-1].y))+
@@ -530,13 +548,17 @@ int32_t pm8xxx_adc_scale_default(int32_t adc_code,
 	adc_chan_result->measurement = scale_voltage *
 				chan_properties->offset_gain_denominator;
 
-	
+	/* do_div only perform positive integer division! */
 	do_div(adc_chan_result->measurement,
 				chan_properties->offset_gain_numerator);
 
 	if (negative_rawfromoffset)
 		adc_chan_result->measurement = -adc_chan_result->measurement;
 
+	/* Note: adc_chan_result->measurement is in the unit of
+	 * adc_properties.adc_reference. For generic channel processing,
+	 * channel measurement is a scale/ratio relative to the adc
+	 * reference input */
 	adc_chan_result->physical = adc_chan_result->measurement;
 
 	return 0;
@@ -586,6 +608,7 @@ int32_t pm8xxx_adc_scale_batt_therm(int32_t adc_code,
 			&adc_chan_result->physical);
 }
 EXPORT_SYMBOL_GPL(pm8xxx_adc_scale_batt_therm);
+/* htc table translate adc_code to mv to degC */
 #if 0
 int32_t pm8xxx_adc_scale_batt_therm(int32_t adc_code,
 		const struct pm8xxx_adc_properties *adc_properties,
@@ -594,7 +617,7 @@ int32_t pm8xxx_adc_scale_batt_therm(int32_t adc_code,
 {
 	pm8xxx_adc_scale_default(adc_code, adc_properties, chan_properties,
 								adc_chan_result);
-	
+	/* convert mV ---> degC using the table */
 	return pm8xxx_adc_map_linear(
 			adcmap_batttherm,
 			ARRAY_SIZE(adcmap_batttherm),
@@ -603,14 +626,17 @@ int32_t pm8xxx_adc_scale_batt_therm(int32_t adc_code,
 }
 EXPORT_SYMBOL_GPL(pm8xxx_adc_scale_batt_therm);
 #endif
+/* qcom tranlate adc_code to temp by table directly */
 #if 0
 int32_t pm8xxx_adc_scale_batt_therm(int32_t adc_code,
 		const struct pm8xxx_adc_properties *adc_properties,
 		const struct pm8xxx_adc_chan_properties *chan_properties,
 		struct pm8xxx_adc_chan_result *adc_chan_result)
 {
+	/* Note: adc_chan_result->measurement is in the unit of
+		adc_properties.adc_reference */
 	adc_chan_result->measurement = adc_code;
-	
+	/* convert mV ---> degC using the table */
 	return pm8xxx_adc_map_linear(
 			adcmap_batttherm,
 			ARRAY_SIZE(adcmap_batttherm),
@@ -681,7 +707,7 @@ int32_t pm8xxx_adc_scale_pmic_therm(int32_t adc_code,
 	pmic_voltage += chan_properties->adc_graph[ADC_CALIB_ABSOLUTE].dx;
 
 	if (pmic_voltage > 0) {
-		
+		/* 2mV/K */
 		adc_chan_result->measurement = pmic_voltage*
 			chan_properties->offset_gain_denominator;
 
@@ -690,7 +716,7 @@ int32_t pm8xxx_adc_scale_pmic_therm(int32_t adc_code,
 	} else {
 		adc_chan_result->measurement = 0;
 	}
-	
+	/* Change to .001 deg C */
 	adc_chan_result->measurement -= KELVINMIL_DEGMIL;
 	adc_chan_result->physical = (int32_t)adc_chan_result->measurement;
 
@@ -698,6 +724,9 @@ int32_t pm8xxx_adc_scale_pmic_therm(int32_t adc_code,
 }
 EXPORT_SYMBOL_GPL(pm8xxx_adc_scale_pmic_therm);
 
+/* Scales the ADC code to 0.001 degrees C using the map
+ * table for the XO thermistor.
+ */
 int32_t pm8xxx_adc_tdkntcg_therm(int32_t adc_code,
 		const struct pm8xxx_adc_properties *adc_properties,
 		const struct pm8xxx_adc_chan_properties *chan_properties,

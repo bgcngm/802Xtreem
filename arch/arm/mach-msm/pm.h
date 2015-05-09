@@ -59,12 +59,14 @@ enum msm_pm_sleep_mode {
 #define MSM_PM_MODE(cpu, mode_nr)  ((cpu) * MSM_PM_SLEEP_MODE_NR + (mode_nr))
 
 struct msm_pm_platform_data {
-	u8 idle_supported;   
-	u8 suspend_supported; 
-	u8 suspend_enabled;  
-	u8 idle_enabled;     
-	u32 latency;         
-	u32 residency;       
+	u8 idle_supported;   /* Allow device to enter mode during idle */
+	u8 suspend_supported; /* Allow device to enter mode during suspend */
+	u8 suspend_enabled;  /* enabled for suspend */
+	u8 idle_enabled;     /* enabled for idle low power */
+	u32 latency;         /* interrupt latency in microseconds when entering
+				and exiting the low power mode */
+	u32 residency;       /* time threshold in microseconds beyond which
+				staying in the low power mode saves power */
 };
 
 extern struct msm_pm_platform_data msm_pm_sleep_modes[];
@@ -146,4 +148,4 @@ static inline void msm_pm_add_stat(enum msm_pm_time_stats_id id, int64_t t) {}
 int print_gpio_buffer(struct seq_file *m);
 int free_gpio_buffer(void);
 
-#endif  
+#endif  /* __ARCH_ARM_MACH_MSM_PM_H */

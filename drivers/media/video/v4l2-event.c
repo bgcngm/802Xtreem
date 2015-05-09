@@ -135,7 +135,7 @@ int v4l2_event_dequeue(struct v4l2_fh *fh, struct v4l2_event *event,
 	if (nonblocking)
 		return __v4l2_event_dequeue(fh, event);
 
-	
+	/* Release the vdev lock while waiting */
 	if (fh->vdev->lock)
 		mutex_unlock(fh->vdev->lock);
 
@@ -155,6 +155,7 @@ int v4l2_event_dequeue(struct v4l2_fh *fh, struct v4l2_event *event,
 }
 EXPORT_SYMBOL_GPL(v4l2_event_dequeue);
 
+/* Caller must hold fh->event->lock! */
 static struct v4l2_subscribed_event *v4l2_event_subscribed(
 	struct v4l2_fh *fh, u32 type)
 {
@@ -185,20 +186,20 @@ void v4l2_event_queue(struct video_device *vdev, const struct v4l2_event *ev)
 		struct v4l2_events *events = fh->events;
 		struct v4l2_kevent *kev;
 
-		
+		/* Are we subscribed? */
 		if (!v4l2_event_subscribed(fh, ev->type))
 			continue;
 
-		
+		/* Increase event sequence number on fh. */
 		events->sequence++;
 
-		
+		/* Do we have any free events? */
 		if (list_empty(&events->free)) {
-			
+			/* HTC_START Max 20120311, add log to indicate that there is no more free event queue */
 			pr_err("%s, no free event queues", __func__);
 			continue;
 		}
-		
+		/* Take one and fill it. */
 		kev = list_first_entry(&events->free, struct v4l2_kevent, list);
 		kev->event.type = ev->type;
 		kev->event.u = ev->u;
@@ -217,7 +218,9 @@ EXPORT_SYMBOL_GPL(v4l2_event_queue);
 
 int v4l2_event_pending(struct v4l2_fh *fh)
 {
+// HTC_START
 	if (!(fh) || !(fh)->events) return 0;
+// HTC_END
 	return fh->events->navailable;
 }
 EXPORT_SYMBOL_GPL(v4l2_event_pending);

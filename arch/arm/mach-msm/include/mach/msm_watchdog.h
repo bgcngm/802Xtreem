@@ -14,14 +14,14 @@
 #define __ARCH_ARM_MACH_MSM_MSM_WATCHDOG_H
 
 struct msm_watchdog_pdata {
-	
+	/* pet interval period in ms */
 	unsigned int pet_time;
-	
+	/* bark timeout in ms */
 	unsigned int bark_time;
 	bool has_secure;
 	bool needs_expired_enable;
 	bool has_vic;
-	
+	/* You have to be running in secure mode to use FIQ */
 	bool use_kernel_fiq;
 };
 

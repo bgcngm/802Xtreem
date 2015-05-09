@@ -323,11 +323,7 @@ static void android_work(struct work_struct *data)
 		kobject_uevent_env(&dev->dev->kobj, KOBJ_CHANGE, uevent_envp);
 		last_uevent = next_state;
 		pr_info("%s: sent uevent %s\n", __func__, uevent_envp[0]);
-		if (dev->pdata->vzw_unmount_cdrom) {
-			cancel_delayed_work(&cdev->cdusbcmd_vzw_unmount_work);
-			cdev->unmount_cdrom_mask = 1 << 3 | 1 << 4;
-			schedule_delayed_work(&cdev->cdusbcmd_vzw_unmount_work,30 * HZ);
-		}
+		pr_info("%s: skip trigger unmount uevent\n", __func__);
 	} else {
 		pr_info("%s: did not send uevent (%d %d %p)\n", __func__,
 			 dev->connected, dev->sw_connected, cdev->config);

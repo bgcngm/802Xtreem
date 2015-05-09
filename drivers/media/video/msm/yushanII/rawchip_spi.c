@@ -66,24 +66,31 @@ yushan_spi_sync_write_then_read(uint8_t *txbuf, size_t n_tx,
 	spi_message_add_tail(&rx_t, &m);
 #endif
 
-	return spi_sync(yushan_spi_ctrl->spi, &m); 
+	return spi_sync(yushan_spi_ctrl->spi, &m); /* USE spi_sync function for now.*/
 }
 int yushan_spi_read(uint16_t reg, uint8_t *rval)
 {
 	int rc = 0;
-	uint8_t  rx[6];
+	uint8_t /*tx[3],*/ rx[6];
+/*
+	tx[0] = 0x60;
+	tx[1] = (reg & 0xff00) >> 8;
+	tx[2] = reg & 0x00ff;
+
+	rc = yushan_spi_single_write(&tx[0], 3);
+*/
 	rx[0] = 0x60;
 	rx[1] = (reg & 0xff00) >> 8;
 	rx[2] = reg & 0x00ff;
 	rx[3] = 0x61;
 	rx[4] = 0;
-	
+	/*rx[5] = 0;*/
 
 	rc = yushan_spi_sync_write_then_read(&rx[0], 3,
 		&rx[3], 2);
 
 	if (rc >= 0)
-		
+		/* *rval = rx[4] << 8 | rx[5];*/
 		*rval = rx[4];
 	else {
 		pr_err("yushan_spi_sync_write_then_read failed\n");
@@ -104,7 +111,7 @@ int SPI_Read32( uint16_t uwIndex , uint16_t uwCount , uint32_t * pData)
 	for (i=0; i<uwCount; i++)
 	{
 		reg = uwIndex+i;
-		
+		/*rc = yushan_spi_read(reg,&val);*/
 		rc = rawchip_spi_read_2B4B(reg,&val);
 		if (rc==0)
 		{
@@ -136,11 +143,11 @@ int SPI_Read( uint16_t uwIndex , uint16_t uwCount , uint8_t * pData)
 	mutex_lock(&spi_lock);
 	if(uwCount > 1){
 		rawchip_spi_read_burst(uwIndex, pData, uwCount);
-	}else{
+	}else{/*TODO:for loop can be remove since now we have burst mode read*/
 		for (i=0; i<uwCount; i++)
 		{
 			reg = uwIndex+i;
-			
+			/*rc = yushan_spi_read(reg,&val);*/
 			rc = rawchip_spi_read_2B1B(reg,&val);
 			if (rc==0)
 			{
@@ -172,9 +179,9 @@ static void yushan_spi_complete(void *arg)
 static int yushan_spi_transaction(struct spi_message *msg)
 {
 	DECLARE_COMPLETION_ONSTACK(yushan_done);
-	
+	/* HTC_START (klockwork issue)*/
 	static int status = 0;
-	
+	/* HTC_END */
 
 	msg->complete = yushan_spi_complete;
 	msg->context = &yushan_done;
@@ -211,21 +218,35 @@ static int yushan_spi_sync_write_once(uint8_t *tbuf, uint8_t *wbuf)
 		.tx_buf	= tbuf,
 		.len = 4,
 	};
+/*
+	struct spi_transfer tx_buf = {
+		.tx_buf = wbuf,
+		.len = 1,
+	};
+*/
 	spi_message_init(&m);
 	spi_message_add_tail(&tx_addr, &m);
+/*
+	spi_message_add_tail(&tx_buf, &m);
+*/
 	return yushan_spi_transaction(&m);
 }
 
-int yushan_spi_write(uint16_t reg, uint8_t val)
+int yushan_spi_write(uint16_t reg, uint8_t/*uint16_t*/ val)
 {
-	uint8_t tx[4];
+	uint8_t tx[4]/*, wb[1]*/;
 
 	tx[0] = 0x60;
 	tx[1] = (reg & 0xff00) >> 8;
 	tx[2] = reg & 0x00ff;
 	tx[3] = val;
+/*
+	wb[0] = yushan_REGVAL_WR;
+	wb[1] = (val & 0xff00) >> 8;
+	wb[2] = val & 0x00ff;
+*/
 
-    return yushan_spi_sync_write_once(&tx[0], NULL);
+    return yushan_spi_sync_write_once(&tx[0], NULL/*&wb[0]*/);
 }
 
 int yushan_spi_burstwrite(uint16_t uwIndex , uint16_t uwCount , uint8_t *pData){
@@ -269,7 +290,7 @@ int SPI_Write(uint16_t uwIndex , uint16_t uwCount , uint8_t *pData)
 	mutex_lock(&spi_lock);
 	if(uwCount>1){
 		rc = yushan_spi_burstwrite(uwIndex,uwCount,pData);
-	}else{
+	}else{/*TODO:for loop can be remove*/
 		for (i = 0; i < uwCount; i++) {
 			reg = uwIndex+i;
 			rc = yushan_spi_write(reg,*(pData+i));
@@ -381,7 +402,7 @@ int rawchip_spi_write_2B1B(uint16_t addr, unsigned char data)
 {
 	unsigned char buffer[4];
 	int rc;
-	
+	/*uint8_t rb;*/
 
 	if (!rawchip_dev)
 		return -1;
@@ -399,6 +420,7 @@ int rawchip_spi_write_2B1B(uint16_t addr, unsigned char data)
 	CDBG("[CAM] rawchip_spi_write_2B1B--\
 		, rc=%d (addr=0x%x, data=0x%x)\n", rc, addr, data);
 
+/*read back check*/
 #if 0
 	msleep(10);
 	rawchip_spi_read_2B1B(addr, &rb);
@@ -429,8 +451,8 @@ int rawchip_spi_read_2B4B(uint16_t addr, uint32_t *data)
 
 	tx_buf[0] = 0x61;
 	tx_buf[1] = 0x00;
-	tx_buf[2] = 0x00; 
-	tx_buf[3] = 0x00; 
+	tx_buf[2] = 0x00; // dummy data, please see spi_write_and_read()
+	tx_buf[3] = 0x00; // dummy data, please see spi_write_and_read()
 
 	rx_buf[0] = 0x00;
 	rx_buf[1] = 0x00;
@@ -513,7 +535,7 @@ int rawchip_spi_read_big_buffer(uint16_t addr, unsigned char *data, int count)
 	rawchip_dev->bits_per_word = 8;
 
 	for(i=0 ; i<times ; i++){
-		
+		/*write address*/
 		buffer[0] = 0x60;
 		buffer[1] = ((addr+times_acc) & 0xff00) >> 8;
 		buffer[2] = (addr+times_acc) & 0x00ff;
@@ -524,7 +546,7 @@ int rawchip_spi_read_big_buffer(uint16_t addr, unsigned char *data, int count)
 			return rc;
 		}
 	
-		
+		/*read address*/
 		left = count - times_acc;
 		if(left < MAX_SIZE)
 			read_size = left;
@@ -540,6 +562,10 @@ int rawchip_spi_read_big_buffer(uint16_t addr, unsigned char *data, int count)
 		memcpy(data+data_acc, rx_buf+1, read_size);
 		data_acc = data_acc + read_size;
 		times_acc = times_acc+MAX_SIZE;
+		/*
+		pr_info("[CAM]read_size:%d times:%d left:%d data_acc:%d data:0x%x next data",
+			read_size,times,left,data_acc,(unsigned int)data+data_acc);
+		*/
 	}
 	CDBG("[CAM]rawchip_spi_read_burst---, \
 		rc=%d, (addr=0x%x, data=0x%x rx_buf[0]:0x%x)\n", rc, addr, data[0], rx_buf[0]);
@@ -634,7 +660,7 @@ int spi_rawchip_probe(struct spi_device *rawchip)
 
 	rawchip_dev = rawchip;
 
-	
+	/*from yushan*/
 	yushan_spi_ctrl = kzalloc(sizeof(*yushan_spi_ctrl), GFP_KERNEL);
 	if (!yushan_spi_ctrl)
 		return -ENOMEM;

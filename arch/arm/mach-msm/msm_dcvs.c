@@ -65,13 +65,13 @@ struct dcvs_core {
 	uint32_t actual_freq;
 	uint32_t freq_change_us;
 
-	uint32_t max_time_us; 
+	uint32_t max_time_us; /* core param */
 
 	struct msm_dcvs_algo_param algo_param;
 	struct msm_dcvs_idle *idle_driver;
 	struct msm_dcvs_freq *freq_driver;
 
-	
+	/* private */
 	int64_t time_start;
 	struct mutex lock;
 	spinlock_t cpu_lock;
@@ -82,7 +82,7 @@ struct dcvs_core {
 	uint32_t freq_pending;
 	struct hrtimer timer;
 	int32_t timer_disabled;
-	
+	/* track if kthread for change_freq is active */
 	int32_t change_freq_activated;
 };
 
@@ -98,6 +98,7 @@ static DEFINE_MUTEX(core_list_lock);
 static struct kobject *cores_kobj;
 static struct dcvs_core *core_handles[CORES_MAX];
 
+/* Change core frequency, called with core mutex locked */
 static int __msm_dcvs_change_freq(struct dcvs_core *core)
 {
 	int ret = 0;
@@ -110,7 +111,7 @@ static int __msm_dcvs_change_freq(struct dcvs_core *core)
 	uint32_t ret1 = 0;
 
 	if (!core->freq_driver || !core->freq_driver->set_frequency) {
-		
+		/* Core may have unregistered or hotplugged */
 		return -ENODEV;
 	}
 repeat:
@@ -131,6 +132,11 @@ repeat:
 	time_start = core->time_start;
 	core->time_start = 0;
 	core->freq_pending = 0;
+	/**
+	 * Cancel the timers, we dont want the timer firing as we are
+	 * changing the clock rate. Dont let idle_exit and others setup
+	 * timers as well.
+	 */
 	hrtimer_cancel(&core->timer);
 	core->timer_disabled = 1;
 	spin_unlock_irqrestore(&core->cpu_lock, flags);
@@ -138,12 +144,17 @@ repeat:
 	if (requested_freq == core->actual_freq)
 		return ret;
 
+	/**
+	 * Call the frequency sink driver to change the frequency
+	 * We will need to get back the actual frequency in KHz and
+	 * the record the time taken to change it.
+	 */
 	ret = core->freq_driver->set_frequency(core->freq_driver,
 				requested_freq);
 	if (ret <= 0) {
 		__err("Core %s failed to set freq %u\n",
 				core->core_name, requested_freq);
-		
+		/* continue to call TZ to get updated slack timer */
 	} else {
 		prev_freq = core->actual_freq;
 		core->actual_freq = ret;
@@ -157,6 +168,10 @@ repeat:
 	do_div(time_end, NSEC_PER_USEC);
 	core->freq_change_us = (uint32_t)time_end;
 
+	/**
+	 * Disable low power modes if the actual frequency is >
+	 * disable_pc_threshold.
+	 */
 	if (core->actual_freq >
 			core->algo_param.disable_pc_threshold) {
 		core->idle_driver->enable(core->idle_driver,
@@ -171,10 +186,15 @@ repeat:
 			__info("Enabling LPM for %s\n", core->core_name);
 	}
 
+	/**
+	 * Update algorithm with new freq and time taken to change
+	 * to this frequency and that will get us the new slack
+	 * timer
+	 */
 	ret = msm_dcvs_scm_event(core->handle, MSM_DCVS_SCM_CLOCK_FREQ_UPDATE,
 		core->actual_freq, (uint32_t)time_end, &slack_us, &ret1);
 	if (!ret) {
-		
+		/* Reset the slack timer */
 		if (slack_us) {
 			core->timer_disabled = 0;
 			ret = hrtimer_start(&core->timer,
@@ -196,6 +216,10 @@ repeat:
 			core->actual_freq, prev_freq,
 			core->freq_change_us, slack_us);
 
+	/**
+	 * By the time we are done with freq changes, we could be asked to
+	 * change again. Check before exiting.
+	 */
 	if (core->freq_pending)
 		goto repeat;
 
@@ -253,7 +277,7 @@ static int msm_dcvs_update_freq(struct dcvs_core *core,
 		core->new_freq[core->freq_pending++] = new_freq;
 		core->time_start = ktime_to_ns(ktime_get());
 
-		
+		/* Schedule the frequency change */
 		if (!core->task)
 			__err("Uninitialized task for core %s\n",
 					core->core_name);
@@ -283,6 +307,10 @@ static enum hrtimer_restart msm_dcvs_core_slack_timer(struct hrtimer *timer)
 	if (msm_dcvs_debug & MSM_DCVS_DEBUG_FREQ_CHANGE)
 		__info("Slack timer fired for core %s\n", core->core_name);
 
+	/**
+	 * Timer expired, notify TZ
+	 * Dont care about the third arg.
+	 */
 	ret = msm_dcvs_update_freq(core, MSM_DCVS_SCM_QOS_TIMER_EXPIRED, 0,
 				   &ret1, &ret2);
 	if (ret)
@@ -292,6 +320,7 @@ static enum hrtimer_restart msm_dcvs_core_slack_timer(struct hrtimer *timer)
 	return HRTIMER_NORESTART;
 }
 
+/* Helper functions and macros for sysfs nodes for a core */
 #define CORE_FROM_ATTRIBS(attr, name) \
 	container_of(container_of(attr, struct core_attribs, name), \
 		struct dcvs_core, attrib);
@@ -350,6 +379,10 @@ static ssize_t msm_dcvs_attr_##_name##_store(struct kobject *kobj, \
 	core->attrib._name.store = msm_dcvs_attr_##_name##_store; \
 	core->attrib.attrib_group.attrs[i] = &core->attrib._name.attr;
 
+/**
+ * Function declarations for different attributes.
+ * Gets used when setting the attribute show and store parameters.
+ */
 DCVS_PARAM_SHOW(idle_enabled, (core->idle_driver != NULL))
 DCVS_PARAM_SHOW(freq_change_enabled, (core->freq_driver != NULL))
 DCVS_PARAM_SHOW(actual_freq, (core->actual_freq))
@@ -421,6 +454,7 @@ done:
 	return ret;
 }
 
+/* Return the core if found or add to list if @add_to_list is true */
 static struct dcvs_core *msm_dcvs_get_core(const char *name, int add_to_list)
 {
 	struct dcvs_core *core = NULL;
@@ -442,7 +476,7 @@ static struct dcvs_core *msm_dcvs_get_core(const char *name, int add_to_list)
 			break;
 	}
 
-	
+	/* Check for core_list full */
 	if ((i == CORES_MAX) && (empty < 0)) {
 		mutex_unlock(&core_list_lock);
 		return NULL;
@@ -478,6 +512,12 @@ int msm_dcvs_register_core(const char *core_name, uint32_t group_id,
 
 	mutex_lock(&core->lock);
 	if (group_id) {
+		/**
+		 * Create a group for cores, if this core is part of a group
+		 * if the group_id is 0, the core is not part of a group.
+		 * If the group_id already exits, it will through an error
+		 * which we will ignore.
+		 */
 		ret = msm_dcvs_scm_create_group(group_id);
 		if (ret == -ENOMEM)
 			goto bail;
@@ -541,7 +581,7 @@ int msm_dcvs_freq_sink_register(struct msm_dcvs_freq *drv)
 
 	if (core->idle_driver) {
 		core->actual_freq = core->freq_driver->get_frequency(drv);
-		
+		/* Notify TZ to start receiving idle info for the core */
 		ret = msm_dcvs_update_freq(core, MSM_DCVS_SCM_ENABLE_CORE, 1,
 					   &ret1, &ret2);
 		core->idle_driver->enable(core->idle_driver,
@@ -574,7 +614,7 @@ int msm_dcvs_freq_sink_unregister(struct msm_dcvs_freq *drv)
 	if (core->idle_driver) {
 		core->idle_driver->enable(core->idle_driver,
 				MSM_DCVS_DISABLE_IDLE_PULSE);
-		
+		/* Notify TZ to stop receiving idle info for the core */
 		ret = msm_dcvs_update_freq(core, MSM_DCVS_SCM_ENABLE_CORE, 0,
 					   &ret1, &ret2);
 		hrtimer_cancel(&core->timer);
@@ -669,7 +709,7 @@ int msm_dcvs_idle(int handle, enum msm_core_idle_state state, uint32_t iowaited)
 		if (ret)
 			__err("Error (%d) sending idle exit for %s\n",
 					ret, core->core_name);
-		
+		/* only start slack timer if change_freq won't */
 		if (freq_changed || core->change_freq_activated)
 			break;
 		if (timer_interval_us && !core->timer_disabled) {

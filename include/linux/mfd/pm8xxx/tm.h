@@ -11,6 +11,9 @@
  * GNU General Public License for more details.
  */
 
+/*
+ * Qualcomm PMIC PM8xxx Thermal Manager driver
+ */
 
 #ifndef __PM8XXX_TM_H
 #define __PM8XXX_TM_H
@@ -20,7 +23,7 @@
 #define PM8XXX_TM_DEV_NAME	"pm8xxx-tm"
 
 enum pm8xxx_tm_adc_type {
-	PM8XXX_TM_ADC_NONE,	
+	PM8XXX_TM_ADC_NONE,	/* Estimates temp based on overload level. */
 	PM8XXX_TM_ADC_PM8058_ADC,
 	PM8XXX_TM_ADC_PM8XXX_ADC,
 };

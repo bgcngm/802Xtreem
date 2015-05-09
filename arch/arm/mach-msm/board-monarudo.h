@@ -36,7 +36,11 @@
 int __init monarudo_init_keypad(void);
 
 
+/* Platform dependent definition */
+/* Platform dependent definition */
+/* Platform dependent definition */
 
+/* Not reviewed GPIO */
 #define LCD_TE			GPIO(0)
 #define DRIVER_EN_XA_XB		GPIO(1)
 #define RAW_RST_XC_XD		GPIO(1)
@@ -231,6 +235,7 @@ int __init monarudo_init_keypad(void);
 #define NC_PMGPIO_43		PMGPIO(43)
 #define AUD_HAC_SDz_XA_XB		PMGPIO(44)
 #define BCM4330_SLEEP_CLK_XC		PMGPIO(44)
+/* Macros assume PMIC GPIOs and MPPs start at 1 */
 #define PM8921_GPIO_BASE		NR_GPIO_IRQS
 #define PM8921_GPIO_PM_TO_SYS(pm_gpio)	(pm_gpio - 1 + PM8921_GPIO_BASE)
 #define PM8921_MPP_BASE			(PM8921_GPIO_BASE + PM8921_NR_GPIOS)
@@ -279,11 +284,11 @@ int monarudo_wifi_init(void);
 void monarudo_init_gpiomux(void);
 void monarudo_init_pmic(void);
 
-#if 1	
+#if 1	// for pre-evt no camera
 extern struct platform_device monarudo_msm_rawchip_device;
 #endif
 extern struct msm_camera_board_info monarudo_camera_board_info;
-extern struct msm_camera_board_info monarudo_camera_board_info_xd;
+extern struct msm_camera_board_info monarudo_camera_board_info_xd;/* HTC_START_Simon.Ti_Liu_201207011_MIPI_SWITCH*/
 void monarudo_init_cam(void);
 
 #define APQ_8064_GSBI1_QUP_I2C_BUS_ID 0

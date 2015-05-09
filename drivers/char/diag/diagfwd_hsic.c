@@ -34,8 +34,8 @@
 #include "diagfwd_bridge.h"
 
 #define READ_HSIC_BUF_SIZE 2048
-#define DIAG_BODY_OF_NEXT_PKT 0 
-#define DIAG_HEAD_OF_NEXT_PKT 1 
+#define DIAG_BODY_OF_NEXT_PKT 0 /* indicate next packet would be not the head of packet */
+#define DIAG_HEAD_OF_NEXT_PKT 1 /* indicate next packet would be the start of packet */
 
 static void diag_read_hsic_work_fn(struct work_struct *work)
 {
@@ -49,6 +49,10 @@ static void diag_read_hsic_work_fn(struct work_struct *work)
 		return;
 	}
 
+	/*
+	 * Determine the current number of available buffers for writing after
+	 * reading from the HSIC has completed.
+	 */
 	if (driver->logging_mode == MEMORY_DEVICE_MODE)
 		write_ptrs_available = driver->poolsize_hsic_write -
 					driver->num_hsic_buf_tbl_entries;
@@ -56,18 +60,35 @@ static void diag_read_hsic_work_fn(struct work_struct *work)
 		write_ptrs_available = driver->poolsize_hsic_write -
 					driver->count_hsic_write_pool;
 
+	/*
+	 * Queue up a read on the HSIC for all available buffers in the
+	 * pool, exhausting the pool.
+	 */
 	do {
+		/*
+		 * If no more write buffers are available,
+		 * stop queuing reads
+		 */
 		if (write_ptrs_available <= 0)
 			break;
 
 		write_ptrs_available--;
 
+		/*
+		 * No sense queuing a read if the HSIC bridge was
+		 * closed in another thread
+		 */
 		if (!driver->hsic_ch)
 			break;
 
 		buf_in_hsic = diagmem_alloc(driver, READ_HSIC_BUF_SIZE,
 							POOL_TYPE_HSIC);
 		if (buf_in_hsic) {
+			/*
+			 * Initiate the read from the HSIC.  The HSIC read is
+			 * asynchronous.  Once the read is complete the read
+			 * callback function will be called.
+			 */
 			pr_debug("diag: read from HSIC\n");
 			num_reads_submitted++;
 			err = diag_bridge_read(0, (char *)buf_in_hsic,
@@ -75,17 +96,26 @@ static void diag_read_hsic_work_fn(struct work_struct *work)
 			if (err) {
 				num_reads_submitted--;
 
-				
+				/* Return the buffer to the pool */
 				diagmem_free(driver, buf_in_hsic,
 						POOL_TYPE_HSIC);
 
 				pr_err_ratelimited("diag: Error initiating HSIC read, err: %d\n",
 					err);
+				/*
+				 * An error occurred, discontinue queuing
+				 * reads
+				 */
 				break;
 			}
 		}
 	} while (buf_in_hsic);
 
+	/*
+	 * If there are read buffers available and for some reason the
+	 * read was not queued, and if no unrecoverable error occurred
+	 * (-ENODEV is an unrecoverable error), then set up the next read
+	 */
 	if ((driver->count_hsic_pool < driver->poolsize_hsic) &&
 		(num_reads_submitted == 0) && (err != -ENODEV) &&
 		(driver->hsic_ch != 0))
@@ -103,12 +133,20 @@ static void diag_hsic_read_complete_callback(void *ctxt, char *buf,
 	int err = -2;
 
 	if (!driver->hsic_ch) {
+		/*
+		 * The HSIC channel is closed. Return the buffer to
+		 * the pool.  Do not send it on.
+		 */
 		diagmem_free(driver, buf, POOL_TYPE_HSIC);
 		pr_debug("diag: In %s: driver->hsic_ch == 0, actual_size: %d\n",
 			__func__, actual_size);
 		return;
 	}
 
+	/*
+	 * Note that zero length is valid and still needs to be sent to
+	 * the USB only when we are logging data to the USB
+	 */
 	if ((actual_size > 0) ||
 		((actual_size == 0) && (driver->logging_mode == USB_MODE))) {
 		if (!buf) {
@@ -116,6 +154,13 @@ static void diag_hsic_read_complete_callback(void *ctxt, char *buf,
 		} else {
 			DIAGFWD_9K_RAWDATA(buf, "9K", DIAG_DBG_READ);
 #if DIAG_XPST && defined(CONFIG_DIAGFWD_BRIDGE_CODE)
+			/* HTC: only route to user space if the packet smd received
+			 * is the head of the full packet to avoid route wrong packet
+			 * to userspace. BTW, to avoid lost 1st packet (do not know if
+			 * the head of packet), we always check 1st packet. It should
+			 * be the 0xc sync packet.
+			 * Note: The checkcmd only be applied if packet size > 0
+			 */
 			if ((pkt_hdr == DIAG_HEAD_OF_NEXT_PKT ||
 				(first_pkt == 1)) && actual_size > 0) {
 				if (unlikely(first_pkt == 1)) first_pkt = 0;
@@ -123,7 +168,7 @@ static void diag_hsic_read_complete_callback(void *ctxt, char *buf,
 				if (type) {
 					modem_to_userspace(buf, actual_size, type, 1);
 					pkt_hdr = DIAG_HEAD_OF_NEXT_PKT;
-					
+					/* HTC: release buffer to diagmem */
 					diagmem_free(driver,
 						(unsigned char *)buf, POOL_TYPE_HSIC);
 					return;
@@ -131,6 +176,11 @@ static void diag_hsic_read_complete_callback(void *ctxt, char *buf,
 				pkt_hdr = DIAG_BODY_OF_NEXT_PKT;
 			}
 
+			/* HTC: Because 0 length packet from HSIC is allowed, so we
+			 * should take care about the 0 length case. If we do the
+			 * check out of boundary, it have chance to make unexpected
+			 * result.
+			 */
 			if ((actual_size == 1 && *buf == CONTROL_CHAR) ||
 					((actual_size >= 2) &&
 					(*(buf+actual_size-1) == CONTROL_CHAR &&
@@ -143,7 +193,7 @@ static void diag_hsic_read_complete_callback(void *ctxt, char *buf,
 			 */
 			diag_bridge[HSIC].write_len = actual_size;
 			err = diag_device_write((void *)buf, HSIC_DATA, NULL);
-			
+			/* If an error, return buffer to the pool */
 			if (err) {
 				diagmem_free(driver, buf, POOL_TYPE_HSIC);
 				pr_err_ratelimited("diag: In %s, error calling diag_device_write, err: %d\n",
@@ -151,11 +201,20 @@ static void diag_hsic_read_complete_callback(void *ctxt, char *buf,
 			}
 		}
 	} else {
+		/*
+		 * The buffer has an error status associated with it. Do not
+		 * pass it on. Note that -ENOENT is sent when the diag bridge
+		 * is closed.
+		 */
 		diagmem_free(driver, buf, POOL_TYPE_HSIC);
 		pr_debug("diag: In %s: error status: %d\n", __func__,
 			actual_size);
 	}
 
+	/*
+	 * If for some reason there was no HSIC data to write to the
+	 * mdm channel, set up another read
+	 */
 	if (err &&
 		((driver->logging_mode == MEMORY_DEVICE_MODE) ||
 		(diag_bridge[HSIC].usb_connected && !driver->hsic_suspend))) {
@@ -167,7 +226,7 @@ static void diag_hsic_read_complete_callback(void *ctxt, char *buf,
 static void diag_hsic_write_complete_callback(void *ctxt, char *buf,
 					int buf_size, int actual_size)
 {
-	
+	/* The write of the data to the HSIC bridge is complete */
 	driver->in_busy_hsic_write = 0;
 
 	if (driver->in_busy_hsic_write_wait) {
@@ -193,11 +252,11 @@ static int diag_hsic_suspend(void *ctxt)
 {
 	pr_debug("diag: hsic_suspend\n");
 
-	
+	/* Don't allow suspend if a write in the HSIC is in progress */
 	if (driver->in_busy_hsic_write)
 		return -EBUSY;
 
-	
+	/* Don't allow suspend if in MEMORY_DEVICE_MODE */
 	if (driver->logging_mode == MEMORY_DEVICE_MODE)
 		return -EBUSY;
 
@@ -211,6 +270,13 @@ static void diag_hsic_resume(void *ctxt)
 	pr_debug("diag: hsic_resume\n");
 	driver->hsic_suspend = 0;
 
+	/* HTC: Always queue read work if we have buffer in pool.
+	 * In QCT design, it only queue read work on below 2 condition
+	 * 1. driver->logging_mode == MEMORY_DEVICE_MODE: embedded logging
+	 * 2. diag_bridge[HSIC].usb_connected: USB QxDM
+	 * However, we supports Verizon/Sprint EPST via DIAG channel, so it
+	 * should queue the request every resume
+	 */
 	if (driver->count_hsic_pool < driver->poolsize_hsic)
 		queue_work(diag_bridge[HSIC].wq,
 			 &driver->diag_read_hsic_work);
@@ -240,6 +306,7 @@ void diag_hsic_close(void)
 	}
 }
 
+/* diagfwd_cancel_hsic is called to cancel outstanding read/writes */
 int diagfwd_cancel_hsic(void)
 {
 	int err;
@@ -265,12 +332,16 @@ int diagfwd_cancel_hsic(void)
 	return 0;
 }
 
+/*
+ * diagfwd_write_complete_hsic is called after the asynchronous
+ * usb_diag_write() on mdm channel is complete
+ */
 int diagfwd_write_complete_hsic(struct diag_request *diag_write_ptr)
 {
 	unsigned char *buf = (diag_write_ptr) ? diag_write_ptr->buf : NULL;
 
 	if (buf) {
-		
+		/* Return buffers to their pools */
 		diagmem_free(driver, (unsigned char *)buf, POOL_TYPE_HSIC);
 		diagmem_free(driver, (unsigned char *)diag_write_ptr,
 							POOL_TYPE_HSIC_WRITE);
@@ -281,7 +352,7 @@ int diagfwd_write_complete_hsic(struct diag_request *diag_write_ptr)
 		return 0;
 	}
 
-	
+	/* Read data from the HSIC */
 	queue_work(diag_bridge[HSIC].wq, &driver->diag_read_hsic_work);
 
 	return 0;
@@ -307,7 +378,7 @@ void diag_read_usb_hsic_work_fn(struct work_struct *work)
 	if (!driver->in_busy_hsic_read_on_device &&
 	     !driver->in_busy_hsic_write) {
 		APPEND_DEBUG('x');
-		
+		/* Setup the next read from usb mdm channel */
 		driver->in_busy_hsic_read_on_device = 1;
 		diag_bridge[HSIC].usb_read_ptr->buf =
 				 diag_bridge[HSIC].usb_buf_out;
@@ -317,6 +388,9 @@ void diag_read_usb_hsic_work_fn(struct work_struct *work)
 				 diag_bridge[HSIC].usb_read_ptr);
 		APPEND_DEBUG('y');
 	}
+	/* If for some reason there was no mdm channel read initiated,
+	 * queue up the reading of data from the mdm channel
+	 */
 
 	if (!driver->in_busy_hsic_read_on_device &&
 		(driver->logging_mode == USB_MODE))
@@ -351,10 +425,15 @@ static int diag_hsic_probe(struct platform_device *pdev)
 			    diag_read_hsic_work_fn);
 		driver->hsic_inited = 1;
 	}
+	/*
+	 * The probe function was called after the usb was connected
+	 * on the legacy channel OR ODL is turned on. Communication over usb
+	 * mdm and HSIC needs to be turned on.
+	 */
 	if (diag_bridge[HSIC].usb_connected || (driver->logging_mode ==
 						   MEMORY_DEVICE_MODE)) {
 		if (driver->hsic_device_opened) {
-			
+			/* should not happen. close it before re-opening */
 			pr_warn("diag: HSIC channel already opened in probe\n");
 			diag_bridge_close(0);
 		}
@@ -373,15 +452,15 @@ static int diag_hsic_probe(struct platform_device *pdev)
 		driver->in_busy_hsic_write = 0;
 
 		if (diag_bridge[HSIC].usb_connected) {
-			
+			/* Poll USB mdm channel to check for data */
 			queue_work(diag_bridge[HSIC].wq,
 			     &diag_bridge[HSIC].diag_read_work);
 		}
-		
+		/* Poll HSIC channel to check for data */
 		queue_work(diag_bridge[HSIC].wq,
 			  &driver->diag_read_hsic_work);
 	}
-	
+	/* The HSIC (diag_bridge) platform device driver is enabled */
 	driver->hsic_device_enabled = 1;
 	mutex_unlock(&diag_bridge[HSIC].bridge_mutex);
 	return err;

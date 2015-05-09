@@ -23,12 +23,17 @@ DEFINE_RAW_SPINLOCK(l2_access_lock);
 #define L2CPUVRF8	0x708
 #define CPUNDX_MASK	(0x7 << 12)
 
+/*
+ * For Krait versions found in APQ8064v1.x, save L2CPUVRF8 before
+ * L2CPMR or L2CPUCPMR writes and restore it after to work around an
+ * issue where L2CPUVRF8 becomes corrupt.
+ */
 static bool l2cpuvrf8_needs_fix(u32 reg_addr)
 {
 	switch (read_cpuid_id()) {
-	case 0x510F06F0: 
-	case 0x510F06F1: 
-	case 0x510F06F2: 
+	case 0x510F06F0: /* KR28M4A10  */
+	case 0x510F06F1: /* KR28M4A10B */
+	case 0x510F06F2: /* KR28M4A11  */
 		break;
 	default:
 		return false;
@@ -77,7 +82,7 @@ u32 set_get_l2_indirect_reg(u32 reg_addr, u32 val)
 	u32 uninitialized_var(l2cpuvrf8_val), l2cpuvrf8_addr = 0;
 	u32 ret_val;
 
-	
+	/* CP15 registers are not emulated on RUMI3. */
 	if (machine_is_msm8960_rumi3())
 		return 0;
 
@@ -110,7 +115,7 @@ void set_l2_indirect_reg(u32 reg_addr, u32 val)
 	unsigned long flags;
 	u32 uninitialized_var(l2cpuvrf8_val), l2cpuvrf8_addr = 0;
 
-	
+	/* CP15 registers are not emulated on RUMI3. */
 	if (machine_is_msm8960_rumi3())
 		return;
 
@@ -139,7 +144,7 @@ u32 get_l2_indirect_reg(u32 reg_addr)
 {
 	u32 val;
 	unsigned long flags;
-	
+	/* CP15 registers are not emulated on RUMI3. */
 	if (machine_is_msm8960_rumi3())
 		return 0;
 

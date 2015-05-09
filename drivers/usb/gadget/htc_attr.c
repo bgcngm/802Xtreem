@@ -623,6 +623,35 @@ void init_mfg_serialno(void)
 	use_mfg_serialno = (board_mfg_mode() == 1) ? 1 : 0;
 	strncpy(mfg_df_serialno, serialno, strlen(serialno));
 }
+
+static int cdrom_unmount;
+static ssize_t show_is_cdrom(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	unsigned length;
+
+	length = sprintf(buf, "%d\n", cdrom_unmount);
+	return length;
+}
+
+static ssize_t store_is_cdrom(struct device *dev, struct device_attribute *attr,
+			const char *buf, size_t count)
+{
+	struct usb_composite_dev *cdev = _android_dev->cdev;
+	int value;
+	sscanf(buf, "%d", &value);
+	cdrom_unmount = value;
+
+	if(value == 1) {
+		printk(KERN_INFO "Trigger unmount uevent after 30 seconds\n");
+		cancel_delayed_work(&cdev->cdusbcmd_vzw_unmount_work);
+		cdev->unmount_cdrom_mask = 1 << 3 | 1 << 4;
+		schedule_delayed_work(&cdev->cdusbcmd_vzw_unmount_work,30 * HZ);
+	}
+
+	return count;
+}
+
 static int usb_disable;
 static ssize_t show_usb_cable_connect(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -929,6 +958,7 @@ static DEVICE_ATTR(usb_disable, 0664,
 static DEVICE_ATTR(usb_denied, 0444, show_is_usb_denied, NULL);
 static DEVICE_ATTR(os_type, 0444, show_os_type, NULL);
 static DEVICE_ATTR(ats, 0444, show_ats, NULL);
+static DEVICE_ATTR(cdrom_unmount, 0644, show_is_cdrom, store_is_cdrom);
 
 static struct attribute *android_htc_usb_attributes[] = {
 	&dev_attr_usb_cable_connect.attr,
@@ -946,6 +976,7 @@ static struct attribute *android_htc_usb_attributes[] = {
 	&dev_attr_usb_denied.attr,
 	&dev_attr_os_type.attr,
 	&dev_attr_ats.attr,
+	&dev_attr_cdrom_unmount.attr,
 	NULL
 };
 

@@ -37,7 +37,7 @@ int pas_init_image(enum pas_id id, const u8 *metadata, size_t size)
 		u32	image_addr;
 	} request;
 	u32 scm_ret = 0;
-	
+	/* Make memory physically contiguous */
 	void *mdata_buf = kmemdup(metadata, size, GFP_KERNEL);
 
 	if (!mdata_buf)
@@ -190,6 +190,10 @@ int pas_supported(enum pas_id id)
 	if (!secure_pil)
 		return 0;
 
+	/*
+	 * 8660 SCM doesn't support querying secure PIL support so just return
+	 * true if not overridden on the command line.
+	 */
 	if (cpu_is_msm8x60())
 		return 1;
 

@@ -184,11 +184,11 @@ static struct workqueue_struct *ki_queue;
 #endif
 
 enum {
-	DEBOUNCE_UNSTABLE     = BIT(0),	
+	DEBOUNCE_UNSTABLE     = BIT(0),	/* Got irq, while debouncing */
 	DEBOUNCE_PRESSED      = BIT(1),
 	DEBOUNCE_NOTPRESSED   = BIT(2),
-	DEBOUNCE_WAIT_IRQ     = BIT(3),	
-	DEBOUNCE_POLL         = BIT(4),	
+	DEBOUNCE_WAIT_IRQ     = BIT(3),	/* Stable irq state */
+	DEBOUNCE_POLL         = BIT(4),	/* Stable polling state */
 
 	DEBOUNCE_UNKNOWN =
 		DEBOUNCE_PRESSED | DEBOUNCE_NOTPRESSED,
@@ -228,7 +228,7 @@ static ssize_t kernel_write(struct file *file, const char *buf,
 
 	old_fs = get_fs();
 	set_fs(get_ds());
-	
+	/* The cast to a user pointer is valid due to the set_fs() */
 	res = vfs_write(file, (const char __user *)buf, count, &pos);
 	set_fs(old_fs);
 
@@ -317,7 +317,7 @@ static void power_key_restart_work_func(struct work_struct *dummy)
 	if (gpio_val && pre_power_key_led_status == 1 && !is_rrm1_mode()) {
 		KEY_LOGI("%s, (PWR+VOL_UP) reset", __func__);
 #endif
-		
+		/* clear power key reset data in MISC */
 		set_hw_reason(0);
 #if defined(CONFIG_PM8921_BMS) && (CONFIG_HTC_BATT_8960)
 		pm8921_store_hw_reset_reason(1);
@@ -412,7 +412,7 @@ static void power_key_check_reset_work_func(struct work_struct *dummy)
 			aa->clear_hw_reset();
 		} else if (board_mfg_mode() == MFG_MODE_NORMAL) {
 #ifndef CONFIG_POWER_VOLUP_RESET
-			
+			/* Check P/L sensor status */
 			pocket_mode = power_key_check_in_pocket();
 			if (pocket_mode) {
 				printk(KERN_INFO "[KEY] power_key_check_in_pocket = %d\n", pocket_mode);
@@ -421,13 +421,16 @@ static void power_key_check_reset_work_func(struct work_struct *dummy)
 #else
 			for (i = 0; i < aa->keymap_size; i++) {
 				if (aa->keymap[i].code == KEY_VOLUMEUP) {
-					val = gpio_get_value(aa->keymap[i].gpio);
+					val = gpio_get_value(aa->keymap[i].gpio);/*volup, pressed=low*/
+					/*KEY_LOGI("Idx[%d] GPIO_%d:Vol_UP is %s\n",
+						 i, aa->keymap[i].gpio,
+						 (val ? "NOT pressed" : "PRESSED"));*/
 					break;
 				}
 			}
-			if (!val) { 	
+			if (!val) { 	/*pressed*/
 				KEY_LOGI("HW RESET continue");
-			} else {	
+			} else {	/*Released*/
 				aa->clear_hw_reset();
 			}
 #endif
@@ -450,6 +453,9 @@ static void power_key_clr_check_work_func(struct work_struct *dummy)
 	for (i = 0; i < aa->keymap_size; i++) {
 		if (aa->keymap[i].code == KEY_VOLUMEUP) {
 			val = gpio_get_value(aa->keymap[i].gpio);
+			/*KEY_LOGI("Idx[%d] GPIO_%d:Vol_UP is %s\n",
+					i, aa->keymap[i].gpio,
+					(val ? "NOT pressed" : "PRESSED"));*/
 			if (val) {
 				KEY_LOGI("volUP clear");
 				aa->clear_hw_reset();
@@ -486,7 +492,7 @@ static void handle_power_key_reset(unsigned int code, int value)
 		}
 		for (i = 0; (i < aa->keymap_size && code != KEY_POWER); i++) {
 			if (aa->keymap[i].code == KEY_POWER) {
-				read_val = gpio_get_value(aa->keymap[i].gpio);
+				read_val = gpio_get_value(aa->keymap[i].gpio);/*volup, pressed=low*/
 				KEY_LOGI("Idx[%d] GPIO_%d:PWR is %s\n",
 						i, aa->keymap[i].gpio,
 						(read_val ? "NOT pressed" : "PRESSED" ));
@@ -502,7 +508,7 @@ static void handle_power_key_reset(unsigned int code, int value)
 		}
 		for (i = aa->keymap_size; (i > 0  && code != KEY_VOLUMEUP); i--) {
 			if (aa->keymap[i-1].code == KEY_VOLUMEUP) {
-				read_val = gpio_get_value(aa->keymap[i-1].gpio);
+				read_val = gpio_get_value(aa->keymap[i-1].gpio);/*volup, pressed=low*/
 				KEY_LOGI("Idx[%d] GPIO_%d:VOL_UP is %s\n",
 						i-1, aa->keymap[i-1].gpio,
 						(read_val ? "NOT pressed" : "PRESSED" ));
@@ -615,7 +621,7 @@ static enum hrtimer_restart gpio_event_input_timer_func(struct hrtimer *timer)
 			key_state->debounce = DEBOUNCE_NOTPRESSED;
 			continue;
 		}
-		
+		/* key is stable */
 		ds->debounce_count--;
 		if (ds->use_irq)
 			key_state->debounce |= DEBOUNCE_WAIT_IRQ;

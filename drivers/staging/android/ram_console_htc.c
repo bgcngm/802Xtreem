@@ -36,7 +36,7 @@ struct ram_console_buffer {
 	uint8_t     data[0];
 };
 
-#define RAM_CONSOLE_SIG (0x43474244) 
+#define RAM_CONSOLE_SIG (0x43474244) /* DBGC */
 
 #ifdef CONFIG_ANDROID_RAM_CONSOLE_EARLY_INIT
 static char __initdata
@@ -63,7 +63,7 @@ static void ram_console_encode_rs8(uint8_t *data, size_t len, uint8_t *ecc)
 {
 	int i;
 	uint16_t par[ECC_SIZE];
-	
+	/* Initialize the parity buffer */
 	memset(par, 0, sizeof(par));
 	encode_rs8(ram_console_rs_decoder, data, len, par, 0);
 	for (i = 0; i < ECC_SIZE; i++)
@@ -365,6 +365,9 @@ static int __init ram_console_init(struct ram_console_buffer *buffer,
 	ram_console_par_buffer = buffer->data + ram_console_buffer_size;
 
 
+	/* first consecutive root is 0
+	 * primitive element to generate roots = 1
+	 */
 	ram_console_rs_decoder = init_rs(ECC_SYMSIZE, ECC_POLY, 0, 1, ECC_SIZE);
 	if (ram_console_rs_decoder == NULL) {
 		printk(KERN_INFO "[K] ram_console: init_rs failed\n");
@@ -478,7 +481,7 @@ static int ram_console_driver_probe(struct platform_device *pdev)
 	if (pdata)
 		bootinfo = pdata->bootinfo;
 
-	return ram_console_init(buffer, buffer_size, bootinfo, NULL);
+	return ram_console_init(buffer, buffer_size, bootinfo, NULL/* allocate */);
 }
 
 static struct platform_driver ram_console_driver = {
@@ -632,7 +635,7 @@ bool bldr_rst_msg_parser(char *bldr_log_buf, unsigned long bldr_log_buf_size, bo
 	bool is_ramdump_mode = false;
 	bool found_ramdump_pattern_rst = false;
 
-	for(i=0; i<bldr_log_buf_size; i++) 
+	for(i=0; i<bldr_log_buf_size; i++) //Scan all of bldr_log_buf string
 	{
 		bool ramdump_pattern_rst_match = true;
 		bool ramdump_pattern_vib_match = true;
@@ -640,7 +643,7 @@ bool bldr_rst_msg_parser(char *bldr_log_buf, unsigned long bldr_log_buf_size, bo
 		if(!found_ramdump_pattern_rst &&
 			(i+ramdump_pattern_rst_len) <= bldr_log_buf_size)
 		{
-			for(j=0; j < ramdump_pattern_rst_len; j++) 
+			for(j=0; j < ramdump_pattern_rst_len; j++) //Compare bldr_log string & ramdump pattern rst
 			{
 				if(bldr_log_buf[i+j] != ramdump_pattern_rst[j])
 				{
@@ -649,7 +652,7 @@ bool bldr_rst_msg_parser(char *bldr_log_buf, unsigned long bldr_log_buf_size, bo
 				}
 			}
 
-			if(ramdump_pattern_rst_match) 
+			if(ramdump_pattern_rst_match) //Means it found the line log that involved ramdump pattern rst
 			{
 				if(is_last_bldr)
 					bldr_ramdump_pattern_rst_buf_ptr = bldr_log_buf+i;
@@ -663,7 +666,7 @@ bool bldr_rst_msg_parser(char *bldr_log_buf, unsigned long bldr_log_buf_size, bo
 			(i+ramdump_pattern_vib_len) <= bldr_log_buf_size &&
 			is_last_bldr)
 		{
-			for(k=0; k < ramdump_pattern_vib_len; k++) 
+			for(k=0; k < ramdump_pattern_vib_len; k++) //Compare bldr_log string & ramdump pattern vib
 			{
 				if(bldr_log_buf[i+k] != ramdump_pattern_vib[k])
 				{
@@ -672,13 +675,13 @@ bool bldr_rst_msg_parser(char *bldr_log_buf, unsigned long bldr_log_buf_size, bo
 				}
 			}
 
-			if(ramdump_pattern_vib_match) 
+			if(ramdump_pattern_vib_match) //Means it found the line log that involved ramdump pattern vib
 				is_ramdump_mode = true;
 		}
 
 		if(found_ramdump_pattern_rst &&
 			is_ramdump_mode &&
-			is_last_bldr)  
+			is_last_bldr)  //Found all of ramdump patterns
 		{
 			memcpy(bldr_ramdump_pattern_rst_buf_ptr, ramdump_pattern_real, ramdump_pattern_real_len);
 			break;
@@ -710,14 +713,14 @@ void bldr_log_parser(char *bldr_log, char *bldr_log_buf, unsigned long bldr_log_
 		return;
 	}
 
-	for(i=0; i<bldr_log_size; i++) 
+	for(i=0; i<bldr_log_size; i++) //Scan all of bldr_log string
 	{
 		bool terminal_match = true;
 
 		if((i+terminal_pattern_len) > bldr_log_size)
 			break;
 
-		for(j=0; j < terminal_pattern_len; j++) 
+		for(j=0; j < terminal_pattern_len; j++) //Compare bldr_log string & terminal pattern
 		{
 			if(bldr_log[i+j] != terminal_pattern[j])
 			{
@@ -726,13 +729,13 @@ void bldr_log_parser(char *bldr_log, char *bldr_log_buf, unsigned long bldr_log_
 			}
 		}
 
-		if(terminal_match) 
+		if(terminal_match) //Means it found a completed line log
 		{
 			bool specific_match = true;
 			int specific_pattern_start = i-specific_pattern_len;
 			line_length = i+terminal_pattern_len-last_index;
 
-			for(k=0; k < specific_pattern_len; k++) 
+			for(k=0; k < specific_pattern_len; k++) //Compare the end of line log string & specific pattern
 			{
 				if(bldr_log[specific_pattern_start+k] != specific_pattern[k])
 				{
@@ -741,9 +744,9 @@ void bldr_log_parser(char *bldr_log, char *bldr_log_buf, unsigned long bldr_log_
 				}
 			}
 
-			if(specific_match) 
+			if(specific_match) //Means it found the line log that involved specific pattern
 			{
-				
+				//Copy the line log to log buffer but remove specific pattern string.
 				memcpy(bldr_log_buf_ptr, bldr_log_ptr, line_length-terminal_pattern_len-specific_pattern_len);
 				bldr_log_buf_ptr +=(line_length-terminal_pattern_len-specific_pattern_len);
 				memcpy(bldr_log_buf_ptr, terminal_pattern, terminal_pattern_len);

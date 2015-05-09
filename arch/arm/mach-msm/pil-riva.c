@@ -226,7 +226,7 @@ static int pil_riva_reset(struct pil_desc *pil)
 	bool use_cxo = cxo_is_needed(drv);
 #ifdef CONFIG_QUALCOMM_WLAN_PXO
 	u32 nLoopCount = 25;
-	u32 nRetryCount = 5;
+	u32 nRetryCount = 10;
 	u32 hw_ver_id;
 	hw_ver_id = (readl(HW_VER_ID_VIRT)& 0xf0000000) >> 28;
 

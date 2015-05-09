@@ -58,6 +58,7 @@ static void cpu_action(void *info)
 	}
 }
 
+/* Disable auto clock-gating for a scalable. */
 static void disable_acg(int sc_id)
 {
 	u32 regval;
@@ -73,6 +74,7 @@ static void disable_acg(int sc_id)
 	}
 }
 
+/* Enable auto clock-gating for a scalable. */
 static void enable_acg(int sc_id)
 {
 	u32 regval;
@@ -88,6 +90,7 @@ static void enable_acg(int sc_id)
 	}
 }
 
+/* Check if auto clock-gating for a scalable. */
 static bool acg_is_enabled(int sc_id)
 {
 	u32 regval;
@@ -102,6 +105,7 @@ static bool acg_is_enabled(int sc_id)
 	}
 }
 
+/* Enable/Disable auto clock gating. */
 static int acg_set(void *data, u64 val)
 {
 	int ret = 0;
@@ -125,6 +129,7 @@ out:
 	return ret;
 }
 
+/* Get auto clock-gating state. */
 static int acg_get(void *data, u64 *val)
 {
 	int ret = 0;
@@ -146,6 +151,7 @@ out:
 }
 DEFINE_SIMPLE_ATTRIBUTE(acgd_fops, acg_get, acg_set, "%lld\n");
 
+/* Get the rate */
 static int rate_get(void *data, u64 *val)
 {
 	int sc_id = (int)data;
@@ -154,6 +160,7 @@ static int rate_get(void *data, u64 *val)
 }
 DEFINE_SIMPLE_ATTRIBUTE(rate_fops, rate_get, NULL, "%lld\n");
 
+/* Get the HFPLL's L-value. */
 static int hfpll_l_get(void *data, u64 *val)
 {
 	int sc_id = (int)data;
@@ -162,6 +169,7 @@ static int hfpll_l_get(void *data, u64 *val)
 }
 DEFINE_SIMPLE_ATTRIBUTE(hfpll_l_fops, hfpll_l_get, NULL, "%lld\n");
 
+/* Get the L2 rate vote. */
 static int l2_vote_get(void *data, u64 *val)
 {
 	int level, sc_id = (int)data;
@@ -173,6 +181,7 @@ static int l2_vote_get(void *data, u64 *val)
 }
 DEFINE_SIMPLE_ATTRIBUTE(l2_vote_fops, l2_vote_get, NULL, "%lld\n");
 
+/* Get the bandwidth vote. */
 static int bw_vote_get(void *data, u64 *val)
 {
 	struct l2_level *l;
@@ -185,6 +194,7 @@ static int bw_vote_get(void *data, u64 *val)
 }
 DEFINE_SIMPLE_ATTRIBUTE(bw_vote_fops, bw_vote_get, NULL, "%lld\n");
 
+/* Get the name of the currently-selected clock source. */
 static int src_name_show(struct seq_file *m, void *unused)
 {
 	const char *const src_names[NUM_SRC_ID] = {
@@ -215,6 +225,7 @@ static const struct file_operations src_name_fops = {
 	.release	= seq_release,
 };
 
+/* Get speed_bin ID */
 static int speed_bin_get(void *data, u64 *val)
 {
 	*val = drv->speed_bin;
@@ -222,6 +233,7 @@ static int speed_bin_get(void *data, u64 *val)
 }
 DEFINE_SIMPLE_ATTRIBUTE(speed_bin_fops, speed_bin_get, NULL, "%lld\n");
 
+/* Get pvs_bin ID */
 static int pvs_bin_get(void *data, u64 *val)
 {
 	*val = drv->pvs_bin;
@@ -229,6 +241,7 @@ static int pvs_bin_get(void *data, u64 *val)
 }
 DEFINE_SIMPLE_ATTRIBUTE(pvs_bin_fops, pvs_bin_get, NULL, "%lld\n");
 
+/* Get boost_uv */
 static int boost_get(void *data, u64 *val)
 {
 	*val = drv->boost_uv;

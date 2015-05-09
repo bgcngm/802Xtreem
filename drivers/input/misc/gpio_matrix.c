@@ -209,7 +209,7 @@ static enum hrtimer_restart gpio_keypad_timer_func(struct hrtimer *timer)
 		return HRTIMER_NORESTART;
 	}
 
-	
+	/* No keys are pressed, reenable interrupt */
 	for (out = 0; out < mi->noutputs; out++) {
 		if (gpio_keypad_flags & GPIOKPF_DRIVE_INACTIVE)
 			gpio_set_value(mi->output_gpios[out], polarity);
@@ -230,7 +230,7 @@ static irqreturn_t gpio_keypad_irq_handler(int irq_in, void *dev_id)
 	unsigned gpio_keypad_flags = mi->flags;
 
 	if (!kp->use_irq) {
-		
+		/* ignore interrupt while registering the handler */
 		kp->disabled_irq = 1;
 		disable_irq_nosync(irq_in);
 		return IRQ_HANDLED;
@@ -317,7 +317,7 @@ int gpio_event_matrix_func(struct gpio_event_input_devs *input_devs,
 
 	mi = container_of(info, struct gpio_event_matrix_info, info);
 	if (func == GPIO_EVENT_FUNC_SUSPEND || func == GPIO_EVENT_FUNC_RESUME) {
-		
+		/* TODO: disable scanning */
 		return 0;
 	}
 

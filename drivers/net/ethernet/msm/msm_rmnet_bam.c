@@ -11,6 +11,9 @@
  *
  */
 
+/*
+ * RMNET BAM Module.
+ */
 
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -38,6 +41,7 @@
 
 static int ril_debug_flag = 0;
 
+/* Debug message support */
 static int msm_rmnet_bam_debug_mask;
 module_param_named(debug_enable, msm_rmnet_bam_debug_mask,
 			int, S_IRUGO | S_IWUSR | S_IWGRP);
@@ -54,8 +58,10 @@ module_param_named(debug_enable, msm_rmnet_bam_debug_mask,
 #define DBG1(x...) DBG(DEBUG_MASK_LVL1, x)
 #define DBG2(x...) DBG(DEBUG_MASK_LVL2, x)
 
+/* Configure device instances */
 #define RMNET_DEVICE_COUNT (8)
 
+/* allow larger frames */
 #define RMNET_DATA_LEN 2000
 
 #define DEVICE_ID_INVALID   -1
@@ -63,9 +69,9 @@ module_param_named(debug_enable, msm_rmnet_bam_debug_mask,
 #define DEVICE_INACTIVE      0
 #define DEVICE_ACTIVE        1
 
-#define HEADROOM_FOR_BAM   8 
+#define HEADROOM_FOR_BAM   8 /* for mux header */
 #define HEADROOM_FOR_QOS    8
-#define TAILROOM            8 
+#define TAILROOM            8 /* for padding by mux layer */
 
 struct rmnet_private {
 	struct net_device_stats stats;
@@ -80,7 +86,7 @@ struct rmnet_private {
 	spinlock_t lock;
 	spinlock_t tx_queue_lock;
 	struct tasklet_struct tsklt;
-	u32 operation_mode; 
+	u32 operation_mode; /* IOCTL specified mode (protocol, QoS header) */
 	uint8_t device_up;
 	uint8_t in_reset;
 };
@@ -89,9 +95,14 @@ struct rmnet_private {
 static unsigned long timeout_us;
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
+/*
+ * If early suspend is enabled then we specify two timeout values,
+ * screen on (default), and screen is off.
+ */
 static unsigned long timeout_suspend_us;
 static struct device *rmnet0;
 
+/* Set timeout in us when the screen is off. */
 static ssize_t timeout_suspend_store(struct device *d,
 				     struct device_attribute *attr,
 				     const char *buf, size_t n)
@@ -140,14 +151,15 @@ static int __init rmnet_late_init(void)
 late_initcall(rmnet_late_init);
 #endif
 
+/* Returns 1 if packet caused rmnet to wakeup, 0 otherwise. */
 static int rmnet_cause_wakeup(struct rmnet_private *p)
 {
 	int ret = 0;
 	ktime_t now;
-	if (p->timeout_us == 0) 
+	if (p->timeout_us == 0) /* Check if disabled */
 		return 0;
 
-	
+	/* Use real (wall) time. */
 	now = ktime_get_real();
 
 	if (ktime_us_delta(now, p->last_packet) > p->timeout_us)
@@ -176,6 +188,7 @@ static ssize_t wakeups_rcv_show(struct device *d, struct device_attribute *attr,
 
 DEVICE_ATTR(wakeups_rcv, 0444, wakeups_rcv_show, NULL);
 
+/* Set timeout in us. */
 static ssize_t timeout_store(struct device *d, struct device_attribute *attr,
 			     const char *buf, size_t n)
 {
@@ -183,6 +196,7 @@ static ssize_t timeout_store(struct device *d, struct device_attribute *attr,
 	struct rmnet_private *p = netdev_priv(to_net_dev(d));
 	p->timeout_us = timeout_us = strict_strtoul(buf, NULL, 10);
 #else
+/* If using early suspend/resume hooks do not write the value on store. */
 	timeout_us = strict_strtoul(buf, NULL, 10);
 #endif
 	return n;
@@ -199,6 +213,7 @@ static ssize_t timeout_show(struct device *d, struct device_attribute *attr,
 DEVICE_ATTR(timeout, 0664, timeout_show, timeout_store);
 #endif
 
+/* Forward declaration */
 static int rmnet_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd);
 
 static __be16 rmnet_ip_type_trans(struct sk_buff *skb, struct net_device *dev)
@@ -207,7 +222,7 @@ static __be16 rmnet_ip_type_trans(struct sk_buff *skb, struct net_device *dev)
 
 	skb->dev = dev;
 
-	
+	/* Determine L3 protocol */
 	switch (skb->data[0] & 0xf0) {
 	case 0x40:
 		protocol = htons(ETH_P_IP);
@@ -218,7 +233,7 @@ static __be16 rmnet_ip_type_trans(struct sk_buff *skb, struct net_device *dev)
 	default:
 		pr_err(MODULE_NAME "[%s] rmnet_recv() L3 protocol decode error: 0x%02x",
 		       dev->name, skb->data[0] & 0xf0);
-		
+		/* skb will be dropped in upper layer for unknown protocol */
 	}
 	return protocol;
 }
@@ -233,6 +248,7 @@ static int count_this_packet(void *_hdr, int len)
 	return 1;
 }
 
+/* Rx Callback, Called in Work Queue context */
 static void bam_recv_notify(void *dev, struct sk_buff *skb)
 {
 	struct rmnet_private *p = netdev_priv(dev);
@@ -241,16 +257,16 @@ static void bam_recv_notify(void *dev, struct sk_buff *skb)
 
 	if (skb) {
 		skb->dev = dev;
-		
+		/* Handle Rx frame format */
 		spin_lock_irqsave(&p->lock, flags);
 		opmode = p->operation_mode;
 		spin_unlock_irqrestore(&p->lock, flags);
 
 		if (RMNET_IS_MODE_IP(opmode)) {
-			
+			/* Driver in IP mode */
 			skb->protocol = rmnet_ip_type_trans(skb, dev);
 		} else {
-			
+			/* Driver in Ethernet mode */
 			skb->protocol = eth_type_trans(skb, dev);
 		}
 		if (RMNET_IS_MODE_IP(opmode) ||
@@ -265,7 +281,7 @@ static void bam_recv_notify(void *dev, struct sk_buff *skb)
 			((struct net_device *)dev)->name,
 			p->stats.rx_packets, skb->len);
 
-		
+		/* Deliver to network stack */
 		netif_rx(skb);
 	} else
 		pr_err(MODULE_NAME "[%s] %s: No skb received",
@@ -280,7 +296,7 @@ static int _rmnet_xmit(struct sk_buff *skb, struct net_device *dev)
 	u32 opmode;
 	unsigned long flags;
 
-	
+	/* For QoS mode, prepend QMI header and assign flow ID from skb->mark */
 	spin_lock_irqsave(&p->lock, flags);
 	opmode = p->operation_mode;
 	spin_unlock_irqrestore(&p->lock, flags);
@@ -294,7 +310,7 @@ static int _rmnet_xmit(struct sk_buff *skb, struct net_device *dev)
 	}
 
 	dev->trans_start = jiffies;
-	
+	/* if write() succeeds, skb access is unsafe in this process */
 	bam_ret = msm_bam_dmux_write(p->ch_id, skb);
 
 	if (bam_ret != 0 && bam_ret != -EAGAIN && bam_ret != -EFAULT) {
@@ -417,6 +433,8 @@ static int __rmnet_close(struct net_device *dev)
 	DBG0("[%s] __rmnet_close()\n", dev->name);
 
 	if (p->device_up) {
+		/* do not close rmnet port once up,  this causes
+		   remote side to hang if tried to open again */
 		p->device_up = DEVICE_INACTIVE;
 		return rc;
 	} else
@@ -463,7 +481,7 @@ static int rmnet_xmit(struct sk_buff *skb, struct net_device *dev)
 	spin_lock_irqsave(&p->lock, flags);
 	awake = msm_bam_dmux_ul_power_vote();
 	if (!awake) {
-		
+		/* send SKB once wakeup is complete */
 		netif_stop_queue(dev);
 		p->waiting_for_ul_skb = skb;
 		spin_unlock_irqrestore(&p->lock, flags);
@@ -478,6 +496,10 @@ static int rmnet_xmit(struct sk_buff *skb, struct net_device *dev)
 		goto exit;
 	}
 
+	/*
+	 * detected SSR a bit early.  shut some things down now, and leave
+	 * the rest to the main ssr handling code when that happens later
+	 */
 	if (ret == -EFAULT) {
 		netif_carrier_off(dev);
 		dev_kfree_skb_any(skb);
@@ -486,6 +508,14 @@ static int rmnet_xmit(struct sk_buff *skb, struct net_device *dev)
 	}
 
 	if (ret == -EAGAIN) {
+		/*
+		 * This should not happen
+		 * EAGAIN means we attempted to overflow the high watermark
+		 * Clearly the queue is not stopped like it should be, so
+		 * stop it and return BUSY to the TCP/IP framework.  It will
+		 * retry this packet with the queue is restarted which happens
+		 * in the write_done callback when the low watermark is hit.
+		 */
 		netif_stop_queue(dev);
 		ret = NETDEV_TX_BUSY;
 		goto exit;
@@ -546,10 +576,10 @@ static int rmnet_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 	int prev_mtu = dev->mtu;
 	int rc = 0;
 
-	
+	/* Process IOCTL command */
 	switch (cmd) {
-	case RMNET_IOCTL_SET_LLP_ETHERNET:  
-		
+	case RMNET_IOCTL_SET_LLP_ETHERNET:  /* Set Ethernet protocol   */
+		/* Perform Ethernet config only if in IP mode currently*/
 		if (p->operation_mode & RMNET_MODE_LLP_IP) {
 			ether_setup(dev);
 			random_ether_addr(dev->dev_addr);
@@ -566,12 +596,12 @@ static int rmnet_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 		}
 		break;
 
-	case RMNET_IOCTL_SET_LLP_IP:        
-		
+	case RMNET_IOCTL_SET_LLP_IP:        /* Set RAWIP protocol      */
+		/* Perform IP config only if in Ethernet mode currently*/
 		if (p->operation_mode & RMNET_MODE_LLP_ETH) {
 
-			
-			dev->header_ops         = 0;  
+			/* Undo config done in ether_setup() */
+			dev->header_ops         = 0;  /* No header */
 			dev->type               = ARPHRD_RAWIP;
 			dev->hard_header_len    = 0;
 			dev->mtu                = prev_mtu;
@@ -593,13 +623,13 @@ static int rmnet_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 		}
 		break;
 
-	case RMNET_IOCTL_GET_LLP:           
+	case RMNET_IOCTL_GET_LLP:           /* Get link protocol state */
 		ifr->ifr_ifru.ifru_data =
 			(void *)(p->operation_mode &
 				 (RMNET_MODE_LLP_ETH|RMNET_MODE_LLP_IP));
 		break;
 
-	case RMNET_IOCTL_SET_QOS_ENABLE:    
+	case RMNET_IOCTL_SET_QOS_ENABLE:    /* Set QoS header enabled  */
 		spin_lock_irqsave(&p->lock, flags);
 		p->operation_mode |= RMNET_MODE_QOS;
 		spin_unlock_irqrestore(&p->lock, flags);
@@ -607,7 +637,7 @@ static int rmnet_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 			dev->name);
 		break;
 
-	case RMNET_IOCTL_SET_QOS_DISABLE:   
+	case RMNET_IOCTL_SET_QOS_DISABLE:   /* Set QoS header disabled */
 		spin_lock_irqsave(&p->lock, flags);
 		p->operation_mode &= ~RMNET_MODE_QOS;
 		spin_unlock_irqrestore(&p->lock, flags);
@@ -615,22 +645,22 @@ static int rmnet_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 			dev->name);
 		break;
 
-	case RMNET_IOCTL_GET_QOS:           
+	case RMNET_IOCTL_GET_QOS:           /* Get QoS header state    */
 		ifr->ifr_ifru.ifru_data =
 			(void *)(p->operation_mode & RMNET_MODE_QOS);
 		break;
 
-	case RMNET_IOCTL_GET_OPMODE:        
+	case RMNET_IOCTL_GET_OPMODE:        /* Get operation mode      */
 		ifr->ifr_ifru.ifru_data = (void *)p->operation_mode;
 		break;
 
-	case RMNET_IOCTL_OPEN:              
+	case RMNET_IOCTL_OPEN:              /* Open transport port     */
 		rc = __rmnet_open(dev);
 		DBG0("[%s] rmnet_ioctl(): open transport port\n",
 			dev->name);
 		break;
 
-	case RMNET_IOCTL_CLOSE:             
+	case RMNET_IOCTL_CLOSE:             /* Close transport port    */
 		rc = __rmnet_close(dev);
 		DBG0("[%s] rmnet_ioctl(): close transport port\n",
 			dev->name);
@@ -649,17 +679,17 @@ static int rmnet_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 
 static void __init rmnet_setup(struct net_device *dev)
 {
-	
+	/* Using Ethernet mode by default */
 	dev->netdev_ops = &rmnet_ops_ether;
 	ether_setup(dev);
 
-	
+	/* set this after calling ether_setup */
 	dev->mtu = RMNET_DATA_LEN;
 	dev->needed_headroom = HEADROOM_FOR_BAM + HEADROOM_FOR_QOS ;
 	dev->needed_tailroom = TAILROOM;
 	random_ether_addr(dev->dev_addr);
 
-	dev->watchdog_timeo = 1000; 
+	dev->watchdog_timeo = 1000; /* 10 seconds? */
 }
 
 static struct net_device *netdevs[RMNET_DEVICE_COUNT];
@@ -678,11 +708,11 @@ static int bam_rmnet_probe(struct platform_device *pdev)
 		if (!strncmp(pdev->name, name, BAM_DMUX_CH_NAME_MAX_LEN))
 			break;
 	}
-       
+       /*+SSD_RIL: fix klocwork, Buffer Overflow */
        if (i >= RMNET_DEVICE_COUNT) {
                return 0;
        }
-       
+       /*-SSD_RIL: fix klocwork, Buffer Overflow */
 
 	p = netdev_priv(netdevs[i]);
 	if (p->in_reset) {
@@ -709,11 +739,11 @@ static int bam_rmnet_remove(struct platform_device *pdev)
 		if (!strncmp(pdev->name, name, BAM_DMUX_CH_NAME_MAX_LEN))
 			break;
 	}
-       
+       /*+SSD_RIL: fix klocwork, Buffer Overflow */
        if (i >= RMNET_DEVICE_COUNT) {
                return 0;
        }
-       
+       /*-SSD_RIL: fix klocwork, Buffer Overflow */
 
 	p = netdev_priv(netdevs[i]);
 	p->in_reset = 1;
@@ -760,7 +790,7 @@ static int __init rmnet_init(void)
 		netdevs[n] = dev;
 		d = &(dev->dev);
 		p = netdev_priv(dev);
-		
+		/* Initial config uses Ethernet */
 		p->operation_mode = RMNET_MODE_LLP_ETH;
 		p->ch_id = n;
 		p->waiting_for_ul_skb = NULL;
@@ -791,7 +821,7 @@ static int __init rmnet_init(void)
 		if (device_create_file(d, &dev_attr_timeout_suspend))
 			continue;
 
-		
+		/* Only care about rmnet0 for suspend/resume tiemout hooks. */
 		if (n == 0)
 			rmnet0 = d;
 #endif

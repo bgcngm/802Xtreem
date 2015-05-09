@@ -169,6 +169,15 @@ static void allocate_co_memory(struct ion_platform_heap *heap,
 	}
 }
 
+/* Fixup heaps in board file to support two heaps being adjacent to each other.
+ * A flag (adjacent_mem_id) in the platform data tells us that the heap phy
+ * memory location must be adjacent to the specified heap. We do this by
+ * carving out memory for both heaps and then splitting up the memory to the
+ * two heaps. The heap specifying the "adjacent_mem_id" get the base of the
+ * memory while heap specified in "adjacent_mem_id" get base+size as its
+ * base address.
+ * Note: Modifies platform data and allocates memory.
+ */
 static void msm_ion_heap_fixup(struct ion_platform_heap heap_data[],
 			       unsigned int nr_heaps)
 {
@@ -384,7 +393,7 @@ static int msm_ion_probe(struct platform_device *pdev)
 
 	msm_ion_heap_fixup(pdata->heaps, num_heaps);
 
-	
+	/* create the heaps as specified in the board file */
 	for (i = 0; i < num_heaps; i++) {
 		struct ion_platform_heap *heap_data = &pdata->heaps[i];
 		msm_ion_allocate(heap_data);

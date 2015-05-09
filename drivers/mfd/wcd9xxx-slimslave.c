@@ -105,6 +105,9 @@ static int wcd9xxx_alloc_slim_sh_ch_rx(struct wcd9xxx *wcd9xxx,
 	u16 slave_port_id = 0;
 	struct wcd9xxx_slim_sch_rx *rx = sh_ch.rx;
 
+	/*
+	 * DSP requires channel number to be between 128 and 255.
+	 */
 	pr_debug("%s: pgd_la[%d]\n", __func__, wcd9xxx_pgd_la);
 	for (ch_idx = 0; ch_idx < SLIM_MAX_RX_PORTS; ch_idx++) {
 		slave_port_id = (ch_idx + 1 +
@@ -139,6 +142,10 @@ static int wcd9xxx_alloc_slim_sh_ch_tx(struct wcd9xxx *wcd9xxx,
 	u16 slave_port_id = 0;
 
 	pr_debug("%s: pgd_la[%d]\n", __func__, wcd9xxx_pgd_la);
+	/* DSP requires channel number to be between 128 and 255. For RX port
+	 * use channel numbers from 138 to 144, for TX port
+	 * use channel numbers from 128 to 137
+	 */
 	for (ch_idx = 0; ch_idx < SLIM_MAX_TX_PORTS; ch_idx++) {
 		slave_port_id = ch_idx;
 		tx[ch_idx].ch_num = slave_port_id + BASE_CH_NUM;
@@ -166,7 +173,7 @@ static int wcd9xxx_dealloc_slim_sh_ch_rx(struct wcd9xxx *wcd9xxx)
 	int idx = 0;
 	int ret = 0;
 	struct wcd9xxx_slim_sch_rx *rx = sh_ch.rx;
-	
+	/* slim_dealloc_ch */
 	for (idx = 0; idx < SLIM_MAX_RX_PORTS; idx++) {
 		ret = slim_dealloc_ch(wcd9xxx->slim, rx[idx].ch_h);
 		if (ret < 0) {
@@ -183,7 +190,7 @@ static int wcd9xxx_dealloc_slim_sh_ch_tx(struct wcd9xxx *wcd9xxx)
 	int idx = 0;
 	int ret = 0;
 	struct wcd9xxx_slim_sch_tx *tx = sh_ch.tx;
-	
+	/* slim_dealloc_ch */
 	for (idx = 0; idx < SLIM_MAX_TX_PORTS; idx++) {
 		ret = slim_dealloc_ch(wcd9xxx->slim, tx[idx].ch_h);
 		if (ret < 0) {
@@ -195,6 +202,7 @@ static int wcd9xxx_dealloc_slim_sh_ch_tx(struct wcd9xxx *wcd9xxx)
 	return ret;
 }
 
+/* Enable slimbus slave device for RX path */
 int wcd9xxx_cfg_slim_sch_rx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 				unsigned int ch_cnt, unsigned int rate,
 				unsigned int bit_width)
@@ -210,7 +218,7 @@ int wcd9xxx_cfg_slim_sch_rx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 	struct wcd9xxx_slim_sch_rx *rx = sh_ch.rx;
 	struct slim_ch prop;
 
-	
+	/* Configure slave interface device */
 	pr_debug("%s: ch_cnt[%d] rate=%d\n", __func__, ch_cnt, rate);
 
 	for (i = 0; i < ch_cnt; i++) {
@@ -227,6 +235,9 @@ int wcd9xxx_cfg_slim_sch_rx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 			goto err;
 		}
 		slave_port_id += SB_PGD_OFFSET_OF_RX_SLAVE_DEV_PORTS;
+		/* look for the valid port range and chose the
+		 * payload accordingly
+		 */
 		if ((slave_port_id >
 				SB_PGD_TX_PORT_MULTI_CHANNEL_1_END_PORT_ID) &&
 			(slave_port_id <=
@@ -241,7 +252,7 @@ int wcd9xxx_cfg_slim_sch_rx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 		}
 		multi_chan_cfg_reg_addr =
 				SB_PGD_RX_PORT_MULTI_CHANNEL_0(slave_port_id);
-		
+		/* write to interface device */
 		ret = wcd9xxx_interface_reg_write(wcd9xxx,
 				multi_chan_cfg_reg_addr,
 				payload_rx);
@@ -252,7 +263,7 @@ int wcd9xxx_cfg_slim_sch_rx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 							payload_rx, ret);
 			goto err;
 		}
-		
+		/* configure the slave port for water mark and enable*/
 		wm_payload = (SLAVE_PORT_WATER_MARK_VALUE <<
 				SLAVE_PORT_WATER_MARK_SHIFT) +
 				SLAVE_PORT_ENABLE;
@@ -265,7 +276,7 @@ int wcd9xxx_cfg_slim_sch_rx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 		}
 	}
 
-	
+	/* slim_define_ch api */
 	prop.prot = SLIM_AUTO_ISO;
 	prop.baser = SLIM_RATE_4000HZ;
 	prop.dataf = SLIM_CH_DATAF_NOT_DEFINED;
@@ -289,7 +300,7 @@ int wcd9xxx_cfg_slim_sch_rx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 			goto err_close_slim_sch;
 		}
 	}
-	
+	/* slim_control_ch */
 	ret = slim_control_ch(wcd9xxx->slim, grph, SLIM_CH_ACTIVATE,
 					true);
 	if (ret < 0) {
@@ -305,13 +316,14 @@ int wcd9xxx_cfg_slim_sch_rx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 	return 0;
 
 err_close_slim_sch:
-	
+	/*  release all acquired handles */
 	wcd9xxx_close_slim_sch_rx(wcd9xxx, ch_num, ch_cnt);
 err:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(wcd9xxx_cfg_slim_sch_rx);
 
+/* Enable slimbus slave device for RX path */
 int wcd9xxx_cfg_slim_sch_tx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 				unsigned int ch_cnt, unsigned int rate)
 {
@@ -339,6 +351,9 @@ int wcd9xxx_cfg_slim_sch_tx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 			ret = -EINVAL;
 			goto err;
 		}
+		/* look for the valid port range and chose the
+		 *  payload accordingly
+		 */
 		if (slave_port_id <=
 			SB_PGD_TX_PORT_MULTI_CHANNEL_0_END_PORT_ID) {
 			payload_tx_0 = payload_tx_0 | (1 << slave_port_id);
@@ -354,7 +369,7 @@ int wcd9xxx_cfg_slim_sch_tx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 		}
 		multi_chan_cfg_reg_addr =
 				SB_PGD_TX_PORT_MULTI_CHANNEL_0(slave_port_id);
-		
+		/* write to interface device */
 		ret = wcd9xxx_interface_reg_write(wcd9xxx,
 				multi_chan_cfg_reg_addr,
 				payload_tx_0);
@@ -367,7 +382,7 @@ int wcd9xxx_cfg_slim_sch_tx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 		}
 		multi_chan_cfg_reg_addr =
 				SB_PGD_TX_PORT_MULTI_CHANNEL_1(slave_port_id);
-		
+		/* ports 8,9 */
 		ret = wcd9xxx_interface_reg_write(wcd9xxx,
 				multi_chan_cfg_reg_addr,
 				payload_tx_1);
@@ -378,7 +393,7 @@ int wcd9xxx_cfg_slim_sch_tx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 						payload_tx_1, ret);
 			goto err;
 		}
-		
+		/* configure the slave port for water mark and enable*/
 		wm_payload = (SLAVE_PORT_WATER_MARK_VALUE <<
 				SLAVE_PORT_WATER_MARK_SHIFT) +
 				SLAVE_PORT_ENABLE;
@@ -392,7 +407,7 @@ int wcd9xxx_cfg_slim_sch_tx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 		}
 	}
 
-	
+	/* slim_define_ch api */
 	prop.prot = SLIM_AUTO_ISO;
 	prop.baser = SLIM_RATE_4000HZ;
 	prop.dataf = SLIM_CH_DATAF_NOT_DEFINED;
@@ -415,7 +430,7 @@ int wcd9xxx_cfg_slim_sch_tx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 			goto err;
 		}
 	}
-	
+	/* slim_control_ch */
 	ret = slim_control_ch(wcd9xxx->slim, grph, SLIM_CH_ACTIVATE,
 					true);
 	if (ret < 0) {
@@ -429,7 +444,7 @@ int wcd9xxx_cfg_slim_sch_tx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 	}
 	return 0;
 err:
-	
+	/* release all acquired handles */
 	wcd9xxx_close_slim_sch_tx(wcd9xxx, ch_num, ch_cnt);
 	return ret;
 }
@@ -456,7 +471,7 @@ int wcd9xxx_close_slim_sch_rx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 		grph = rx[idx].grph;
 	}
 
-	
+	/* slim_control_ch (REMOVE) */
 	ret = slim_control_ch(wcd9xxx->slim, grph, SLIM_CH_REMOVE, true);
 	if (ret < 0) {
 		pr_err("%s: slim_control_ch failed ret[%d]\n",
@@ -492,7 +507,7 @@ int wcd9xxx_close_slim_sch_tx(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 		}
 		grph = tx[idx].grph;
 	}
-	
+	/* slim_control_ch (REMOVE) */
 	ret = slim_control_ch(wcd9xxx->slim, grph, SLIM_CH_REMOVE, true);
 	if (ret < 0) {
 		pr_err("%s: slim_control_ch failed ret[%d]\n",
@@ -534,7 +549,7 @@ int wcd9xxx_disconnect_port(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 
 	pr_debug("%s: ch_cnt[%d], rx_tx flag = %d\n", __func__, ch_cnt, rx_tx);
 	for (i = 0; i < ch_cnt; i++) {
-		
+		/* rx_tx will be 1 for rx, 0 for tx */
 		if (rx_tx) {
 			idx = (ch_num[i] - BASE_CH_NUM -
 				SB_PGD_OFFSET_OF_RX_SLAVE_DEV_PORTS - 1);
@@ -557,7 +572,7 @@ int wcd9xxx_disconnect_port(struct wcd9xxx *wcd9xxx, unsigned int *ch_num,
 		}
 	}
 
-	
+	/* slim_disconnect_port */
 	ret = slim_disconnect_ports(wcd9xxx->slim, sph, ch_cnt);
 	if (ret < 0) {
 		pr_err("%s: slim_disconnect_ports failed ret[%d]\n",

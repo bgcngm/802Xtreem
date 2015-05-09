@@ -80,6 +80,8 @@ struct venc_msg_ops {
 #define FREE_INPUT_BUFFER _IOWR('V', 22, struct mem_region *)
 #define FREE_RECON_BUFFERS _IO('V', 23)
 #define ENCODE_FLUSH _IO('V', 24)
+//#define ENC_MMAP _IOWR('V', 25, struct mem_region_map *)
+//#define ENC_MUNMAP _IOWR('V', 26, struct mem_region_map *)
 #define SET_FRAMERATE_MODE _IO('V', 27)
 
 extern int venc_init(struct v4l2_subdev *sd, u32 val);
@@ -87,4 +89,4 @@ extern int venc_load_fw(struct v4l2_subdev *sd);
 extern long venc_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg);
 
 
-#endif 
+#endif /* _WFD_ENC_SUBDEV_ */

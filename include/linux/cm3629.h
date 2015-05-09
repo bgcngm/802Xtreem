@@ -18,11 +18,20 @@
 
 #define CM3629_I2C_NAME "CM3629"
 
+/* Define Slave Address*/
+/*
+#define ALS_slave_address	0x30
+#define ALS_slave_read		0x31
+#define PS_slave_address	0x32
+#define PS_slave_read		0x33
+*/
 
+/*Define ALS Command Code*/
 #define ALS_config_cmd		0x00
 #define ALS_high_thd		0x01
 #define ALS_low_thd		0x02
 
+/* Define PS Command Code*/
 #define PS_config		0x03
 #define PS_config_ms		0x04
 #define PS_CANC			0x05
@@ -35,15 +44,21 @@
 #define INT_FLAG		0x0B
 #define CH_ID			0x0C
 
+/*Define Interrupt address*/
+/*#define check_interrupt_add 0x18*/
 
 #define ALS_CALIBRATED		0x6DA5
 #define PS_CALIBRATED		0x5053
 
+/*CM3629*/
+/*for ALS command 00h_L*/
+/*Engineer sample*/
 #define CM3629_ALS_IT_50ms 	(0 << 6)
 #define CM3629_ALS_IT_100ms 	(1 << 6)
 #define CM3629_ALS_IT_200ms 	(2 << 6)
 #define CM3629_ALS_IT_400ms 	(3 << 6)
 
+/*MP sample*/
 #define CM3629_ALS_IT_80ms 		(0 << 6)
 #define CM3629_ALS_IT_160ms 	(1 << 6)
 #define CM3629_ALS_IT_320ms 	(2 << 6)
@@ -54,13 +69,14 @@
 #define CM3629_ALS_AV_2		(1 << 4)
 #define CM3629_ALS_AV_4		(2 << 4)
 #define CM3629_ALS_AV_8		(3 << 4)
-#define CM3629_ALS_PERS_1 	(0 << 2) 
+#define CM3629_ALS_PERS_1 	(0 << 2) /* ALS persistence */
 #define CM3629_ALS_PERS_2 	(1 << 2)
 #define CM3629_ALS_PERS_4 	(2 << 2)
 #define CM3629_ALS_PERS_8 	(3 << 2)
-#define CM3629_ALS_INT_EN	(1 << 1) 
-#define CM3629_ALS_SD		(1 << 0) 
+#define CM3629_ALS_INT_EN	(1 << 1) /* 1: Enable interrupt */
+#define CM3629_ALS_SD		(1 << 0) /* 1: Disable ALS */
 
+/*for PS command 00h_H*/
 #define CM3629_PS_63_STEPS 	(0 << 4)
 #define CM3629_PS_120_STEPS 	(1 << 4)
 #define CM3629_PS_191_STEPS 	(2 << 4)
@@ -68,6 +84,7 @@
 
 
 
+/*for PS command 03h_L*/
 #define CM3629_PS_DR_1_40 	(0 << 6)
 #define CM3629_PS_DR_1_80 	(1 << 6)
 #define CM3629_PS_DR_1_160 	(2 << 6)
@@ -83,9 +100,10 @@
 #define CM3629_PS1_PERS_3 	(2 << 2)
 #define CM3629_PS1_PERS_4 	(3 << 2)
 
-#define CM3629_PS2_SD		(1 << 1) 
-#define CM3629_PS1_SD		(1 << 0) 
+#define CM3629_PS2_SD		(1 << 1) /* 0: Enable PS2, 1: Disable PS2 */
+#define CM3629_PS1_SD		(1 << 0) /* 0: Enable PS1, 1: Disable PS1 */
 
+/*for PS command 03h_H*/
 #define CM3629_PS_ITB_1_2 	(0 << 6)
 #define CM3629_PS_ITB_1 	(1 << 6)
 #define CM3629_PS_ITB_2 	(2 << 6)
@@ -107,6 +125,7 @@
 #define CM3629_PS1_INT_BOTH	(3 << 0)
 
 
+/*for PS command 04h_L*/
 #define CM3629_PS2_PROL_4 	(0 << 6)
 #define CM3629_PS2_PROL_8 	(1 << 6)
 #define CM3629_PS2_PROL_16	(2 << 6)
@@ -122,8 +141,10 @@
 #define CM3629_PS2_PERS_3 	(2 << 0)
 #define CM3629_PS2_PERS_4 	(3 << 0)
 
+/*for PS command 04h_H*/
 #define CM3629_PS_MS 		(1 << 5)
 
+/*for Interrupt command 0Bh_H*/
 #define CM3629_PS2_SPFLAG 	(1 << 7)
 #define CM3629_PS1_SPFLAG 	(1 << 6)
 
@@ -159,16 +180,16 @@ struct cm3629_platform_data {
 	uint16_t levels[10];
 	uint16_t correction[10];
 	uint16_t golden_adc;
-	int (*power)(int, uint8_t); 
-	int (*lpm_power)(uint8_t); 
+	int (*power)(int, uint8_t); /* power to the chip */
+	int (*lpm_power)(uint8_t); /* power to the chip */
 	uint16_t cm3629_slave_address;
 	uint8_t ps_select;
 	uint8_t ps1_thd_set;
 	uint8_t ps1_thh_diff;
 	uint8_t ps2_thd_set;
 	uint8_t inte_cancel_set;
-	
-	uint8_t ps_conf2_val; 
+	/*command code 0x02, intelligent cancel level, for ps calibration*/
+	uint8_t ps_conf2_val; /* PS_CONF2 value */
 	uint8_t *mapping_table;
 	uint8_t mapping_size;
 	uint8_t ps_base_index;

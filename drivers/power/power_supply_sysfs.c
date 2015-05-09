@@ -19,6 +19,17 @@
 
 #include "power_supply.h"
 
+/*
+ * This is because the name "current" breaks the device attr macro.
+ * The "current" word resolves to "(get_current())" so instead of
+ * "current" "(get_current())" appears in the sysfs.
+ *
+ * The source of this definition is the device.h which calls __ATTR
+ * macro in sysfs.h which calls the __stringify macro.
+ *
+ * Only modification that the name is not tried to be resolved
+ * (as a macro let's say).
+ */
 
 #define POWER_SUPPLY_ATTR(_name)					\
 {									\
@@ -107,7 +118,7 @@ static ssize_t power_supply_store_property(struct device *dev,
 	union power_supply_propval value;
 	long long_val;
 
-	
+	/* TODO: support other types than int */
 	ret = strict_strtol(buf, 10, &long_val);
 	if (ret < 0)
 		return ret;
@@ -121,8 +132,9 @@ static ssize_t power_supply_store_property(struct device *dev,
 	return count;
 }
 
+/* Must be in the same order as POWER_SUPPLY_PROP_* */
 static struct device_attribute power_supply_attrs[] = {
-	
+	/* Properties of type `int' */
 	POWER_SUPPLY_ATTR(status),
 	POWER_SUPPLY_ATTR(charge_type),
 	POWER_SUPPLY_ATTR(health),
@@ -164,7 +176,7 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(time_to_full_avg),
 	POWER_SUPPLY_ATTR(type),
 	POWER_SUPPLY_ATTR(scope),
-	
+	/* Properties of type `const char *' */
 	POWER_SUPPLY_ATTR(model_name),
 	POWER_SUPPLY_ATTR(manufacturer),
 	POWER_SUPPLY_ATTR(serial_number),
@@ -270,6 +282,8 @@ int power_supply_uevent(struct device *dev, struct kobj_uevent_env *env)
 
 		ret = power_supply_show_property(dev, attr, prop_buf);
 		if (ret == -ENODEV || ret == -ENODATA) {
+			/* When a battery is absent, we expect -ENODEV. Don't abort;
+			   send the uevent with at least the the PRESENT=0 property */
 			ret = 0;
 			continue;
 		}

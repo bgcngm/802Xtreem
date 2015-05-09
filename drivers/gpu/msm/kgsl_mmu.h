@@ -15,11 +15,18 @@
 
 #include <mach/iommu.h>
 
+/*
+ * These defines control the address range for allocations that
+ * are mapped into all pagetables.
+ */
 #define KGSL_IOMMU_GLOBAL_MEM_BASE	0xf8000000
 #define KGSL_IOMMU_GLOBAL_MEM_SIZE	SZ_4M
 
 #define KGSL_MMU_ALIGN_MASK     (~((1 << PAGE_SHIFT) - 1))
 
+/* Identifier for the global page table */
+/* Per process page tables will probably pass in the thread group
+   as an identifier */
 
 #define KGSL_MMU_GLOBAL_PT 0
 #define KGSL_MMU_PRIV_BANK_TABLE_NAME 0xFFFFFFFF
@@ -31,6 +38,10 @@ struct kgsl_device;
 #define GSL_PT_PAGE_RV		0x00000002
 #define GSL_PT_PAGE_DIRTY	0x00000004
 
+/* MMU registers - the register locations for all cores are the
+   same.  The method for getting to those locations differs between
+   2D and 3D, but the 2D and 3D register functions do that magic
+   for us */
 
 #define MH_MMU_CONFIG                0x0040
 #define MH_MMU_VA_RANGE              0x0041
@@ -52,6 +63,7 @@ struct kgsl_device;
 #define MH_CLNT_INTF_CTRL_CONFIG1    0x0A54
 #define MH_CLNT_INTF_CTRL_CONFIG2    0x0A55
 
+/* MH_MMU_CONFIG bit definitions */
 
 #define MH_MMU_CONFIG__RB_W_CLNT_BEHAVIOR__SHIFT           0x00000004
 #define MH_MMU_CONFIG__CP_W_CLNT_BEHAVIOR__SHIFT           0x00000006
@@ -65,6 +77,7 @@ struct kgsl_device;
 #define MH_MMU_CONFIG__TC_R_CLNT_BEHAVIOR__SHIFT           0x00000016
 #define MH_MMU_CONFIG__PA_W_CLNT_BEHAVIOR__SHIFT           0x00000018
 
+/* MMU Flags */
 #define KGSL_MMUFLAGS_TLBFLUSH         0x10000000
 #define KGSL_MMUFLAGS_PTUPDATE         0x20000000
 
@@ -168,9 +181,9 @@ struct kgsl_mmu {
 	struct kgsl_device     *device;
 	unsigned int     config;
 	struct kgsl_memdesc    setstate_memory;
-	
+	/* current page table object being used by device mmu */
 	struct kgsl_pagetable  *defaultpagetable;
-	
+	/* pagetable object used for priv bank of IOMMU */
 	struct kgsl_pagetable  *priv_bank_table;
 	struct kgsl_pagetable  *hwpagetable;
 	const struct kgsl_mmu_ops *mmu_ops;
@@ -216,6 +229,11 @@ void kgsl_mmu_set_mmutype(char *mmutype);
 enum kgsl_mmutype kgsl_mmu_get_mmutype(void);
 int kgsl_mmu_gpuaddr_in_range(unsigned int gpuaddr);
 
+/*
+ * Static inline functions of MMU that simply call the SMMU specific
+ * function using a function pointer. These functions can be thought
+ * of as wrappers around the actual function
+ */
 
 static inline unsigned int kgsl_mmu_get_current_ptbase(struct kgsl_mmu *mmu)
 {
@@ -293,7 +311,7 @@ static inline void kgsl_mmu_disable_clk_on_ts(struct kgsl_mmu *mmu,
 
 static inline unsigned int kgsl_mmu_get_int_mask(void)
 {
-	
+	/* Dont enable gpummu interrupts, if iommu is enabled */
 	if (KGSL_MMU_TYPE_GPU == kgsl_mmu_get_mmutype())
 		return KGSL_MMU_INT_MASK;
 	else
@@ -340,11 +358,18 @@ static inline int kgsl_mmu_sync_unlock(struct kgsl_mmu *mmu,
 		return 0;
 }
 
+/*
+ * kgsl_mmu_is_perprocess() - Runtime check for per-process
+ * pagetables.
+ *
+ * Returns non-zero if per-process pagetables are enabled,
+ * 0 if not.
+ */
 #ifdef CONFIG_KGSL_PER_PROCESS_PAGE_TABLE
 static inline int kgsl_mmu_is_perprocess(void)
 {
 
-	
+	/* We presently do not support per-process for IOMMU-v2 */
 	return (kgsl_mmu_get_mmutype() != KGSL_MMU_TYPE_IOMMU)
 		|| msm_soc_version_supports_iommu_v1();
 }
@@ -355,16 +380,44 @@ static inline int kgsl_mmu_is_perprocess(void)
 }
 #endif
 
+/*
+ * kgsl_mmu_base_addr() - Get gpu virtual address base.
+ *
+ * Returns the start address of the allocatable gpu
+ * virtual address space. Other mappings that mirror
+ * the CPU address space are possible outside this range.
+ */
 static inline unsigned int kgsl_mmu_get_base_addr(void)
 {
 	if (KGSL_MMU_TYPE_GPU == kgsl_mmu_get_mmutype()
 		|| !kgsl_mmu_is_perprocess())
 		return KGSL_PAGETABLE_BASE;
+	/*
+	 * This is the start of the kernel address
+	 * space, so allocations from this range will
+	 * never conflict with userpace addresses
+	 */
 	return PAGE_OFFSET;
 }
 
+/*
+ * kgsl_mmu_get_ptsize() - Get gpu pagetable size
+ *
+ * Returns the usable size of the gpu allocatable
+ * address space.
+ */
 static inline unsigned int kgsl_mmu_get_ptsize(void)
 {
+	/*
+	 * For IOMMU per-process pagetables, the allocatable range
+	 * and the kernel global range must both be outside
+	 * the userspace address range. There is a 1Mb gap
+	 * between these address ranges to make overrun
+	 * detection easier.
+	 * For the shared pagetable case use 2GB and because
+	 * mirroring the CPU address space is not possible and
+	 * we're better off with extra room.
+	 */
 	enum kgsl_mmutype mmu_type = kgsl_mmu_get_mmutype();
 
 	if (KGSL_MMU_TYPE_GPU == mmu_type)
@@ -379,4 +432,4 @@ static inline unsigned int kgsl_mmu_get_ptsize(void)
 	return 0;
 }
 
-#endif 
+#endif /* __KGSL_MMU_H */

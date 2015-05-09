@@ -68,8 +68,8 @@ static unsigned long dump_startaddress(void)
 		for (i = 0; i <  pdata->count; i++) {
 			tmp_address = pdata->region[i].start + current_point * COPY_LENGTH;
 
-			
-			
+			/* the address out of dump region */
+			/* chagne */
 			if ((tmp_address - pdata->region[i].start) >= pdata->region[i].size) {
 				tmp = pdata->region[i].size/COPY_LENGTH;
 				current_point -= tmp;

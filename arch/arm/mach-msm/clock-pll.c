@@ -67,9 +67,13 @@ int pll_vote_clk_enable(struct clk *c)
 	writel_relaxed(ena, PLL_EN_REG(pllv));
 	spin_unlock_irqrestore(&pll_reg_lock, flags);
 
+	/*
+	 * Use a memory barrier since some PLL status registers are
+	 * not within the same 1K segment as the voting registers.
+	 */
 	mb();
 
-	
+	/* Wait for pll to enable. */
 	for (count = ENABLE_WAIT_MAX_LOOPS; count > 0; count--) {
 		if (readl_relaxed(PLL_STATUS_REG(pllv)) & pllv->status_mask)
 			return 0;
@@ -125,26 +129,30 @@ struct clk_ops clk_ops_pll_vote = {
 static void __pll_clk_enable_reg(void __iomem *mode_reg)
 {
 	u32 mode = readl_relaxed(mode_reg);
-	
+	/* Disable PLL bypass mode. */
 	mode |= PLL_BYPASSNL;
 	writel_relaxed(mode, mode_reg);
 
+	/*
+	 * H/W requires a 5us delay between disabling the bypass and
+	 * de-asserting the reset. Delay 10us just to be safe.
+	 */
 	mb();
 	udelay(10);
 
-	
+	/* De-assert active-low PLL reset. */
 	mode |= PLL_RESET_N;
 	writel_relaxed(mode, mode_reg);
 
-	
+	/* Wait until PLL is locked. */
 	mb();
 	udelay(50);
 
-	
+	/* Enable PLL output. */
 	mode |= PLL_OUTCTRL;
 	writel_relaxed(mode, mode_reg);
 
-	
+	/* Ensure that the write above goes through before returning. */
 	mb();
 }
 
@@ -172,6 +180,10 @@ static void local_pll_clk_disable(struct clk *c)
 	unsigned long flags;
 	struct pll_clk *pll = to_pll_clk(c);
 
+	/*
+	 * Disable the PLL output, disable test mode, enable
+	 * the bypass mode, and assert the reset.
+	 */
 	spin_lock_irqsave(&pll_reg_lock, flags);
 	__pll_clk_disable_reg(PLL_MODE_REG(pll));
 	spin_unlock_irqrestore(&pll_reg_lock, flags);
@@ -202,26 +214,30 @@ int sr_pll_clk_enable(struct clk *c)
 
 	spin_lock_irqsave(&pll_reg_lock, flags);
 	mode = readl_relaxed(PLL_MODE_REG(pll));
-	
+	/* De-assert active-low PLL reset. */
 	mode |= PLL_RESET_N;
 	writel_relaxed(mode, PLL_MODE_REG(pll));
 
+	/*
+	 * H/W requires a 5us delay between disabling the bypass and
+	 * de-asserting the reset. Delay 10us just to be safe.
+	 */
 	mb();
 	udelay(10);
 
-	
+	/* Disable PLL bypass mode. */
 	mode |= PLL_BYPASSNL;
 	writel_relaxed(mode, PLL_MODE_REG(pll));
 
-	
+	/* Wait until PLL is locked. */
 	mb();
 	udelay(60);
 
-	
+	/* Enable PLL output. */
 	mode |= PLL_OUTCTRL;
 	writel_relaxed(mode, PLL_MODE_REG(pll));
 
-	
+	/* Ensure that the write above goes through before returning. */
 	mb();
 
 	spin_unlock_irqrestore(&pll_reg_lock, flags);
@@ -240,11 +256,11 @@ int sr_hpm_lp_pll_clk_enable(struct clk *c)
 
 	spin_lock_irqsave(&pll_reg_lock, flags);
 
-	
+	/* Disable PLL bypass mode and de-assert reset. */
 	mode = PLL_BYPASSNL | PLL_RESET_N;
 	writel_relaxed(mode, PLL_MODE_REG(pll));
 
-	
+	/* Wait for pll to lock. */
 	for (count = ENABLE_WAIT_MAX_LOOPS; count > 0; count--) {
 		if (readl_relaxed(PLL_STATUS_REG(pll)) & PLL_LOCKED_BIT)
 			break;
@@ -257,11 +273,11 @@ int sr_hpm_lp_pll_clk_enable(struct clk *c)
 		goto out;
 	}
 
-	
+	/* Enable PLL output. */
 	mode |= PLL_OUTCTRL;
 	writel_relaxed(mode, PLL_MODE_REG(pll));
 
-	
+	/* Ensure the write above goes through before returning. */
 	mb();
 
 out:
@@ -300,7 +316,17 @@ static struct pll_rate pll_l_rate[] = {
 struct shared_pll_control {
 	uint32_t	version;
 	struct {
+		/*
+		 * Denotes if the PLL is ON. Technically, this can be read
+		 * directly from the PLL registers, but this feild is here,
+		 * so let's use it.
+		 */
 		uint32_t	on;
+		/*
+		 * One bit for each processor core. The application processor
+		 * is allocated bit position 1. All other bits should be
+		 * considered as votes from other processors.
+		 */
 		uint32_t	votes;
 	} pll[PLL_BASE + PLL_END];
 };
@@ -319,6 +345,11 @@ void __init msm_shared_pll_control_init(void)
 	if (!pll_control) {
 		pr_err("Can't find shared PLL control data structure!\n");
 		BUG();
+	/*
+	 * There might be more PLLs than what the application processor knows
+	 * about. But the index used for each PLL is guaranteed to remain the
+	 * same.
+	 */
 	} else if (smem_size < sizeof(struct shared_pll_control)) {
 			pr_err("Shared PLL control data"
 					 "structure too small!\n");
@@ -378,13 +409,16 @@ static enum handoff pll_clk_handoff(struct clk *c)
 	unsigned int pll_lval;
 	struct pll_rate *l;
 
+	/*
+	 * Wait for the PLLs to be initialized and then read their frequency.
+	 */
 	do {
 		pll_lval = readl_relaxed(PLL_MODE_REG(pll) + 4) & 0x3ff;
 		cpu_relax();
 		udelay(50);
 	} while (pll_lval == 0);
 
-	
+	/* Convert PLL L values to PLL Output rate */
 	for (l = pll_l_rate; l->rate != 0; l++) {
 		if (l->lvalue == pll_lval) {
 			c->rate = l->rate;
@@ -412,21 +446,21 @@ static void __init __set_fsm_mode(void __iomem *mode_reg,
 {
 	u32 regval = readl_relaxed(mode_reg);
 
-	
+	/* De-assert reset to FSM */
 	regval &= ~BIT(21);
 	writel_relaxed(regval, mode_reg);
 
-	
+	/* Program bias count */
 	regval &= ~BM(19, 14);
 	regval |= BVAL(19, 14, bias_count);
 	writel_relaxed(regval, mode_reg);
 
-	
+	/* Program lock count */
 	regval &= ~BM(13, 8);
 	regval |= BVAL(13, 8, lock_count);
 	writel_relaxed(regval, mode_reg);
 
-	
+	/* Enable PLL FSM voting */
 	regval |= BIT(20);
 	writel_relaxed(regval, mode_reg);
 }
@@ -442,25 +476,25 @@ void __init __configure_pll(struct pll_config *config,
 
 	regval = readl_relaxed(PLL_CONFIG_REG(regs));
 
-	
+	/* Enable the MN accumulator  */
 	if (config->mn_ena_mask) {
 		regval &= ~config->mn_ena_mask;
 		regval |= config->mn_ena_val;
 	}
 
-	
+	/* Enable the main output */
 	if (config->main_output_mask) {
 		regval &= ~config->main_output_mask;
 		regval |= config->main_output_val;
 	}
 
-	
+	/* Set pre-divider and post-divider values */
 	regval &= ~config->pre_div_mask;
 	regval |= config->pre_div_val;
 	regval &= ~config->post_div_mask;
 	regval |= config->post_div_val;
 
-	
+	/* Select VCO setting */
 	regval &= ~config->vco_mask;
 	regval |= config->vco_val;
 	writel_relaxed(regval, PLL_CONFIG_REG(regs));

@@ -43,6 +43,7 @@
 #include "clock.h"
 #include "mdm_private.h"
 
+/* HTC added start */
 #if defined(pr_warn)
 #undef pr_warn
 #endif
@@ -80,6 +81,7 @@
 #define pr_warn(x...) do {				\
 			printk(KERN_WARNING "[MDM] "x);		\
 	} while (0)
+/* HTC added end */
 
 #define MDM_MODEM_TIMEOUT	6000
 #define MDM_HOLD_TIME		4000
@@ -124,29 +126,47 @@ static void power_on_mdm(struct mdm_modem_drv *mdm_drv)
 
 	power_on_count++;
 
+	/* The second attempt to power-on the mdm is the first attempt
+	 * from user space, but we're already powered on. Ignore this.
+	 * Subsequent attempts are from SSR or if something failed, in
+	 * which case we must always reset the modem.
+	 */
 	if (power_on_count == 2)
 		return;
 
 	mdm_peripheral_disconnect(mdm_drv);
 
+	/* Leakege might cause abnormal MDM status.
+	   Output ap2mdm_status low to avoid leakege. */
 	gpio_direction_output(mdm_drv->ap2mdm_status_gpio, 0);
 
+	/* this gpio will be used to indicate apq readiness,
+	 * de-assert it now so that it can asserted later
+	 */
 	gpio_direction_output(mdm_drv->ap2mdm_wakeup_gpio, 0);
 
-	
+	/* Pull RESET gpio low and wait for it to settle. */
 	pr_debug("Pulling RESET gpio low\n");
 	gpio_direction_output(mdm_drv->ap2mdm_pmic_reset_n_gpio, 0);
 
 	usleep_range(5000, 10000);
 
-	
+	/* Deassert RESET first and wait for it to settle. */
 	pr_debug("%s: Pulling RESET gpio high\n", __func__);
 	gpio_direction_output(mdm_drv->ap2mdm_pmic_reset_n_gpio, 1);
 
 	msleep(40);
 
+	/* re-enable ap2mdm_status after mdm is ready.
+	 *According to HW measurement, mdm takes abort 50ms to enter PBL
+	 */
 	gpio_direction_output(mdm_drv->ap2mdm_status_gpio, 1);
 
+	/* QCT workaround: Keep the host HSIC in reset until the MDM9x15M has
+           come out of reset. QCT has defined GPIO79(HSIC_DEVICE_READY) in
+           the primany boot loader(PBL) to hold the host HSIC reset.
+           HSIC_DEVUCE_READY will go high when the MDM9x15M device has powered
+           up and is ready for HSIC enumeration. */
 	while (!gpio_get_value(mdm_drv->mdm2ap_hsic_ready_gpio) && hsic_ready_timeout_ms>0) {
 		msleep(10);
 		hsic_ready_timeout_ms -= 10;
@@ -159,6 +179,10 @@ static void power_on_mdm(struct mdm_modem_drv *mdm_drv)
 
 	usleep(1000);
 
+	/* Pull PWR gpio high and wait for it to settle, but only
+	 * the first time the mdm is powered up.
+	 * Some targets do not use ap2mdm_kpdpwr_n_gpio.
+	 */
 	if (power_on_count == 1) {
 		if (mdm_drv->ap2mdm_kpdpwr_n_gpio > 0) {
 			pr_debug("%s: Powering on mdm modem\n", __func__);
@@ -172,18 +196,18 @@ static void power_on_mdm(struct mdm_modem_drv *mdm_drv)
 
 static void power_down_mdm(struct mdm_modem_drv *mdm_drv)
 {
-	
+	/*++SSD_RIL: pull ap2mdm gpio to low for power leakage*/
 	if (mdm_drv->ap2mdm_errfatal_gpio > 0)
 		gpio_direction_output(mdm_drv->ap2mdm_errfatal_gpio, 0);
 	if (mdm_drv->ap2mdm_status_gpio > 0)
 		gpio_direction_output(mdm_drv->ap2mdm_status_gpio, 0);
 	if (mdm_drv->ap2mdm_wakeup_gpio > 0)
 		gpio_direction_output(mdm_drv->ap2mdm_wakeup_gpio, 0);
-	
+	/*--SSD_RIL*/
 
 	if (mdm_drv->ap2mdm_kpdpwr_n_gpio > 0)
 		gpio_direction_output(mdm_drv->ap2mdm_kpdpwr_n_gpio, 0);
-	
+	//mdm_peripheral_disconnect(mdm_drv);
 }
 
 #define HTC_MDM_HOLD_TIME			2000

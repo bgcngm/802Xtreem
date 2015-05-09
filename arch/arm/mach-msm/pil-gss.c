@@ -97,27 +97,31 @@ static void gss_init(struct gss_data *drv)
 {
 	void __iomem *base = drv->base;
 
-	
+	/* Supply clocks to GSS. */
 	writel_relaxed(XO_CLK_BRANCH_ENA, GSS_CXO_SRC_CTL);
 	writel_relaxed(SLP_CLK_BRANCH_ENA, GSS_SLP_CLK_CTL);
 
-	
+	/* Deassert GSS reset and clamps. */
 	writel_relaxed(0x0, GSS_RESET);
 	writel_relaxed(0x0, GSS_CLAMP_ENA);
 	mb();
 
+	/*
+	 * Configure clock source and dividers for 288MHz core, 144MHz AXI and
+	 * 72MHz AHB, all derived from the 288MHz PLL.
+	 */
 	writel_relaxed(0x341, base + GSS_CSR_CLK_BLK_CONFIG);
 	writel_relaxed(0x1, base + GSS_CSR_AHB_CLK_SEL);
 
-	
+	/* Assert all GSS resets. */
 	writel_relaxed(0x7F, base + GSS_CSR_RESET);
 
-	
+	/* Enable all bus clocks and wait for resets to propagate. */
 	writel_relaxed(0x1F, base + GSS_CSR_CLK_ENABLE);
 	mb();
 	udelay(1);
 
-	
+	/* Release subsystem from reset, but leave A5 in reset. */
 	writel_relaxed(A5_RESET, base + GSS_CSR_RESET);
 }
 
@@ -126,6 +130,11 @@ static void cfg_qgic2_bus_access(void *data)
 	struct gss_data *drv = data;
 	int i;
 
+	/*
+	 * Apply a 8064 v1.0 workaround to configure QGIC bus access.
+	 * This must be done from Krait 0 to configure the Master ID
+	 * correctly.
+	 */
 	writel_relaxed(0x2, drv->base + GSS_CSR_CFG_HID);
 	for (i = 0; i <= 3; i++)
 		readl_relaxed(drv->qgic2_base);
@@ -144,35 +153,39 @@ static int pil_gss_shutdown(struct pil_desc *pil)
 		return ret;
 	}
 
-	
+	/* Make sure bus port is halted. */
 	msm_bus_axi_porthalt(MSM_BUS_MASTER_GSS_NAV);
 
+	/*
+	 * Vote PLL on in GSS's voting register and wait for it to enable.
+	 * The PLL must be enable to switch the GFMUX to a low-power source.
+	 */
 	writel_relaxed(PLL5_VOTE, PLL_ENA_GSS);
 	while ((readl_relaxed(PLL5_STATUS) & PLL_STATUS) == 0)
 		cpu_relax();
 
-	
+	/* Perform one-time GSS initialization. */
 	gss_init(drv);
 
-	
+	/* Assert A5 reset. */
 	regval = readl_relaxed(base + GSS_CSR_RESET);
 	regval |= A5_RESET;
 	writel_relaxed(regval, base + GSS_CSR_RESET);
 
-	
+	/* Power down A5 and NAV. */
 	regval = readl_relaxed(base + GSS_CSR_POWER_UP_DOWN);
 	regval &= ~(A5_POWER_ENA|NAV_POWER_ENA);
 	writel_relaxed(regval, base + GSS_CSR_POWER_UP_DOWN);
 
-	
+	/* Select XO clock source and increase dividers to save power. */
 	regval = readl_relaxed(base + GSS_CSR_CLK_BLK_CONFIG);
 	regval |= 0x3FF;
 	writel_relaxed(regval, base + GSS_CSR_CLK_BLK_CONFIG);
 
-	
+	/* Disable bus clocks. */
 	writel_relaxed(0x1F, base + GSS_CSR_CLK_ENABLE);
 
-	
+	/* Clear GSS PLL votes. */
 	writel_relaxed(0, PLL_ENA_GSS);
 	mb();
 
@@ -188,26 +201,26 @@ static int pil_gss_reset(struct pil_desc *pil)
 	unsigned long start_addr = drv->start_addr;
 	int ret;
 
-	
+	/* Unhalt bus port. */
 	ret = msm_bus_axi_portunhalt(MSM_BUS_MASTER_GSS_NAV);
 	if (ret) {
 		dev_err(pil->dev, "Failed to unhalt bus port\n");
 		return ret;
 	}
 
-	
+	/* Vote PLL on in GSS's voting register and wait for it to enable. */
 	writel_relaxed(PLL5_VOTE, PLL_ENA_GSS);
 	while ((readl_relaxed(PLL5_STATUS) & PLL_STATUS) == 0)
 		cpu_relax();
 
-	
+	/* Perform GSS initialization. */
 	gss_init(drv);
 
-	
+	/* Configure boot address and enable remap. */
 	writel_relaxed(REMAP_ENABLE | (start_addr >> 16),
 			base + GSS_CSR_BOOT_REMAP);
 
-	
+	/* Power up A5 core. */
 	writel_relaxed(A5_POWER_ENA, base + GSS_CSR_POWER_UP_DOWN);
 	while (!(readl_relaxed(base + GSS_CSR_POWER_UP_DOWN) & A5_POWER_STATUS))
 		cpu_relax();
@@ -223,7 +236,7 @@ static int pil_gss_reset(struct pil_desc *pil)
 		}
 	}
 
-	
+	/* Release A5 from reset. */
 	writel_relaxed(0x0, base + GSS_CSR_RESET);
 
 	return 0;
@@ -248,6 +261,10 @@ static int pil_gss_shutdown_trusted(struct pil_desc *pil)
 	struct gss_data *drv = dev_get_drvdata(pil->dev);
 	int ret;
 
+	/*
+	 * CXO is used in the secure shutdown code to configure the processor
+	 * for low power mode.
+	 */
 	ret = clk_prepare_enable(drv->xo);
 	if (ret) {
 		dev_err(pil->dev, "Failed to enable XO\n");
@@ -339,7 +356,7 @@ static int __devinit pil_gss_probe(struct platform_device *pdev)
 		desc->ops = &pil_gss_ops;
 		dev_info(&pdev->dev, "using non-secure boot\n");
 	}
-	
+	/* Force into low power mode because hardware doesn't do this */
 	desc->ops->shutdown(desc);
 
 	drv->pil = msm_pil_register(desc);

@@ -11,16 +11,18 @@
 
 #define OV4688_REG_READ_MODE 0x0101
 
-#define OV4688_REG_FLIP_MODE 0x3820	
-#define OV4688_REG_MIRROR_MODE 0x3821	
+/* HTC_START steven correct pixel order */
+#define OV4688_REG_FLIP_MODE 0x3820	/* ov4688 flip register */
+#define OV4688_REG_MIRROR_MODE 0x3821	/* ov4688 mirror register */
 #define OV4688_REG_NON_MIRROR_FLIP 0x0000
 #define OV4688_REG_FLIP 0x6
 #define OV4688_REG_MIRROR 0x6
+/* HTC_END steven correct pixel order */
 
-#define OV4688_READ_NORMAL_MODE 0x0000	
-#define OV4688_READ_MIRROR 0x0001			
-#define OV4688_READ_FLIP 0x0002			
-#define OV4688_READ_MIRROR_FLIP 0x0003	
+#define OV4688_READ_NORMAL_MODE 0x0000	/* without mirror/flip */
+#define OV4688_READ_MIRROR 0x0001			/* with mirror */
+#define OV4688_READ_FLIP 0x0002			/* with flip */
+#define OV4688_READ_MIRROR_FLIP 0x0003	/* with mirror/flip */
 
 #define REG_DIGITAL_GAIN_GREEN_R 0x020E
 #define REG_DIGITAL_GAIN_RED 0x0210
@@ -29,7 +31,7 @@
 
 
 DEFINE_MUTEX(ov4688_mut);
-DEFINE_MUTEX(ov4688_sensor_init_mut);
+DEFINE_MUTEX(ov4688_sensor_init_mut);//CC120826,
 
 struct ov4688_hdr_exp_info_t {
 	uint16_t long_coarse_int_time_addr_h;
@@ -45,7 +47,7 @@ struct ov4688_hdr_exp_info_t {
 	uint16_t middle_gain_addr_m;
 	uint16_t middle_gain_addr_l;
 	uint16_t vert_offset;
-	uint32_t sensor_max_linecount; 
+	uint32_t sensor_max_linecount; /* HTC ben 20120229 */
 };
 
 static struct msm_sensor_ctrl_t ov4688_s_ctrl;
@@ -63,8 +65,8 @@ static struct msm_camera_i2c_reg_conf ov4688_start_settings[] = {
 
 static struct msm_camera_i2c_reg_conf ov4688_start_settings2[] = {
 	{0x3105, 0x11}, 
-	{0x301a, 0xf1}, 
-	{0x4805, 0x00}, 
+	{0x301a, 0xf1}, // 0506
+	{0x4805, 0x00}, // chad 5/6 change for switch mode
     {0x301a, 0xf0},
     {0x3208, 0x00},
 	{0x302a, 0x00}, 
@@ -96,42 +98,45 @@ static struct msm_camera_i2c_reg_conf ov4688_groupoff_settings[] = {
 	{0x3208, 0xa0},
 };
 
+/* HTC_START Steven 20130528 fix bad frame issue with quick launc on ov4688 sensor */
 static struct msm_camera_i2c_reg_conf ov4688_groupon_settings_hdr[] = {
 	{0x3208, 0x01},
 };
 
 static struct msm_camera_i2c_reg_conf ov4688_groupoff_settings_hdr[] = {
     {0x3208, 0x11},
+//	{0x3208, 0xe1},	//remove it and active it at N+2 SOF of short frame
 };
+/* HTC_END Steven 20130528 fix bad frame issue with quick launc on ov4688 sensor */
 
  struct msm_camera_i2c_reg_conf ov4688_prev_settings[] = {
     {0xffff, 200},
-    
+    // non hdr
     {0x3841 , 0x02},
     {0x3846 , 0x08},
     {0x3847 , 0x07},
     {0x4800 , 0x04},
     {0x376e , 0x00},
 
-	
+	//{0x4308 , 0x02+1}, /*status line off*/
 	{0x3632, 0x05},
 	{0x376b, 0x40},
-	{0x3800, 0x00},
-	{0x3801, 0x08},
-	{0x3802, 0x00},
-	{0x3803, 0x04},
-	{0x3804, 0x0a},
-	{0x3805, 0x97},
-	{0x3806, 0x05},
-	{0x3807, 0xff},
-	{0x3808, 0x05},
-	{0x3809, 0x40},
-	{0x380a, 0x02},
-	{0x380b, 0xf8+1},
-	{0x380c, 0x09}, 
-	{0x380d, 0xcd},
-	{0x380e, 0x03},
-	{0x380f, 0x1d},
+	{0x3800, 0x00},/*x start MSB*/
+	{0x3801, 0x08},/*x start LSB*/
+	{0x3802, 0x00},/*y start MSB*/
+	{0x3803, 0x04},/*y start LSB*/
+	{0x3804, 0x0a},/*x end MSB */
+	{0x3805, 0x97},/*x end LSB */
+	{0x3806, 0x05},/*y end LSB */
+	{0x3807, 0xff},/*y end MSB */
+	{0x3808, 0x05},/*x output size MSB	*/
+	{0x3809, 0x40},/*x output size LSB */
+	{0x380a, 0x02},/*y output size MSB */
+	{0x380b, 0xf8+1},/*y output size LSB 1*/
+	{0x380c, 0x09},/*line length */ //0x09 for 60fps
+	{0x380d, 0xcd},/////0xc0*line length */ //0xcd for 60fps
+	{0x380e, 0x03},/*frame length*/
+	{0x380f, 0x1d},/*frame length*/
 	{0x3810, 0x00},
 	{0x3811, 0x04},
 	{0x3812, 0x00},
@@ -139,8 +144,8 @@ static struct msm_camera_i2c_reg_conf ov4688_groupoff_settings_hdr[] = {
 	{0x3814, 0x03},
 	{0x3815, 0x01},
 	{0x3819, 0x01},
-	{0x3820, 0x00},
-	{0x3821, 0x07},
+	{0x3820, 0x00},/*x binning mode 0x01 binning 0x00 non-binning*/
+	{0x3821, 0x07},/*y binning mode 0x01 binning 0x00 non-binning*/
 	{0x3829, 0x00},
 	{0x382a, 0x03},
 	{0x382b, 0x01},
@@ -165,40 +170,40 @@ static struct msm_camera_i2c_reg_conf ov4688_video_settings[] = {
     {0x3632, 0x00},
     {0x376b, 0x20},
 
-    
+    // non hdr
     {0x3841 , 0x02},
     {0x3846 , 0x08},
     {0x3847 , 0x07},
     {0x4800 , 0x04},
     {0x376e , 0x00},
-    
+    //{0x4308 , 0x02+1}, /*status line off*/
 
 
-    {0x3800, 0x00},
-    {0x3801, 0x00},
-    {0x3802, 0x00},
-    {0x3803, 0x04},
-    {0x3804, 0x0a},
-    {0x3805, 0x9f},
-    {0x3806, 0x05},
-    {0x3807, 0xfb},
-    {0x3808, 0x0a},
-    {0x3809, 0x80},
-    {0x380a, 0x05},
-    {0x380b, 0xf0+1}, 
-    {0x380c, 0x06},
-    {0x380d, 0x48},
-    {0x380e, 0x06},
-    {0x380f, 0x12},
+    {0x3800, 0x00},/*x start MSB*/
+    {0x3801, 0x00},/*x start LSB*/
+    {0x3802, 0x00},/*y start MSB*/
+    {0x3803, 0x04},/*y start LSB*/
+    {0x3804, 0x0a},/*x end MSB 2719*/
+    {0x3805, 0x9f},/*x end LSB 2719*/
+    {0x3806, 0x05},/*y end LSB 1531*/
+    {0x3807, 0xfb},/*y end MSB 1531*/
+    {0x3808, 0x0a},/*x output size MSB  2688*/
+    {0x3809, 0x80},/*x output size LSB 2688*/
+    {0x380a, 0x05},/*y output size MSB 1520*/
+    {0x380b, 0xf0+1},/*y output size LSB 1520*/ // 0xf0 +1
+    {0x380c, 0x06},/*line length 1728*/
+    {0x380d, 0x48},/////0xc0*line length 1728*/
+    {0x380e, 0x06},/*frame length*/
+    {0x380f, 0x12},/*frame length*/
     {0x3810, 0x00},
     {0x3811, 0x10},
     {0x3812, 0x00},
-    {0x3813, 0x04-1}, 
+    {0x3813, 0x04-1}, //0x04 -1
     {0x3814, 0x01},
     {0x3815, 0x01},
     {0x3819, 0x01},
-    {0x3820, 0x00},
-    {0x3821, 0x06},
+    {0x3820, 0x00},/*x binning mode 0x01 binning 0x00 non-binning*/
+    {0x3821, 0x06},/*y binning mode 0x01 binning 0x00 non-binning*/
     {0x3829, 0x00},
     {0x382a, 0x01},
     {0x382b, 0x01},
@@ -219,10 +224,10 @@ static struct msm_camera_i2c_reg_conf ov4688_video_settings[] = {
 };
 
 struct msm_camera_i2c_reg_conf ov4688_fast_video_settings[] = {
-    
+    //{0x4308, 0x02+1}, /*status line off*/
     {0xffff, 200},
 
-    
+    // non hdr
     {0x3841 , 0x02},
     {0x3846 , 0x08},
     {0x3847 , 0x07},
@@ -231,22 +236,22 @@ struct msm_camera_i2c_reg_conf ov4688_fast_video_settings[] = {
 
     {0x3632, 0x05},
     {0x376b, 0x40},
-    {0x3800, 0x00},
-    {0x3801, 0x08},
-    {0x3802, 0x00},
-    {0x3803, 0x04},
-    {0x3804, 0x0a},
-    {0x3805, 0x97},
-    {0x3806, 0x05},
-    {0x3807, 0xff},
-    {0x3808, 0x05},
-    {0x3809, 0x40},
-    {0x380a, 0x02},
-    {0x380b, 0xf8+1},
-    {0x380c, 0x05}, 
-    {0x380d, 0xe8},
-    {0x380e, 0x03},
-    {0x380f, 0x1d},
+    {0x3800, 0x00},/*x start MSB*/
+    {0x3801, 0x08},/*x start LSB*/
+    {0x3802, 0x00},/*y start MSB*/
+    {0x3803, 0x04},/*y start LSB*/
+    {0x3804, 0x0a},/*x end MSB */
+    {0x3805, 0x97},/*x end LSB */
+    {0x3806, 0x05},/*y end LSB */
+    {0x3807, 0xff},/*y end MSB */
+    {0x3808, 0x05},/*x output size MSB  */
+    {0x3809, 0x40},/*x output size LSB */
+    {0x380a, 0x02},/*y output size MSB */
+    {0x380b, 0xf8+1},/*y output size LSB 1*/
+    {0x380c, 0x05},/*line length */ //0x09 for 60fps 0x04
+    {0x380d, 0xe8},/////0xc0*line length */ //0xcd for 60fps 0xe6
+    {0x380e, 0x03},/*frame length*/
+    {0x380f, 0x1d},/*frame length*/
     {0x3810, 0x00},
     {0x3811, 0x04},
     {0x3812, 0x00},
@@ -254,8 +259,8 @@ struct msm_camera_i2c_reg_conf ov4688_fast_video_settings[] = {
     {0x3814, 0x03},
     {0x3815, 0x01},
     {0x3819, 0x01},
-    {0x3820, 0x00},
-    {0x3821, 0x07},
+    {0x3820, 0x00},/*x binning mode 0x01 binning 0x00 non-binning*/
+    {0x3821, 0x07},/*y binning mode 0x01 binning 0x00 non-binning*/
     {0x3829, 0x00},
     {0x382a, 0x03},
     {0x382b, 0x01},
@@ -275,6 +280,7 @@ struct msm_camera_i2c_reg_conf ov4688_fast_video_settings[] = {
 
 };
 
+// 2048x1520
 struct msm_camera_i2c_reg_conf ov4688_4_3_settings[] = {
     {0xffff, 200},
 
@@ -283,31 +289,31 @@ struct msm_camera_i2c_reg_conf ov4688_4_3_settings[] = {
     {0x376b , 0x20},
 
 
-    
+    // non hdr
     {0x3841 , 0x02},
     {0x3846 , 0x08},
     {0x3847 , 0x07},
     {0x4800 , 0x04},
     {0x376e , 0x00},
-    
+    //{0x4308 , 0x02+1}, /*status line off*/
 
 
-    {0x3800 , 0x01},
-    {0x3801 , 0x34},
-    {0x3802 , 0x00},
-    {0x3803 , 0x04},
-    {0x3804 , 0x09},
-    {0x3805 , 0x4f},
-    {0x3806 , 0x05},
-    {0x3807 , 0xfb},
-    {0x3808 , 0x08},
-    {0x3809 , 0x04},
-    {0x380a , 0x05},
-    {0x380b , 0xf0+1},
-    {0x380c , 0x05},
-    {0x380d , 0xc0},
-    {0x380e , 0x06},
-    {0x380f , 0x60},
+    {0x3800 , 0x01},/*x start MSB*/
+    {0x3801 , 0x34},/*x start LSB*/
+    {0x3802 , 0x00},/*y start MSB*/
+    {0x3803 , 0x04},/*y start LSB*/
+    {0x3804 , 0x09},/*x end MSB */
+    {0x3805 , 0x4f},/*x end LSB */
+    {0x3806 , 0x05},/*y end LSB */
+    {0x3807 , 0xfb},/*y end MSB */
+    {0x3808 , 0x08},/*x output size MSB*/
+    {0x3809 , 0x04},/*x output size LSB */
+    {0x380a , 0x05},/*y output size MSB */
+    {0x380b , 0xf0+1},/*y output size LSB */
+    {0x380c , 0x05},/*line length */
+    {0x380d , 0xc0},/////0xc0*line length*/  // 0xbd
+    {0x380e , 0x06},/*frame length*/
+    {0x380f , 0x60},/*frame length*/
     {0x3810 , 0x00},
     {0x3811 , 0x04},
     {0x3812 , 0x00},
@@ -343,7 +349,7 @@ static struct msm_camera_i2c_reg_conf ov4688_hdr_settings[] = {
    {0x3632 , 0x00},
    {0x376b , 0x20},
 
-   {0x4308 , 0x03}, 
+   {0x4308 , 0x03}, // status line on bit[0]=1  0x03
 
    {0x3800 , 0x01 },
    {0x3801 , 0xb0 },
@@ -402,39 +408,39 @@ struct msm_camera_i2c_reg_conf ov4688_16_9_settings_non_hdr[] = {
     {0x3632, 0x00},
     {0x376b, 0x20},
 
-    
+    // non hdr
     {0x3841 , 0x02},
     {0x3846 , 0x08},
     {0x3847 , 0x07},
     {0x4800 , 0x04},
     {0x376e , 0x00},
-   
+   // {0x4308 , 0x02|1}, /*status line off*/
 
-    {0x3800, 0x00},
-    {0x3801, 0x00},
-    {0x3802, 0x00},
-    {0x3803, 0x04},
-    {0x3804, 0x0a},
-    {0x3805, 0x9f},
-    {0x3806, 0x05},
-    {0x3807, 0xfb},
-    {0x3808, 0x0a},
-    {0x3809, 0x80},
-    {0x380a, 0x05},
-    {0x380b, 0xf0|1}, 
-    {0x380c, 0x06},
-    {0x380d, 0x48},
-    {0x380e, 0x06},
-    {0x380f, 0x12},
+    {0x3800, 0x00},/*x start MSB*/
+    {0x3801, 0x00},/*x start LSB*/
+    {0x3802, 0x00},/*y start MSB*/
+    {0x3803, 0x04},/*y start LSB*/
+    {0x3804, 0x0a},/*x end MSB 2719*/
+    {0x3805, 0x9f},/*x end LSB 2719*/
+    {0x3806, 0x05},/*y end LSB 1531*/
+    {0x3807, 0xfb},/*y end MSB 1531*/
+    {0x3808, 0x0a},/*x output size MSB  2688*/
+    {0x3809, 0x80},/*x output size LSB 2688*/
+    {0x380a, 0x05},/*y output size MSB 1520*/
+    {0x380b, 0xf0|1},/*y output size LSB 1520*/ // 0xf0 +1
+    {0x380c, 0x06},/*line length 1728*/
+    {0x380d, 0x48},/////0xc0*line length 1728*/
+    {0x380e, 0x06},/*frame length*/
+    {0x380f, 0x12},/*frame length*/
     {0x3810, 0x00},
     {0x3811, 0x10},
     {0x3812, 0x00},
-    {0x3813, 0x04-1}, 
+    {0x3813, 0x04-1}, //0x04
     {0x3814, 0x01},
     {0x3815, 0x01},
     {0x3819, 0x01},
-    {0x3820, 0x00},
-    {0x3821, 0x06},
+    {0x3820, 0x00},/*x binning mode 0x01 binning 0x00 non-binning*/
+    {0x3821, 0x06},/*y binning mode 0x01 binning 0x00 non-binning*/
     {0x3829, 0x00},
     {0x382a, 0x01},
     {0x382b, 0x01},
@@ -458,8 +464,8 @@ static struct msm_camera_i2c_reg_conf ov4688_recommend_settings[] = {
     {0x0103, 0x01},
     {0x3638, 0x00},
     {0x0300, 0x00},
-    {0x0302, 0x30}, 
-    {0x0303, 0x01}, 
+    {0x0302, 0x30}, //0x30 for 576
+    {0x0303, 0x01}, //
     {0x0304, 0x03},
     {0x030b, 0x00},
     {0x030d, 0x1e},
@@ -471,7 +477,7 @@ static struct msm_camera_i2c_reg_conf ov4688_recommend_settings[] = {
     {0x3002, 0x00},
     {0x3018, 0x72},
     {0x3020, 0x93},
-    {0x3021, 0x03}, 
+    {0x3021, 0x03}, // 0506
     {0x3022, 0x01},
     {0x3031, 0x0a},
     {0x3305, 0xf1},
@@ -480,7 +486,7 @@ static struct msm_camera_i2c_reg_conf ov4688_recommend_settings[] = {
     {0x3500, 0x00},
     {0x3501, 0x60},
     {0x3502, 0x00},
-    {0x3503, 0x04}, 
+    {0x3503, 0x04}, // 0x04
     {0x3504, 0x00},
     {0x3505, 0x00},
     {0x3506, 0x00},
@@ -518,7 +524,7 @@ static struct msm_camera_i2c_reg_conf ov4688_recommend_settings[] = {
     {0x352a, 0x08},
     {0x3602, 0x00},
 
-	{0x3603, 0x01},    
+	{0x3603, 0x01},    /* HTC_START Steven 20130605 fix glitch issue on ov4688 sensor */
 
     {0x3604, 0x02},
     {0x3605, 0x00},
@@ -629,7 +635,7 @@ static struct msm_camera_i2c_reg_conf ov4688_recommend_settings[] = {
     {0x4304, 0x00},
     {0x4305, 0x00},
     {0x4306, 0x00},
-    {0x4308 , 0x03}, 
+    {0x4308 , 0x03}, // status line on bit[0]=1  0x03
 
     {0x4500, 0x6c},
     {0x4501, 0xc4},
@@ -638,11 +644,11 @@ static struct msm_camera_i2c_reg_conf ov4688_recommend_settings[] = {
     {0x4813, 0x08},
     {0x481f, 0x40},
     {0x4829, 0x78},
-    {0x4837, 0x1c},
+    {0x4837, 0x1c},//////0x1b for 576
     {0x4b00, 0x2a},
     {0x4b0d, 0x00},
     {0x4d00, 0x04},
-    {0x4d01, 0x42}, 
+    {0x4d01, 0x42}, // 0506
     {0x4d02, 0xd1},
     {0x4d03, 0x93},
     {0x4d04, 0xf5},
@@ -654,12 +660,12 @@ static struct msm_camera_i2c_reg_conf ov4688_recommend_settings[] = {
     {0x500b, 0x00},
     {0x5032, 0x00},
 
-	
+	/* HTC_START Steven 20130605 fix glitch issue on ov4688 sensor */
 	{0x5500, 0x00},
 	{0x5501, 0x10},
 	{0x5502, 0x01},
 	{0x5503, 0x0f},
-	
+	/* HTC_END Steven 20130605 fix glitch issue on ov4688 sensor */
 
     {0x5040, 0x00},
     {0x8000, 0x00},
@@ -673,15 +679,15 @@ static struct msm_camera_i2c_reg_conf ov4688_recommend_settings[] = {
     {0x8008, 0x00},
     {0x3638, 0x00},
     {0x3105, 0x31},
-    {0x301a, 0xf9}, 
+    {0x301a, 0xf9}, // 0506
 
-	
+	/* HTC_START Steven 20130605 fix glitch issue on ov4688 sensor */
 	{0x484b, 0x05},
 	{0x4805, 0x03},
 	{0x3508, 0x07},
 	{0x3601, 0x01},
 	{0x3603, 0x01},
-	
+	/* HTC_END Steven 20130605 fix glitch issue on ov4688 sensor */
 };
 
 static struct msm_camera_i2c_reg_conf ov4688_zoe_settings[] = {
@@ -691,44 +697,44 @@ static struct msm_camera_i2c_reg_conf ov4688_zoe_settings[] = {
     {0x3632, 0x00},
     {0x376b, 0x20},
 
-    
+    // non hdr
     {0x3841 , 0x02},
     {0x3846 , 0x08},
     {0x3847 , 0x07},
     {0x4800 , 0x04},
     {0x376e , 0x00},
-    
+    //{0x4308 , 0x02+1}, /*status line off*/
 
 
-    {0x3800, 0x00},
-    {0x3801, 0x00},
-    {0x3802, 0x00},
-    {0x3803, 0x04},
-    {0x3804, 0x0a},
-    {0x3805, 0x9f},
-    {0x3806, 0x05},
-    {0x3807, 0xfb},
-    {0x3808, 0x0a},
-    {0x3809, 0x80},
-    {0x380a, 0x05},
-    {0x380b, 0xf0+1}, 
-    {0x380c, 0x09},
-    {0x380d, 0x10},
-    {0x380e, 0x09},
-    {0x380f, 0x2d},
+    {0x3800, 0x00},/*x start MSB*/
+    {0x3801, 0x00},/*x start LSB*/
+    {0x3802, 0x00},/*y start MSB*/
+    {0x3803, 0x04},/*y start LSB*/
+    {0x3804, 0x0a},/*x end MSB 2719*/
+    {0x3805, 0x9f},/*x end LSB 2719*/
+    {0x3806, 0x05},/*y end LSB 1531*/
+    {0x3807, 0xfb},/*y end MSB 1531*/
+    {0x3808, 0x0a},/*x output size MSB  2688*/
+    {0x3809, 0x80},/*x output size LSB 2688*/
+    {0x380a, 0x05},/*y output size MSB 1520*/
+    {0x380b, 0xf0+1},/*y output size LSB 1520*/ // 0xf0 +1
+    {0x380c, 0x09},/* 0x0d  line length 1728*/
+    {0x380d, 0x10},/* 0x80 0xc0*line length 1728*/
+    {0x380e, 0x09},/* 0x06 frame length*/
+    {0x380f, 0x2d},/* 0x12 frame length*/
 
-    
-    
+    //{0x380e, 0x0c},/*frame length*/
+    //{0x380f, 0x42},/*frame length*/
 
     {0x3810, 0x00},
     {0x3811, 0x10},
     {0x3812, 0x00},
-    {0x3813, 0x04-1}, 
+    {0x3813, 0x04-1}, //0x04 -1
     {0x3814, 0x01},
     {0x3815, 0x01},
     {0x3819, 0x01},
-    {0x3820, 0x00},
-    {0x3821, 0x06},
+    {0x3820, 0x00},/*x binning mode 0x01 binning 0x00 non-binning*/
+    {0x3821, 0x06},/*y binning mode 0x01 binning 0x00 non-binning*/
     {0x3829, 0x00},
     {0x382a, 0x01},
     {0x382b, 0x01},
@@ -754,7 +760,7 @@ static struct v4l2_subdev_info ov4688_subdev_info[] = {
 	.fmt    = 1,
 	.order  = 0,
 	},
-	
+	/* more can be supported, to be added later */
 };
 
 static struct msm_camera_i2c_conf_array ov4688_init_conf[] = {
@@ -784,18 +790,18 @@ static struct msm_camera_i2c_conf_array ov4688_confs[] = {
 
 #define ADD_FRAME_LENGTH_LINES 0x00
 #define ADD_LINE_LENGTH 0x0
-#define PIXEL_CLK 230400000 
+#define PIXEL_CLK 230400000 //201600000 240000000
 #define De_flicker_pixel_clk 240000000
 
 static struct msm_sensor_output_info_t ov4688_dimensions[] = {
-	{
+	{/*non HDR 16:9*/
 		.x_addr_start = 0x0,
-		.y_addr_start = 0x0,
-		.x_output = 0xA80, 
-		.y_output = 0x5F0+1, 
-		.line_length_pclk = 0x6c0+ADD_LINE_LENGTH,
-		.frame_length_lines = 0x612+ADD_FRAME_LENGTH_LINES,
-		.vt_pixel_clk = De_flicker_pixel_clk,
+		.y_addr_start = 0x0,//
+		.x_output = 0xA80, //0x3808,0x3809 /* 2688 */
+		.y_output = 0x5F0+1, //0x380a,0x380b/* 1520 */
+		.line_length_pclk = 0x6c0+ADD_LINE_LENGTH,//1608 0x6c0,/*1728*/  0x6c0
+		.frame_length_lines = 0x612+ADD_FRAME_LENGTH_LINES,//0x380e,0x380f /* 1554 */
+		.vt_pixel_clk = De_flicker_pixel_clk,/* MP per lane*/
 		.op_pixel_clk = PIXEL_CLK,
 		.binning_factor = 1,
 		.is_hdr = 0,
@@ -803,27 +809,27 @@ static struct msm_sensor_output_info_t ov4688_dimensions[] = {
         .yushan_status_line = 1,
         .yushan_sensor_status_line = 0,
 	},
-	{
-		.x_output = 0x540, 
-		.y_output = 0x2F8+1, 
-		.line_length_pclk = 0xa00+ADD_LINE_LENGTH,  
-		.frame_length_lines = 0x31d+ADD_FRAME_LENGTH_LINES,
-		.vt_pixel_clk = De_flicker_pixel_clk,
-		.op_pixel_clk = PIXEL_CLK,
+	{/*Q size720P 60fps */
+		.x_output = 0x540, /* 1344 */
+		.y_output = 0x2F8+1, /* 760 */
+		.line_length_pclk = 0xa00+ADD_LINE_LENGTH, /* 2900 */ // 0xB54 ok 0x554 ok
+		.frame_length_lines = 0x31d+ADD_FRAME_LENGTH_LINES,//0x317, /* 791 */
+		.vt_pixel_clk = De_flicker_pixel_clk,//139200000,
+		.op_pixel_clk = PIXEL_CLK,//278400000,
 		.binning_factor = 2,
 		.is_hdr = 0,
         .yushan_status_line_enable = 1,
         .yushan_status_line = 1,
         .yushan_sensor_status_line = 0,
     },
-	{
+	{/*video size*/
 		.x_addr_start = 0x0,
-		.y_addr_start = 0x0,
-		.x_output = 0xA80, 
-		.y_output = 0x5F0+1, 
-		.line_length_pclk = 0x9f0+ADD_LINE_LENGTH,
-		.frame_length_lines = 0x612+ADD_FRAME_LENGTH_LINES,
-		.vt_pixel_clk = De_flicker_pixel_clk,
+		.y_addr_start = 0x0,//
+		.x_output = 0xA80, //0x3808,0x3809 /* 2688 */
+		.y_output = 0x5F0+1, //0x380a,0x380b/* 1520 */
+		.line_length_pclk = 0x9f0+ADD_LINE_LENGTH,//1608 0x6c0,/*1728*/
+		.frame_length_lines = 0x612+ADD_FRAME_LENGTH_LINES,//0x380e,0x380f /* 1554 */
+		.vt_pixel_clk = De_flicker_pixel_clk,/* MP per lane*/
 		.op_pixel_clk = PIXEL_CLK,
 		.binning_factor = 1,
 		.is_hdr = 0,
@@ -831,13 +837,13 @@ static struct msm_sensor_output_info_t ov4688_dimensions[] = {
         .yushan_status_line = 1,
         .yushan_sensor_status_line = 0,
 	},
-	{
-		.x_output = 0x540, 
-		.y_output = 0x2F8+1, 
-		.line_length_pclk = 0x600+ADD_LINE_LENGTH,  
-		.frame_length_lines = 0x31d+ADD_FRAME_LENGTH_LINES,
-		.vt_pixel_clk = De_flicker_pixel_clk,
-		.op_pixel_clk = PIXEL_CLK,
+	{/*fast video size 100fps*/
+		.x_output = 0x540, /* 1344 */
+		.y_output = 0x2F8+1, /* 760 */
+		.line_length_pclk = 0x600+ADD_LINE_LENGTH, /* 2900 */ // 0xB54 ok 0x554 ok
+		.frame_length_lines = 0x31d+ADD_FRAME_LENGTH_LINES,//0x317, /* 791 */
+		.vt_pixel_clk = De_flicker_pixel_clk,//139200000,
+		.op_pixel_clk = PIXEL_CLK,//278400000,
 		.binning_factor = 2,
 		.is_hdr = 0,
         .yushan_status_line_enable = 1,
@@ -845,12 +851,12 @@ static struct msm_sensor_output_info_t ov4688_dimensions[] = {
         .yushan_sensor_status_line = 0,
 	},
 	#if 1
-	{
-		.x_output = 1952, 
-		.y_output = 1089, 
-		.line_length_pclk = 0xaaa+ADD_LINE_LENGTH,
-		.frame_length_lines = 0x4c0+ADD_FRAME_LENGTH_LINES,
-		.vt_pixel_clk = De_flicker_pixel_clk,
+	{/*HDR 16:9*/
+		.x_output = 1952, //0x3808,0x3809 /* 2688 */
+		.y_output = 1089, //0x380a,0x380b/* 1521 */
+		.line_length_pclk = 0xaaa+ADD_LINE_LENGTH,//1608 0x6c0,/*1728*/
+		.frame_length_lines = 0x4c0+ADD_FRAME_LENGTH_LINES,//0x380e,0x380f /* 1554 */	//0x4c0 //1216
+		.vt_pixel_clk = De_flicker_pixel_clk,/* MP per lane*/
 		.op_pixel_clk = PIXEL_CLK,
 		.binning_factor = 1,
 		.is_hdr = 1,
@@ -859,42 +865,42 @@ static struct msm_sensor_output_info_t ov4688_dimensions[] = {
         .yushan_sensor_status_line = 0,
 	},
 	#endif
-	{
+	{/*4:3*/
         .x_addr_start = 0x0,
-        .y_addr_start = 0x0,
-        .x_output = 0x804, 
-        .y_output = 0x5F0+1, 
-        .line_length_pclk = 0x6c0,
-        .frame_length_lines = 0x660+ADD_FRAME_LENGTH_LINES,
-        .vt_pixel_clk = De_flicker_pixel_clk,
-        .op_pixel_clk = PIXEL_CLK,
+        .y_addr_start = 0x0,//
+        .x_output = 0x804, //0x3808,0x3809 /* 2688 */
+        .y_output = 0x5F0+1, //0x380a,0x380b/* 1520 */
+        .line_length_pclk = 0x6c0,//0x6c0+ADD_LINE_LENGTH,//1608 0x6c0,/*1728*/  0x6c0 0x5db
+        .frame_length_lines = 0x660+ADD_FRAME_LENGTH_LINES,//0x380e,0x380f /* 1554 */ 0x660
+        .vt_pixel_clk = De_flicker_pixel_clk,//201600000,/* MP per lane*/
+        .op_pixel_clk = PIXEL_CLK,//201600000,
         .binning_factor = 1,
         .is_hdr = 0,
         .yushan_status_line_enable = 1,
         .yushan_status_line = 1,
         .yushan_sensor_status_line = 0,
 	},
-    {
-        .x_output = 0x540, 
-        .y_output = 0x2F8+1, 
-        .line_length_pclk = 0x600+ADD_LINE_LENGTH,  
-        .frame_length_lines = 0x31d+ADD_FRAME_LENGTH_LINES,
-        .vt_pixel_clk = De_flicker_pixel_clk,
-        .op_pixel_clk = PIXEL_CLK,
+    {/*fast video size 100fps*/
+        .x_output = 0x540, /* 1344 */
+        .y_output = 0x2F8+1, /* 760 */
+        .line_length_pclk = 0x600+ADD_LINE_LENGTH, /* 2900 */ // 0xB54 ok 0x554 ok
+        .frame_length_lines = 0x31d+ADD_FRAME_LENGTH_LINES,//0x317, /* 791 */
+        .vt_pixel_clk = De_flicker_pixel_clk,//139200000,
+        .op_pixel_clk = PIXEL_CLK,//278400000,
         .binning_factor = 2,
         .is_hdr = 0,
         .yushan_status_line_enable = 1,
         .yushan_status_line = 1,
         .yushan_sensor_status_line = 0,
     },
-	{
+	{/*non HDR 16:9*/
 		.x_addr_start = 0x0,
-		.y_addr_start = 0x0,
-		.x_output = 0xA80, 
-		.y_output = 0x5F0+1, 
-		.line_length_pclk = 0x6c0+ADD_LINE_LENGTH,
-		.frame_length_lines = 0x612+ADD_FRAME_LENGTH_LINES,
-		.vt_pixel_clk = De_flicker_pixel_clk,
+		.y_addr_start = 0x0,//
+		.x_output = 0xA80, //0x3808,0x3809 /* 2688 */
+		.y_output = 0x5F0+1, //0x380a,0x380b/* 1520 */
+		.line_length_pclk = 0x6c0+ADD_LINE_LENGTH,//1608 0x6c0,/*1728*/
+		.frame_length_lines = 0x612+ADD_FRAME_LENGTH_LINES,//0x380e,0x380f /* 1554 */
+		.vt_pixel_clk = De_flicker_pixel_clk,/* MP per lane*/
 		.op_pixel_clk = PIXEL_CLK,
 		.binning_factor = 1,
 		.is_hdr = 0,
@@ -902,15 +908,15 @@ static struct msm_sensor_output_info_t ov4688_dimensions[] = {
         .yushan_status_line = 1,
         .yushan_sensor_status_line = 0,
 	},
-	{
+	{/*zoe*/
 		.x_addr_start = 0x0,
-		.y_addr_start = 0x0,
-		.x_output = 0xA80, 
-		.y_output = 0x5F0+1, 
-		.line_length_pclk = 0x910,
-		.frame_length_lines = 0x92d,
-		.vt_pixel_clk = De_flicker_pixel_clk,
-		.op_pixel_clk = PIXEL_CLK, 
+		.y_addr_start = 0x0,//
+		.x_output = 0xA80, //0x3808,0x3809 /* 2688 */
+		.y_output = 0x5F0+1, //0x380a,0x380b/* 1520 */
+		.line_length_pclk = 0x910,//0xd80,//0x6c0+ADD_LINE_LENGTH,//1608 0x6c0,/*1728*/
+		.frame_length_lines = 0x92d,//0x612,//0xc24,//0x612+ADD_FRAME_LENGTH_LINES,//0x380e,0x380f /* 1554 */
+		.vt_pixel_clk = De_flicker_pixel_clk,/* MP per lane*/
+		.op_pixel_clk = PIXEL_CLK, // 201600000
 		.binning_factor = 1,
 		.is_hdr = 0,
         .yushan_status_line_enable = 1,
@@ -968,9 +974,9 @@ static struct msm_sensor_id_info_t ov4688_id_info = {
 static struct msm_sensor_exp_gain_info_t ov4688_exp_gain_info = {
 	.coarse_int_time_addr = 0x3500,
 	.global_gain_addr = 0x3508,
-	.vert_offset = SENSOR_VERT_OFFSET, 
-	.min_vert = 4,  
-	.sensor_max_linecount = SENSOR_REGISTER_MAX_LINECOUNT - SENSOR_VERT_OFFSET,  
+	.vert_offset = SENSOR_VERT_OFFSET, /* vert_offset would be used to limit sensor_max_linecount, need to re-calculate sensor_max_linecount if changed */
+	.min_vert = 4, /* min coarse integration time */ /* HTC Angie 20111019 - Fix FPS */
+	.sensor_max_linecount = SENSOR_REGISTER_MAX_LINECOUNT - SENSOR_VERT_OFFSET, /* sensor max linecount = max unsigned value of linecount register size - vert_offset */ /* HTC ben 20120229 */
 };
 #define SENSOR_VERT_OFFSET_HDR 4
 
@@ -988,7 +994,7 @@ static struct ov4688_hdr_exp_info_t ov4688_hdr_gain_info = {
 	.middle_gain_addr_m = 0x350E,
 	.middle_gain_addr_l = 0x350F,
 	.vert_offset = SENSOR_VERT_OFFSET_HDR,
-	.sensor_max_linecount = SENSOR_REGISTER_MAX_LINECOUNT-SENSOR_VERT_OFFSET_HDR,  
+	.sensor_max_linecount = SENSOR_REGISTER_MAX_LINECOUNT-SENSOR_VERT_OFFSET_HDR, /* sensor max linecount = max unsigned value of linecount register size - vert_offset */ /* HTC ben 20120229 */
 };
 
 int32_t ov4688_set_dig_gain(struct msm_sensor_ctrl_t *s_ctrl, uint16_t dig_gain)
@@ -1009,6 +1015,7 @@ int32_t ov4688_set_dig_gain(struct msm_sensor_ctrl_t *s_ctrl, uint16_t dig_gain)
 	return 0;
 }
 
+/* HTC_START steven correct pixel order */
 static int ov4688_sensor_open_init(const struct msm_camera_sensor_info *data)
 {
 	int rc = 0;
@@ -1016,7 +1023,7 @@ static int ov4688_sensor_open_init(const struct msm_camera_sensor_info *data)
 	if (data->sensor_platform_info)
 		ov4688_s_ctrl.mirror_flip = data->sensor_platform_info->mirror_flip;
 
-	ov4688_s_ctrl.actived_ae = false;	
+	ov4688_s_ctrl.actived_ae = false;	/* HTC_START Steven 20130528 fix bad frame issue with quick launc on ov4688 sensor */
     pr_info("%s: ov4688_s_ctrl.mirror_flip=%d", __func__, ov4688_s_ctrl.mirror_flip);
 
 	 return rc;
@@ -1032,9 +1039,9 @@ int ov4688_write_output_settings_specific(struct msm_sensor_ctrl_t *s_ctrl,
     pr_info("%s: ov4688_s_ctrl.mirror_flip=%d", __func__, ov4688_s_ctrl.mirror_flip);
 
 	msm_camera_i2c_read(ov4688_s_ctrl.sensor_i2c_client, OV4688_REG_MIRROR_MODE, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
-	read_data = read_data & 0x1;    
+	read_data = read_data & 0x1;    /*filter y binning bit for y binning mode 0x01 binning 0x00 non-binning*/
 
-	
+	/* Apply sensor mirror/flip */
 	if (ov4688_s_ctrl.mirror_flip == CAMERA_SENSOR_MIRROR_FLIP) {
 		msm_camera_i2c_write(ov4688_s_ctrl.sensor_i2c_client, OV4688_REG_FLIP_MODE, OV4688_REG_FLIP, MSM_CAMERA_I2C_BYTE_DATA);
 		msm_camera_i2c_write(ov4688_s_ctrl.sensor_i2c_client, OV4688_REG_MIRROR_MODE, (OV4688_REG_MIRROR | read_data), MSM_CAMERA_I2C_BYTE_DATA);
@@ -1051,6 +1058,7 @@ int ov4688_write_output_settings_specific(struct msm_sensor_ctrl_t *s_ctrl,
 
 	return rc;
  }
+/* HTC_END steven correct pixel order */
 
 static const char *ov4688Vendor = "ov";
 static const char *ov4688NAME = "ov4688";
@@ -1143,7 +1151,7 @@ static struct msm_camera_i2c_client ov4688_sensor_i2c_client = {
 static int ov4688_read_fuseid(struct sensor_cfg_data *cdata,
 	struct msm_sensor_ctrl_t *s_ctrl);
 static int power_on=false;
-int32_t ov4688_power_up(struct msm_sensor_ctrl_t *s_ctrl)
+int32_t ov4688_power_up(struct msm_sensor_ctrl_t *s_ctrl)//(const struct msm_camera_sensor_info *sdata)
 {
 	int rc;
 	struct msm_camera_sensor_info *sdata = NULL;
@@ -1179,7 +1187,7 @@ int32_t ov4688_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 		goto enable_power_on_failed;
 	}
 
-	rc = msm_sensor_set_power_up(s_ctrl);
+	rc = msm_sensor_set_power_up(s_ctrl);//(sdata);
 	if (rc < 0) {
 		pr_info("%s msm_sensor_power_up failed\n", __func__);
 		goto enable_sensor_power_up_failed;
@@ -1269,6 +1277,7 @@ static struct v4l2_subdev_ops ov4688_subdev_ops = {
 };
 
 
+/* HTC_START 20130621 : Support multiple actuators */
 static int ov4688_lookup_actuator(struct msm_sensor_ctrl_t *s_ctrl, char *actuator_name)
 {
 	int i;
@@ -1294,16 +1303,17 @@ static int ov4688_lookup_actuator(struct msm_sensor_ctrl_t *s_ctrl, char *actuat
 
 	return actuator_index;
 }
+/* HTC_END */
 
 #if defined(CONFIG_ACT_OIS_BINDER)
 extern void HtcActOisBinder_set_OIS_OTP(uint8_t *otp_data, uint8_t otp_size);
 
 #define OV4688_LITEON_OIS_OTP_SIZE 34
 const static short ois_addr[3][OV4688_LITEON_OIS_OTP_SIZE] = {
-    
-    {0x16A,0x16B,0x16C,0x16D,0x16E,0x16F,0x170,0x171,0x172,0x173,0x174,0x175,0x176,0x177,0x178,0x179,0x17A,0x17B,0x17C,0x17D,0x17E,0x17F,0x180,0x181,   0x124,0x125,0x12B,0x12C,   0x1B2,0x1B3,0x1B4,0x1B5,0x1B6,0x1B7}, 
-    {0x182,0x183,0x184,0x185,0x186,0x187,0x188,0x189,0x18A,0x18B,0x18C,0x18D,0x18E,0x18F,0x190,0x191,0x192,0x193,0x194,0x195,0x196,0x197,0x198,0x199,   0x142,0x143,0x149,0x014A,   0x1B8,0x1B9,0x1BA,0x1BB,0x1BC,0x1BD}, 
-    {0x19A,0x19B,0x19C,0x19D,0x19E,0x19F,0x1A0,0x1A1,0x1A2,0x1A3,0x1A4,0x1A5,0x1A6,0x1A7,0x1A8,0x1A9,0x1AA,0x1AB,0x1AC,0x1AD,0x1AE,0x1AF,0x1B0,0x1B1,   0x160,0x161,0x167,0x168,   0x1BE,0x1BF,0x1C0,0x1C1,0x1C2,0x1C3}, 
+    //0,    1,    2,    3,    4,    5,    6,    7,    8,    9,    a,    b,    c,    d,    e,    f,   10,   11
+    {0x16A,0x16B,0x16C,0x16D,0x16E,0x16F,0x170,0x171,0x172,0x173,0x174,0x175,0x176,0x177,0x178,0x179,0x17A,0x17B,0x17C,0x17D,0x17E,0x17F,0x180,0x181,   0x124,0x125,0x12B,0x12C,   0x1B2,0x1B3,0x1B4,0x1B5,0x1B6,0x1B7}, // layer 1
+    {0x182,0x183,0x184,0x185,0x186,0x187,0x188,0x189,0x18A,0x18B,0x18C,0x18D,0x18E,0x18F,0x190,0x191,0x192,0x193,0x194,0x195,0x196,0x197,0x198,0x199,   0x142,0x143,0x149,0x014A,   0x1B8,0x1B9,0x1BA,0x1BB,0x1BC,0x1BD}, // layer 2
+    {0x19A,0x19B,0x19C,0x19D,0x19E,0x19F,0x1A0,0x1A1,0x1A2,0x1A3,0x1A4,0x1A5,0x1A6,0x1A7,0x1A8,0x1A9,0x1AA,0x1AB,0x1AC,0x1AD,0x1AE,0x1AF,0x1B0,0x1B1,   0x160,0x161,0x167,0x168,   0x1BE,0x1BF,0x1C0,0x1C1,0x1C2,0x1C3}, // layer 3
 };
 #endif
 
@@ -1318,10 +1328,10 @@ static int ov4688_read_fuseid(struct sensor_cfg_data *cdata,
     #define OV4688_LITEON_OTP_SIZE 0x12
 
     const short addr[3][OV4688_LITEON_OTP_SIZE] = {
-        
-        {0x126,0x127,0x128,0x129,0x12a,0x110,0x111,0x112,0x12b,0x12c,0x11e,0x11f,0x120,0x121,0x122,0x123,0x124,0x125}, 
-        {0x144,0x145,0x146,0x147,0x148,0x12e,0x12f,0x130,0x149,0x14a,0x13c,0x13d,0x13e,0x13f,0x140,0x141,0x142,0x143}, 
-        {0x162,0x163,0x164,0x165,0x166,0x14c,0x14d,0x14e,0x167,0x168,0x15a,0x15b,0x15c,0x15d,0x15e,0x15f,0x160,0x161}, 
+        //0,    1,    2,    3,    4,    5,    6,    7,    8,    9,    a,    b,    c,    d,    e,    f,   10,   11
+        {0x126,0x127,0x128,0x129,0x12a,0x110,0x111,0x112,0x12b,0x12c,0x11e,0x11f,0x120,0x121,0x122,0x123,0x124,0x125}, // layer 1
+        {0x144,0x145,0x146,0x147,0x148,0x12e,0x12f,0x130,0x149,0x14a,0x13c,0x13d,0x13e,0x13f,0x140,0x141,0x142,0x143}, // layer 2
+        {0x162,0x163,0x164,0x165,0x166,0x14c,0x14d,0x14e,0x167,0x168,0x15a,0x15b,0x15c,0x15d,0x15e,0x15f,0x160,0x161}, // layer 3
     };
     static uint8_t otp[OV4688_LITEON_OTP_SIZE];
 	static int frist= true;
@@ -1374,10 +1384,10 @@ static int ov4688_read_fuseid(struct sensor_cfg_data *cdata,
 
         msleep(10);
 
-        
+        // start from layer 2
         for (j=2; j>=0; --j) {
             for (i=0; i<OV4688_LITEON_OTP_SIZE; ++i) {
-                rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
+                rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);//0x37c2
                 if (rc < 0){
                     pr_err("%s: msm_camera_i2c_read 0x%x failed\n", __func__, addr[j][i]);
                     return rc;
@@ -1397,10 +1407,10 @@ static int ov4688_read_fuseid(struct sensor_cfg_data *cdata,
 
 
 #if defined(CONFIG_ACT_OIS_BINDER)
-        
+        // start from layer 2
         for (j=2; j>=0; --j) {
             for (i=0; i<OV4688_LITEON_OIS_OTP_SIZE; ++i) {
-                rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, ois_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
+                rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, ois_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);//0x37c2
                 if (rc < 0){
                     pr_err("%s: msm_camera_i2c_read 0x%x failed\n", __func__, ois_addr[j][i]);
                     return rc;
@@ -1434,13 +1444,13 @@ static int ov4688_read_fuseid(struct sensor_cfg_data *cdata,
     }
     if (board_mfg_mode())
         msm_dump_otp_to_file (PLATFORM_DRIVER_NAME, valid_layer, OV4688_OTP_ADDRESS_START, all_otp_data,OV4688_OTP_SIZE);
-    
+    // fuseid
     cdata->cfg.fuse.fuse_id_word1 = 0;
     cdata->cfg.fuse.fuse_id_word2 = otp[5];
     cdata->cfg.fuse.fuse_id_word3 = otp[6];
     cdata->cfg.fuse.fuse_id_word4 = otp[7];
 
-    
+    // vcm
     cdata->af_value.VCM_BIAS = otp[8];
     cdata->af_value.VCM_OFFSET = otp[9];
     cdata->af_value.VCM_BOTTOM_MECH_MSB = otp[0xa];
@@ -1476,16 +1486,17 @@ static int ov4688_read_fuseid(struct sensor_cfg_data *cdata,
     pr_info("%s: OTP VCM top mech. Limit (LSByte) = 0x%x\n",    __func__,  cdata->af_value.VCM_TOP_MECH_LSB);
 
 
+/* HTC_START 20130621 : Support multiple actuators */
 	if (sdata->num_actuator_info_table > 1)
 	{
 		driver_ic = otp[3];
 		pr_info("%s: driver_ic=%d\n", __func__, driver_ic);
 
-		if (driver_ic == 0x21) { 
+		if (driver_ic == 0x21) { //ONSEMI(TI201)
 			actuator_index = ov4688_lookup_actuator(s_ctrl, "ti201_act");
-		} else if (driver_ic == 0x11) { 
+		} else if (driver_ic == 0x11) { //Closed-Loop VCM (LC898212)
 			actuator_index = ov4688_lookup_actuator(s_ctrl, "lc898212_act");
-		} else if (driver_ic == 0x1)  { 
+		} else if (driver_ic == 0x1)  { //RUMBA_S
 			actuator_index = ov4688_lookup_actuator(s_ctrl, "rumbas_act");
 		}
 
@@ -1498,6 +1509,7 @@ static int ov4688_read_fuseid(struct sensor_cfg_data *cdata,
 		pr_info("%s: sdata->actuator_info->board_info->type=%s", __func__, sdata->actuator_info->board_info->type);
 		pr_info("%s: sdata->actuator_info->board_info->addr=0x%x", __func__, sdata->actuator_info->board_info->addr);
 	}
+/* HTC_END */
 
 	return 0;
 }
@@ -1523,12 +1535,12 @@ static int ov4688_read_VCM_driver_IC_info(	struct msm_sensor_ctrl_t *s_ctrl)
 		return 0;
 	}
 
-	
+	//Set Sensor to SW-Standby
 	rc = msm_camera_i2c_write_b(msm_camera_i2c_client, 0x0100, 0x00);
 	if (rc < 0)
 		pr_info("%s: i2c_write_b 0x0100 fail\n", __func__);
 
-	
+	//Set Input clock freq.(24MHz)
 	rc = msm_camera_i2c_write_b(msm_camera_i2c_client, 0x3368, 0x18);
 	if (rc < 0)
 		pr_info("%s: i2c_write_b 0x3368 fail\n", __func__);
@@ -1537,38 +1549,38 @@ static int ov4688_read_VCM_driver_IC_info(	struct msm_sensor_ctrl_t *s_ctrl)
 	if (rc < 0)
 		pr_info("%s: i2c_write_b 0x3369 fail\n", __func__);
 
-	
+	//set read mode
 	rc = msm_camera_i2c_write_b(msm_camera_i2c_client, 0x3400, 0x01);
 	if (rc < 0)
 		pr_info("%s: i2c_write_b 0x3400 fail\n", __func__);
 
 	mdelay(4);
 
-	
+	//select information index, Driver ID at 10th index
 	info_index = 10;
-	
+	/*Read page 3 to Page 0*/
 	for (page = 3; page >= 0; page--) {
-		
+		//Select page
 		rc = msm_camera_i2c_write_b(msm_camera_i2c_client, 0x3402, page);
 		if (rc < 0)
 			pr_info("%s: i2c_write_b 0x3402 (select page %d) fail\n", __func__, page);
 
-		
-		
+		//Select information index. Driver ID at 10th index
+		//for formal sample
 		rc = msm_camera_i2c_read_b(msm_camera_i2c_client, (0x3410 + info_index), &info_value);
 		if (rc < 0)
 			pr_info("%s: i2c_read_b 0x%x fail\n", __func__, (0x3410 + info_index));
 
-		
+		/* some values of fuseid are maybe zero */
 		if (((info_value & 0x0F) != 0) || page < 0)
 			break;
 
-		
+		//for first sample
 		rc = msm_camera_i2c_read_b(msm_camera_i2c_client, (0x3404 + info_index), &info_value);
 		if (rc < 0)
 			pr_info("%s: i2c_read_b 0x%x fail\n", __func__, (0x3404 + info_index));
 
-		
+		/* some values of fuseid are maybe zero */
 		if (((info_value & 0x0F) != 0) || page < 0)
 			break;
 
@@ -1579,16 +1591,16 @@ static int ov4688_read_VCM_driver_IC_info(	struct msm_sensor_ctrl_t *s_ctrl)
 
 	if (sdata->num_actuator_info_table > 1)
 	{
-		if (OTP == 1) 
+		if (OTP == 1) //AD5816
 			sdata->actuator_info = &sdata->actuator_info_table[2][0];
-		else if (OTP == 2) 
+		else if (OTP == 2) //TI201
 			sdata->actuator_info = &sdata->actuator_info_table[1][0];
 
 		pr_info("%s: sdata->actuator_info->board_info->type=%s", __func__, sdata->actuator_info->board_info->type);
 		pr_info("%s: sdata->actuator_info->board_info->addr=0x%x", __func__, sdata->actuator_info->board_info->addr);
 	}
 
-	
+	/* interface disable */
 #endif
 	return 0;
 }
@@ -1600,16 +1612,19 @@ int ov4688_write_hdr_exp_gain1_ex(struct msm_sensor_ctrl_t *s_ctrl,
 	uint32_t fl_lines;
 	uint8_t offset;
 
+/* HTC_START Angie 20111019 - Fix FPS */
 	uint32_t fps_divider = Q10;
 	pr_info("[CAM]%s: called\n", __func__);
 
 	if (mode == SENSOR_PREVIEW_MODE)
 		fps_divider = s_ctrl->fps_divider;
 
+/* HTC_START ben 20120229 */
     if(long_line > s_ctrl->sensor_exp_gain_info->sensor_max_linecount)
         long_line = s_ctrl->sensor_exp_gain_info->sensor_max_linecount;
     if(short_line > s_ctrl->sensor_exp_gain_info->sensor_max_linecount)
         short_line = s_ctrl->sensor_exp_gain_info->sensor_max_linecount;
+/* HTC_END */
 
 	fl_lines = s_ctrl->curr_frame_length_lines;
 	offset = s_ctrl->sensor_exp_gain_info->vert_offset;
@@ -1621,15 +1636,16 @@ int ov4688_write_hdr_exp_gain1_ex(struct msm_sensor_ctrl_t *s_ctrl,
 		fl_lines = short_line + offset;
 	else
 		fl_lines = (fl_lines * fps_divider) / Q10;
+/* HTC_END */
 
 	if(short_line > 198)
 		short_line = 198;
-	if(short_line < 2)	
+	if(short_line < 2)	// OV4688 minmum is 2 not 1
 		short_line = 2;
 
 	long_line = short_line*4;
 
-	if(long_line > 1008)	
+	if(long_line > 1008)	/*long exposure maximum = frame length line - short frame maximum - 8(read out porcessing time) */
 		long_line = 1008;
 	if(long_line < 8)
 		long_line = 8;
@@ -1639,15 +1655,17 @@ int ov4688_write_hdr_exp_gain1_ex(struct msm_sensor_ctrl_t *s_ctrl,
 		long_line,
 		short_line);
 
+/* HTC_START Steven 20130528 fix bad frame issue with quick launc on ov4688 sensor */
 	if (s_ctrl->func_tbl->sensor_group_hold_on_hdr)
 		s_ctrl->func_tbl->sensor_group_hold_on_hdr(s_ctrl);
+/* HTC_END Steven 20130528 fix bad frame issue with quick launc on ov4688 sensor */
 
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		s_ctrl->sensor_output_reg_addr->frame_length_lines, fl_lines,
 		MSM_CAMERA_I2C_WORD_DATA);
 
-	
-	
+	/*long exposure*/
+	// 3500[3:0]+3501[7:0]+3502[7:4]
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.long_coarse_int_time_addr_h, long_line>>12, MSM_CAMERA_I2C_BYTE_DATA);
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.long_coarse_int_time_addr_m, (long_line>>4)&0xff, MSM_CAMERA_I2C_BYTE_DATA);
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.long_coarse_int_time_addr_l, (long_line<<4)&0xff, MSM_CAMERA_I2C_BYTE_DATA);
@@ -1656,8 +1674,8 @@ int ov4688_write_hdr_exp_gain1_ex(struct msm_sensor_ctrl_t *s_ctrl,
 		ov4688_hdr_gain_info.long_gain_addr_m, gain,
 		MSM_CAMERA_I2C_WORD_DATA);
 
-	
-	
+	//short exposure
+	// 3500[3:0]+3501[7:0]+3502[7:4]
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.middle_coarse_int_time_addr_h, short_line>>12, MSM_CAMERA_I2C_BYTE_DATA);
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.middle_coarse_int_time_addr_m, (short_line>>4)&0xff, MSM_CAMERA_I2C_BYTE_DATA);
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.middle_coarse_int_time_addr_l, (short_line<<4)&0xff, MSM_CAMERA_I2C_BYTE_DATA);
@@ -1666,10 +1684,12 @@ int ov4688_write_hdr_exp_gain1_ex(struct msm_sensor_ctrl_t *s_ctrl,
 		ov4688_hdr_gain_info.middle_gain_addr_m, gain,
 		MSM_CAMERA_I2C_WORD_DATA);
 
+/* HTC_START Steven 20130528 fix bad frame issue with quick launc on ov4688 sensor */
 	if (s_ctrl->func_tbl->sensor_group_hold_off_hdr)
 		s_ctrl->func_tbl->sensor_group_hold_off_hdr(s_ctrl);
 
 	ov4688_s_ctrl.actived_ae = false;
+/* HTC_END Steven 20130528 fix bad frame issue with quick launc on ov4688 sensor */
 
 	return 0;
 
@@ -1682,14 +1702,17 @@ int ov4688_write_non_hdr_exp_gain1_ex(struct msm_sensor_ctrl_t *s_ctrl,
 	uint32_t fl_lines;
 	uint8_t offset;
 
+/* HTC_START Angie 20111019 - Fix FPS */
 	uint32_t fps_divider = Q10;
 	pr_info("[CAM]%s: called\n", __func__);
-	
+	//return 0 ;
 	if (mode == SENSOR_PREVIEW_MODE)
 		fps_divider = s_ctrl->fps_divider;
 
+/* HTC_START ben 20120229 */
 	if(line > s_ctrl->sensor_exp_gain_info->sensor_max_linecount)
 		line = s_ctrl->sensor_exp_gain_info->sensor_max_linecount;
+/* HTC_END */
 
 	fl_lines = s_ctrl->curr_frame_length_lines;
 	offset = s_ctrl->sensor_exp_gain_info->vert_offset;
@@ -1697,13 +1720,14 @@ int ov4688_write_non_hdr_exp_gain1_ex(struct msm_sensor_ctrl_t *s_ctrl,
 		fl_lines = line + offset;
 	else
 		fl_lines = (fl_lines * fps_divider) / Q10;
+/* HTC_END */
 
 	s_ctrl->func_tbl->sensor_group_hold_on(s_ctrl);
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		s_ctrl->sensor_output_reg_addr->frame_length_lines, fl_lines,
 		MSM_CAMERA_I2C_WORD_DATA);
 
-	
+	// 3500[3:0]+3501[7:0]+3502[7:4]
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.long_coarse_int_time_addr_h, line>>12, MSM_CAMERA_I2C_BYTE_DATA);
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.long_coarse_int_time_addr_m, (line>>4)&0xff, MSM_CAMERA_I2C_BYTE_DATA);
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.long_coarse_int_time_addr_l, (line<<4)&0xff, MSM_CAMERA_I2C_BYTE_DATA);
@@ -1727,6 +1751,7 @@ int ov4688_write_exp_gain1_ex(struct msm_sensor_ctrl_t *s_ctrl,
 
 void ov4688_start_stream_hdr(struct msm_sensor_ctrl_t *s_ctrl){
 
+//	uint16_t read_data;
 	pr_info("becker  1031,ov4688_start_stream,HDR");
 
 	msm_camera_i2c_write_tbl(
@@ -1742,7 +1767,7 @@ void ov4688_start_stream_hdr(struct msm_sensor_ctrl_t *s_ctrl){
 		MSM_CAMERA_I2C_BYTE_DATA);
 	mdelay(50);
 
-	
+	/* clear 0x3300 bit 4 */
 	msm_camera_i2c_read(s_ctrl->sensor_i2c_client,
 		0x3300, &read_data,
 		MSM_CAMERA_I2C_BYTE_DATA);
@@ -1799,8 +1824,8 @@ void ov4688_start_stream(struct msm_sensor_ctrl_t *s_ctrl)
 int ov4688_write_hdr_outdoor_flag(struct msm_sensor_ctrl_t *s_ctrl, uint8_t is_outdoor)
 {
     int indoor_line_length, outdoor_line_length;
-    indoor_line_length = 3000;
-    outdoor_line_length = 1760;
+    indoor_line_length = 3000;//18FPS
+    outdoor_line_length = 1760;//26FPS
 
     if (is_outdoor)
         msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
@@ -1814,6 +1839,7 @@ int ov4688_write_hdr_outdoor_flag(struct msm_sensor_ctrl_t *s_ctrl, uint8_t is_o
     return 0;
 }
 
+// for ov4688 without 2 status lines like vd6869 does
 void ov4688_yushanII_set_output_format(struct msm_sensor_ctrl_t *sensor,int res, Ilp0100_structFrameFormat *output_format)
 {
 	pr_info("[CAM]%s",__func__);
@@ -1822,19 +1848,19 @@ void ov4688_yushanII_set_output_format(struct msm_sensor_ctrl_t *sensor,int res,
 	output_format->LineLengthPixels = sensor->msm_sensor_reg->output_settings[res].line_length_pclk * 4;
 	output_format->FrameLengthLines = sensor->msm_sensor_reg->output_settings[res].frame_length_lines;
 
-	
-	
+	/* HTC_START steven bring sensor parms 20121119 */
+	/*status line configuration*/
 	output_format->StatusLinesOutputted = sensor->msm_sensor_reg->output_settings[res].yushan_status_line_enable;
 	output_format->StatusNbLines = sensor->msm_sensor_reg->output_settings[res].yushan_status_line;
 	output_format->ImageOrientation = sensor->sensordata->sensor_platform_info->mirror_flip;
 	output_format->StatusLineLengthPixels =
 		sensor->msm_sensor_reg->output_settings[res].x_output;
-	
+	/* HTC_END steven bring sensor parms 20121119 */
 
 	output_format->MinInterframe =
 		(output_format->FrameLengthLines -
 		output_format->ActiveFrameLengthLines -
-		output_format->StatusNbLines);
+		output_format->StatusNbLines);//206;//HDR mode
 	output_format->AutomaticFrameParamsUpdate = TRUE;
 
 	if(sensor->sensordata->hdr_mode)
@@ -1847,13 +1873,13 @@ void ov4688_yushanII_set_output_format(struct msm_sensor_ctrl_t *sensor,int res,
 	output_format->Voffset =
 			sensor->msm_sensor_reg->output_settings[res].y_addr_start;
 
-	
+	/*TOOD:vd6869 should provide this value*/
 	output_format->HScaling = 1;
 	output_format->VScaling = 1;
 
-	if(sensor->msm_sensor_reg->output_settings[res].binning_factor == 2){
+	if(sensor->msm_sensor_reg->output_settings[res].binning_factor == 2){/*binning mode*/
 		output_format->Binning = 0x22;
-	}else{
+	}else{/*non binning*/
 		output_format->Binning = 0x11;
 	}
 
@@ -1861,15 +1887,15 @@ void ov4688_yushanII_set_output_format(struct msm_sensor_ctrl_t *sensor,int res,
 
 void ov4688_yushanII_set_parm(struct msm_sensor_ctrl_t *sensor, int res,Ilp0100_structSensorParams *YushanII_sensor)
 {
-	
+	/* HTC_END steven bring sensor parms 20121119 */
 	YushanII_sensor->StatusNbLines = sensor->msm_sensor_reg->output_settings[res].yushan_sensor_status_line;
-    
+    /*this should be sensor maximum y size, not sensor resolution*/
 	YushanII_sensor->FullActiveLines =
 		sensor->msm_sensor_reg->output_settings[MSM_SENSOR_RES_FULL].y_output;
-	
+	/*this should be sensor maximum x size, not sensor resolution*/
 	YushanII_sensor->FullActivePixels =
 		sensor->msm_sensor_reg->output_settings[MSM_SENSOR_RES_FULL].x_output;
-	
+	/*this should be minimum LineLength of the sensor*/
 	YushanII_sensor->MinLineLength =
 		sensor->msm_sensor_reg->output_settings[MSM_SENSOR_RES_FULL].line_length_pclk * 4;
 }
@@ -1879,6 +1905,7 @@ void ov4688_yushanII_set_IQ(struct msm_sensor_ctrl_t *sensor,int* channel_offset
     *channel_offset = 70;
 }
 
+/* HTC_START Steven 20130528 fix bad frame issue with quick launc on ov4688 sensor */
 void ov4688_yushanII_active_hold(void)
 {
 	pr_info("[CAM]%s,actived_ae=%d", __func__, ov4688_s_ctrl.actived_ae);
@@ -1895,14 +1922,14 @@ int ov4688_yushanII_ae_updated(void)
 
 void ov4688_yushanII_set_default_ae(struct msm_sensor_ctrl_t *s_ctrl, uint8_t res)
 {
-	uint32_t long_line =0x1d4;	
+	uint32_t long_line =0x1d4;	/* default value of long_line/short line/gain need optical to fine-tune it */
 	uint32_t short_line = 0x75;
 	uint16_t gain = 0x3f7;
 
 	pr_info("[CAM]%s, res=%d", __func__, res);
 
-	if (res == 4) {	
-		
+	if (res == 4) {	/* video HDR mode */
+		/*long exposure*/
 		msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.long_coarse_int_time_addr_h, long_line>>12, MSM_CAMERA_I2C_BYTE_DATA);
 		msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.long_coarse_int_time_addr_m, (long_line>>4)&0xff, MSM_CAMERA_I2C_BYTE_DATA);
 		msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.long_coarse_int_time_addr_l, (long_line<<4)&0xff, MSM_CAMERA_I2C_BYTE_DATA);
@@ -1911,7 +1938,7 @@ void ov4688_yushanII_set_default_ae(struct msm_sensor_ctrl_t *s_ctrl, uint8_t re
 			ov4688_hdr_gain_info.long_gain_addr_m, gain,
 			MSM_CAMERA_I2C_WORD_DATA);
 
-		
+		//short exposure
 		msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.middle_coarse_int_time_addr_h, short_line>>12, MSM_CAMERA_I2C_BYTE_DATA);
 		msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.middle_coarse_int_time_addr_m, (short_line>>4)&0xff, MSM_CAMERA_I2C_BYTE_DATA);
 		msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.middle_coarse_int_time_addr_l, (short_line<<4)&0xff, MSM_CAMERA_I2C_BYTE_DATA);
@@ -1920,8 +1947,8 @@ void ov4688_yushanII_set_default_ae(struct msm_sensor_ctrl_t *s_ctrl, uint8_t re
 			ov4688_hdr_gain_info.middle_gain_addr_m, gain,
 			MSM_CAMERA_I2C_WORD_DATA);
 	} else {
-		long_line = s_ctrl->msm_sensor_reg->output_settings[res].frame_length_lines/2;	
-		gain = 0xc0;	
+		long_line = s_ctrl->msm_sensor_reg->output_settings[res].frame_length_lines/2;	/* ov comment the default line  is frame length line devided by 2*/
+		gain = 0xc0;	/* ov comment default gain is 1.5x */
 
 		msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.long_coarse_int_time_addr_h, long_line>>12, MSM_CAMERA_I2C_BYTE_DATA);
 		msm_camera_i2c_write(s_ctrl->sensor_i2c_client, ov4688_hdr_gain_info.long_coarse_int_time_addr_m, (long_line>>4)&0xff, MSM_CAMERA_I2C_BYTE_DATA);
@@ -1933,18 +1960,21 @@ void ov4688_yushanII_set_default_ae(struct msm_sensor_ctrl_t *s_ctrl, uint8_t re
 	}
 
 }
+/* HTC_END Steven 20130528 fix bad frame issue with quick launc on ov4688 sensor */
 
 static struct msm_sensor_fn_t ov4688_func_tbl = {
 	.sensor_start_stream = ov4688_start_stream,
 	.sensor_stop_stream = msm_sensor_stop_stream,
 	.sensor_group_hold_on = msm_sensor_group_hold_on,
 	.sensor_group_hold_off = msm_sensor_group_hold_off,
+/* HTC_START Steven 20130528 fix bad frame issue with quick launc on ov4688 sensor */
 	.sensor_group_hold_on_hdr = msm_sensor_group_hold_on_hdr,
 	.sensor_group_hold_off_hdr = msm_sensor_group_hold_off_hdr,
+/* HTC_END Steven 20130528 fix bad frame issue with quick launc on ov4688 sensor */
 	.sensor_set_fps = msm_sensor_set_fps,
 	.sensor_write_exp_gain_ex = ov4688_write_exp_gain1_ex,
 	.sensor_write_hdr_exp_gain_ex = ov4688_write_hdr_exp_gain1_ex,
-	
+	//.sensor_write_snapshot_exp_gain_ex = msm_sensor_write_exp_gain1_ex,
 	.sensor_write_snapshot_exp_gain_ex = ov4688_write_exp_gain1_ex,
 	.sensor_write_snapshot_exp_gain = msm_sensor_write_exp_gain1,
 	.sensor_setting = msm_sensor_setting_parallel,
@@ -1960,10 +1990,12 @@ static struct msm_sensor_fn_t ov4688_func_tbl = {
 	.sensor_yushanII_set_output_format = ov4688_yushanII_set_output_format,
 	.sensor_yushanII_set_parm = ov4688_yushanII_set_parm,
 	.sensor_yushanII_set_IQ = ov4688_yushanII_set_IQ,
-	.sensor_write_output_settings_specific = ov4688_write_output_settings_specific,	
+	.sensor_write_output_settings_specific = ov4688_write_output_settings_specific,	/* HTC_START steven correct pixel order */
+/* HTC_START Steven 20130528 fix bad frame issue with quick launc on ov4688 sensor */
 	.sensor_yushanII_active_hold = ov4688_yushanII_active_hold,
 	.sensor_yushanII_ae_updated = ov4688_yushanII_ae_updated,
 	.sensor_yushanII_set_default_ae = ov4688_yushanII_set_default_ae,
+/* HTC_END Steven 20130528 fix bad frame issue with quick launc on ov4688 sensor */
 };
 
 static struct msm_sensor_reg_t ov4688_regs = {
@@ -1975,11 +2007,13 @@ static struct msm_sensor_reg_t ov4688_regs = {
 	.group_hold_on_conf = ov4688_groupon_settings,
 	.group_hold_on_conf_size = ARRAY_SIZE(ov4688_groupon_settings),
 	.group_hold_off_conf = ov4688_groupoff_settings,
+/* HTC_START Steven 20130528 fix bad frame issue with quick launc on ov4688 sensor */
 	.group_hold_off_conf_size = ARRAY_SIZE(ov4688_groupoff_settings),
 	.group_hold_on_conf_hdr = ov4688_groupon_settings_hdr,
 	.group_hold_on_conf_size_hdr = ARRAY_SIZE(ov4688_groupon_settings_hdr),
 	.group_hold_off_conf_hdr = ov4688_groupoff_settings_hdr,
 	.group_hold_off_conf_size_hdr = ARRAY_SIZE(ov4688_groupoff_settings_hdr),
+/* HTC_END Steven 20130528 fix bad frame issue with quick launc on ov4688 sensor */
 
 	.init_settings = &ov4688_init_conf[0],
 	.init_size = ARRAY_SIZE(ov4688_init_conf),
@@ -2007,7 +2041,7 @@ static struct msm_sensor_ctrl_t ov4688_s_ctrl = {
 	.sensor_v4l2_subdev_info_size = ARRAY_SIZE(ov4688_subdev_info),
 	.sensor_v4l2_subdev_ops = &ov4688_subdev_ops,
 	.func_tbl = &ov4688_func_tbl,
-	.sensor_first_mutex = &ov4688_sensor_init_mut, 
+	.sensor_first_mutex = &ov4688_sensor_init_mut, //CC120826,
 	.yushanII_switch_virtual_channel = 1,
 	.adjust_y_output_size = 1,
 	.adjust_frame_length_line = 1,

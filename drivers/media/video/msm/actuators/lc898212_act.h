@@ -63,6 +63,7 @@
 #define	EZ_211H			0x3E
 #define	EZ_211L			0x3F
 
+//Coefficient RAM 40h Å` 7Fh
 #define	ag_211H			0x40
 #define	ag_211L			0x41
 #define	da_211H			0x42
@@ -127,6 +128,7 @@
 #define	CHTGX_211L		0x7D
 #define	CHTGN_211H		0x7E
 #define	CHTGN_211L		0x7F
+//Register 80h Å`  9F
 #define	CLKSEL_211		0x80
 #define	ADSET_211		0x81
 #define	PWMSEL_211		0x82
@@ -166,13 +168,17 @@
 #define ANA2_211		0xA4
 
 
+//**************************
+//	define
+//**************************
 
-#define		TNE 			100								
-#define		OFFSET_DIV		2								
-#define		BIAS_ADJ_BORDER	0x15FF 
+//Hall Adjustment
+#define		TNE 			100								// Waiting Time For Movement
+#define		OFFSET_DIV		2								// Divide Difference For Offset Step
+#define		BIAS_ADJ_BORDER	0x15FF //0x15FF							// HALL_MAX_GAP < BIAS_ADJ_BORDER < HALL_MIN_GAP
 
 #define		TIME_OUT		100
-#define		MARGIN			0x300 
+#define		MARGIN			0x300 // 0x300							// Margin
 #define		HALL_MAX_GAP	BIAS_ADJ_BORDER - MARGIN
 #define		HALL_MIN_GAP	BIAS_ADJ_BORDER + MARGIN
 
@@ -180,45 +186,53 @@
 #define		PTP_BEFORE		0
 #define		PTP_AFTER		1
 
-unsigned short	UsStpSiz	= 0 ;							
+//**************************
+//	Global Variable
+//**************************
+unsigned short	UsStpSiz	= 0 ;							// Bias Step Size
 
 #define	LC898211_fs	23.4375
-#define	SUCCESS			0x00		
-#define	FAILURE			0x01		
+//**************************
+//	Const
+//**************************
+// Common Define
+#define	SUCCESS			0x00		// Success
+#define	FAILURE			0x01		// Failure
 
-#define		EXE_END		0x02		
-#define		EXE_HADJ	0x06		
-#define		EXE_LADJ	0x0A		
-#define		EXE_OCADJ	0x42		
-#define		EXE_ERR		0x99		
+// Command Status
+#define		EXE_END		0x02		// Execute End (Adjust OK)
+#define		EXE_HADJ	0x06		// Adjust NG : Hall NG (Gain or Offset)
+#define		EXE_LADJ	0x0A		// Adjust NG : X Loop NG (Gain)
+#define		EXE_OCADJ	0x42		// Adjust NG : OSC Clock NG
+#define		EXE_ERR		0x99		// Execute Error End
 
 
 typedef struct STADJPAR {
 	struct {
-		
-		unsigned short	UsHlbCen ;				
-		unsigned short	UsHlbMax ;				
-		unsigned short	UsHlbMin ;				
-		unsigned short	UsHlbOff ;				
-		unsigned short	UsHlbBia ;				
-		unsigned short	UsAdbOff ;				
-		
-		unsigned short	UsHlaCen ;				
-		unsigned short	UsHlaMax ;				
-		unsigned short	UsHlaMin ;				
-		unsigned short	UsHlaOff ;				
-		unsigned short	UsHlaBia ;				
-		unsigned short	UsAdaOff ;				
+		//Before
+		unsigned short	UsHlbCen ;				// Hall Center Value after Hall Adjust
+		unsigned short	UsHlbMax ;				// Hall Max Value
+		unsigned short	UsHlbMin ;				// Hall Min Value
+		unsigned short	UsHlbOff ;				// Hall Offset Value
+		unsigned short	UsHlbBia ;				// Hall Gain Value
+		unsigned short	UsAdbOff ;				// Hall A/D Offset Value
+		//After
+		unsigned short	UsHlaCen ;				// Hall Center Value after Hall Adjust
+		unsigned short	UsHlaMax ;				// Hall Max Value
+		unsigned short	UsHlaMin ;				// Hall Min Value
+		unsigned short	UsHlaOff ;				// Hall Offset Value
+		unsigned short	UsHlaBia ;				// Hall Gain Value
+		unsigned short	UsAdaOff ;				// Hall A/D Offset Value
 	} StHalAdj ;
 
 	struct {
-		unsigned short	UsLgbVal ;				
-		unsigned short	UsLgaVal ;				
+		unsigned short	UsLgbVal ;				// Loop Gain befre
+		unsigned short	UsLgaVal ;				// Loop Gain after
 	} StLopGan ;
 
 	struct {
-		unsigned char		UcOsbVal ;			
-		unsigned char		UcOsaVal ;			
+		unsigned char		UcOsbVal ;			// OSC value Before
+		unsigned char		UcOsaVal ;			// OSC value After
 	} StOscAdj ;
 
 } stAdjPar ;

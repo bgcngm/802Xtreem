@@ -62,6 +62,7 @@ void RamReadA_lc898111(uint16_t addr, uint16_t* data)
 	if (binder_i2c_client == NULL)
 		return;
 
+//	rc = msm_camera_i2c_read(binder_i2c_client, addr, data, MSM_CAMERA_I2C_WORD_DATA);
 	rc = msm_camera_i2c_read_seq(binder_i2c_client, addr, (uint8_t *)data, 2);
 	if (rc < 0) {
 		pr_err("%s i2c read failed (%d)\n", __func__, rc);
@@ -90,6 +91,7 @@ void RamWriteA_lc898111(uint16_t addr, uint16_t data)
 	*(data_ptr) = dummy[0];
 	*(data_ptr+1) = dummy[1];
 
+//	rc = msm_camera_i2c_write(binder_i2c_client, addr, data, MSM_CAMERA_I2C_WORD_DATA);
 	rc = msm_camera_i2c_write_seq(binder_i2c_client, addr, (uint8_t *)&data, 2);
 	if (rc < 0) {
 		pr_err("%s i2c write failed (%d)\n", __func__, rc);
@@ -192,91 +194,92 @@ void HtcActOisBinder_open_init(void)
 	pr_info("[OIS]  %s  FW_Version=0x%x\n", __func__, RdFwVr());
 
 #if 0
-	RegReadA_lc898111(0x027F, &ois_data_8); 
+	RegReadA_lc898111(0x027F, &ois_data_8); //Normally it should be : 0xAC
 	pr_info("[OIS]  0x027F read : 0x%x\n", ois_data_8);
 #endif
 
 
-	IniSet(); 
+	IniSet(); //Initial setting
 
 
-	
+	//OIS CCM calibration data(read from OTP data ; write to register/ram)
 	if (g_otp_size > 0)
 	{
 		pr_info("[OIS]  %s  g_otp_size=%d\n", __func__, g_otp_size);
 
-		
+		//16bits_RAM
 		ois_data_16 = (g_otp_data[0] << 8) + g_otp_data[1];
-		RamWriteA_lc898111(0x1114, ois_data_16); 
+		RamWriteA_lc898111(0x1114, ois_data_16); //Hall X Offset
 		ois_data_16 = (g_otp_data[2] << 8) + g_otp_data[3];
-		RamWriteA_lc898111(0x1116, ois_data_16); 
+		RamWriteA_lc898111(0x1116, ois_data_16); //Hall Y Offset
 		ois_data_16 = (g_otp_data[4] << 8) + g_otp_data[5];
-		RamWriteA_lc898111(0x1115, ois_data_16); 
+		RamWriteA_lc898111(0x1115, ois_data_16); //Hall X Bias
 		ois_data_16 = (g_otp_data[6] << 8) + g_otp_data[7];
-		RamWriteA_lc898111(0x1117, ois_data_16); 
+		RamWriteA_lc898111(0x1117, ois_data_16); //Hall Y Bias
 		ois_data_16 = (g_otp_data[8] << 8) + g_otp_data[9];
-		RamWriteA_lc898111(0x1102, ois_data_16); 
+		RamWriteA_lc898111(0x1102, ois_data_16); //Hall X A/D Offset
 		ois_data_16 = (g_otp_data[10] << 8) + g_otp_data[11];
-		RamWriteA_lc898111(0x1105, ois_data_16); 
+		RamWriteA_lc898111(0x1105, ois_data_16); //Hall Y A/D Offset
 		ois_data_16 = (g_otp_data[12] << 8) + g_otp_data[13];
-		RamWriteA_lc898111(0x132A, ois_data_16); 
+		RamWriteA_lc898111(0x132A, ois_data_16); //X Axis Loop Gain
 		ois_data_16 = (g_otp_data[14] << 8) + g_otp_data[15];
-		RamWriteA_lc898111(0x136A, ois_data_16); 
+		RamWriteA_lc898111(0x136A, ois_data_16); //Y Axis Loop Gain
 		ois_data_16 = (g_otp_data[16] << 8) + g_otp_data[17];
-		RamWriteA_lc898111(0x1127, ois_data_16); 
+		RamWriteA_lc898111(0x1127, ois_data_16); //X Optical center
 		ois_data_16 = (g_otp_data[18] << 8) + g_otp_data[19];
-		RamWriteA_lc898111(0x1167, ois_data_16); 
+		RamWriteA_lc898111(0x1167, ois_data_16); //Y Optical center
 
-		
+		//8bits_Register
 		ois_data_8 = g_otp_data[20];
-		RegWriteA_lc898111(0x03A0, ois_data_8); 
+		RegWriteA_lc898111(0x03A0, ois_data_8); //Gyro X offset (High byte)
 		ois_data_8 = g_otp_data[21];
-		RegWriteA_lc898111(0x03A1, ois_data_8); 
+		RegWriteA_lc898111(0x03A1, ois_data_8); //Gyro X offset (Low byte)
 		ois_data_8 = g_otp_data[22];
-		RegWriteA_lc898111(0x03A2, ois_data_8); 
+		RegWriteA_lc898111(0x03A2, ois_data_8); //Gyro Y offset (High byte)
 		ois_data_8 = g_otp_data[23];
-		RegWriteA_lc898111(0x03A3, ois_data_8); 
+		RegWriteA_lc898111(0x03A3, ois_data_8); //Gyro Y offset (Low byte)
 
-		
-		
-		
+		//32bits_RAM
+		//Correcte the Gyro Gain X0 by vendor request
+		//---------------------------------------------------------
 		pr_info("[OIS]  Gyro Gain X0  : 0x%x\n", g_otp_data[24]);
 		g_otp_data[24] = g_otp_data[24] | 0x80;
 		pr_info("[OIS]  Corrected Gyro Gain X0  : 0x%x\n", g_otp_data[24]);
-		
+		//---------------------------------------------------------
 		ois_data_32 = (g_otp_data[24] << 24) + (g_otp_data[25] << 16) + (g_otp_data[26] << 8) + g_otp_data[27];
-		RamWrite32A(0x1828, ois_data_32); 
+		RamWrite32A(0x1828, ois_data_32); //Gyro Gain X
 		ois_data_32 = (g_otp_data[28] << 24) + (g_otp_data[29] << 16) + (g_otp_data[30] << 8) + g_otp_data[31];
-		RamWrite32A(0x1928, ois_data_32); 
+		RamWrite32A(0x1928, ois_data_32); //Gyro Gain Y
 
 
-		
+		//8bits_Register
 		ois_data_8 = g_otp_data[32];
-		RegWriteA_lc898111(0x0264, ois_data_8); 
+		RegWriteA_lc898111(0x0264, ois_data_8); //OSC value
 	}
 
 
+/* After updating FW V0004. Do not set Compensation angle now. Change to define OIS05DEG/OIS06DEG/OIS07DEG in Ois.h */
 #if 0
-	
-	
-	RamWrite32A( 0x1808, 0x3F99999A ) ;	
-	RamWrite32A( 0x1809, 0x3F99999A ) ;	
-	RamWrite32A( 0x1908, 0x3F99999A ) ;	
-	RamWrite32A( 0x1909, 0x3F99999A ) ;	
+	/* Compensation angle */
+	// 0x3F99999A : 1.2    about 0.6deg
+	RamWrite32A( 0x1808, 0x3F99999A ) ;	// 0x1808
+	RamWrite32A( 0x1809, 0x3F99999A ) ;	// 0x1809
+	RamWrite32A( 0x1908, 0x3F99999A ) ;	// 0x1908
+	RamWrite32A( 0x1909, 0x3F99999A ) ;	// 0x1909
 #endif
 
 
-	RtnCen(0); 
-	
-	SetPanTiltMode(ON);
+	RtnCen(0); //Servo ON and OIS OFF
+	//SetZsp(1);
+	SetPanTiltMode(ON);/*Set pan_tilt*/
 
 	pr_info("[OIS]  %s  g_ois_mode=%d\n", __func__, g_ois_mode);
 	if (g_ois_mode != 0) {
 		ClrGyr(0x06, CLR_GYR_DLY_RAM);
-		OisEna(); 
-		SetGcf(5); 
+		OisEna(); //Turn ON OIS
+		SetGcf(5); //OIS level
 	}
-	
+	//S2cPro(1); //S2 enable
 
 	pr_info("[OIS]  %s  end\n", __func__);
 }
@@ -289,11 +292,11 @@ void HtcActOisBinder_power_down(void)
 
 	pr_info("[OIS]  %s  start\n", __func__);
 
-	
-	RtnCen(0); 
+	//S2cPro(0); //S2 disable
+	RtnCen(0); //Servo ON and OIS OFF
 
-	SrvCon(X_DIR, OFF); 
-	SrvCon(Y_DIR, OFF); 
+	SrvCon(X_DIR, OFF); //Servo OFF : X
+	SrvCon(Y_DIR, OFF); //Servo OFF : Y
 
 	pr_info("[OIS]  %s  end\n", __func__);
 }
@@ -338,57 +341,57 @@ static int32_t process_OIS_MFG_debug(void)
 	pr_info("[OIS]  %s called\n", __func__);
 
 #if 0
-	
-	RamReadA_lc898111(0x1103, &ois_data_1); 
-	RamReadA_lc898111(0x1106, &ois_data_2); 
+	//16bits_RAM
+	RamReadA_lc898111(0x1103, &ois_data_1); //X Hall A/D data
+	RamReadA_lc898111(0x1106, &ois_data_2); //Y Hall A/D data
 	pr_info("[OIS]  OIS_ENABLE_DEBUG  0x1103 read : 0x%04x , 0x1106 read : 0x%04x\n", ois_data_1 , ois_data_2);
 
-	RamReadA_lc898111(0x1101, &ois_data_3); 
-	RamReadA_lc898111(0x1104, &ois_data_4); 
+	RamReadA_lc898111(0x1101, &ois_data_3); //X Hall A/D data
+	RamReadA_lc898111(0x1104, &ois_data_4); //Y Hall A/D data
 	pr_info("[OIS]  OIS_ENABLE_DEBUG  0x1101 read : 0x%04x , 0x1104 read : 0x%04x\n", ois_data_3 , ois_data_4);
 #endif
 
-	
+	/* OIS level */
 	ois_level = get_ois_level();
 	if ((ois_level >= 0) && (ois_level <= 6))
 	{
 		pr_info("[OIS]  set OIS level : %d\n", ois_level);
-		SetGcf(ois_level); 
+		SetGcf(ois_level); //OIS level
 	}
 
 
-	
+	/* Compensation angle */
 	compensation_angle = get_compensation_angle();
 	if(compensation_angle < ILLEGAL_CMD_INPUT_VALUE) {
 		pr_info("[OIS]  set Compensation angle : %d\n", compensation_angle);
 		if (compensation_angle == 800) {
 			pr_info("[OIS]  Apply Compensation angle as 0.8deg\n");
-			
-			RamWrite32A( 0x1808, 0x3FD1EB85 ) ;	
-			RamWrite32A( 0x1809, 0x3FD1EB85 ) ;	
-			RamWrite32A( 0x1908, 0x3FD1EB85 ) ;	
-			RamWrite32A( 0x1909, 0x3FD1EB85 ) ;	
+			// 0x3FD1EB85 : 1.64   about 0.8deg
+			RamWrite32A( 0x1808, 0x3FD1EB85 ) ;	// 0x1808
+			RamWrite32A( 0x1809, 0x3FD1EB85 ) ;	// 0x1809
+			RamWrite32A( 0x1908, 0x3FD1EB85 ) ;	// 0x1908
+			RamWrite32A( 0x1909, 0x3FD1EB85 ) ;	// 0x1909
 		} else if (compensation_angle == 700) {
 			pr_info("[OIS]  Apply Compensation angle as 0.7deg\n");
-			
-			RamWrite32A( 0x1808, 0x3FB33333 ) ;	
-			RamWrite32A( 0x1809, 0x3FB33333 ) ;	
-			RamWrite32A( 0x1908, 0x3FB33333 ) ;	
-			RamWrite32A( 0x1909, 0x3FB33333 ) ;	
+			// 0x3FB33333 : 1.4    about 0.7deg
+			RamWrite32A( 0x1808, 0x3FB33333 ) ;	// 0x1808
+			RamWrite32A( 0x1809, 0x3FB33333 ) ;	// 0x1809
+			RamWrite32A( 0x1908, 0x3FB33333 ) ;	// 0x1908
+			RamWrite32A( 0x1909, 0x3FB33333 ) ;	// 0x1909
 		} else if (compensation_angle == 600) {
 			pr_info("[OIS]  Apply Compensation angle as 0.6deg\n");
-			
-			RamWrite32A( 0x1808, 0x3F99999A ) ;	
-			RamWrite32A( 0x1809, 0x3F99999A ) ;	
-			RamWrite32A( 0x1908, 0x3F99999A ) ;	
-			RamWrite32A( 0x1909, 0x3F99999A ) ;	
+			// 0x3F99999A : 1.2    about 0.6deg
+			RamWrite32A( 0x1808, 0x3F99999A ) ;	// 0x1808
+			RamWrite32A( 0x1809, 0x3F99999A ) ;	// 0x1809
+			RamWrite32A( 0x1908, 0x3F99999A ) ;	// 0x1908
+			RamWrite32A( 0x1909, 0x3F99999A ) ;	// 0x1909
 		} else {
 			pr_info("[OIS]  value is not allowed, Apply default Compensation angle as 0.8deg\n");
-			
-			RamWrite32A( 0x1808, 0x3FD1EB85 ) ;	
-			RamWrite32A( 0x1809, 0x3FD1EB85 ) ;	
-			RamWrite32A( 0x1908, 0x3FD1EB85 ) ;	
-			RamWrite32A( 0x1909, 0x3FD1EB85 ) ;	
+			// default : 0.8deg
+			RamWrite32A( 0x1808, 0x3FD1EB85 ) ;	// 0x1808
+			RamWrite32A( 0x1809, 0x3FD1EB85 ) ;	// 0x1809
+			RamWrite32A( 0x1908, 0x3FD1EB85 ) ;	// 0x1908
+			RamWrite32A( 0x1909, 0x3FD1EB85 ) ;	// 0x1909
 		}
 	}
 
@@ -404,12 +407,12 @@ int32_t HtcActOisBinder_act_set_ois_mode(int ois_mode)
 
 	g_ois_mode = ois_mode;
 
-	RtnCen(0); 
+	RtnCen(0); //Servo ON and OIS OFF
 
 	if (ois_mode != 0) {
 		ClrGyr(0x06, CLR_GYR_DLY_RAM);
-		OisEna(); 
-		SetGcf(5); 
+		OisEna(); //Turn ON OIS
+		SetGcf(5); //OIS level,
 	}
 
 	return rc;
@@ -530,7 +533,7 @@ int32_t HtcActOisBinder_mappingTbl_i2c_write(int startup_mode, struct sensor_act
 		ois_off,  cur_cam_mode, cur_line_cnt, cur_exp_time, cur_ois_level, cur_zoom_level);
 
 	if (ois_off) {
-		
+		/* Set OIS level to 0 when OIS is OFF */
 		cur_ois_level= 0;
 	}
 
@@ -538,31 +541,32 @@ int32_t HtcActOisBinder_mappingTbl_i2c_write(int startup_mode, struct sensor_act
 		if ((cur_ois_level >= 0) && (cur_ois_level <= 6))
 		{
 			pr_info("[OIS]  set OIS level : %d\n", cur_ois_level);
-			SetGcf(cur_ois_level); 
+			SetGcf(cur_ois_level); //OIS level
 		}
 
+/* Disable Compensation angle update */
 #if 0
 		if (cur_cmp_angle == 800) {
 			pr_info("[OIS]  Apply Compensation angle as 0.8deg\n");
-			
-			RamWrite32A( 0x1808, 0x3FD1EB85 ) ;	
-			RamWrite32A( 0x1809, 0x3FD1EB85 ) ;	
-			RamWrite32A( 0x1908, 0x3FD1EB85 ) ;	
-			RamWrite32A( 0x1909, 0x3FD1EB85 ) ;	
+			// 0x3FD1EB85 : 1.64   about 0.8deg
+			RamWrite32A( 0x1808, 0x3FD1EB85 ) ;	// 0x1808
+			RamWrite32A( 0x1809, 0x3FD1EB85 ) ;	// 0x1809
+			RamWrite32A( 0x1908, 0x3FD1EB85 ) ;	// 0x1908
+			RamWrite32A( 0x1909, 0x3FD1EB85 ) ;	// 0x1909
 		} else if (cur_cmp_angle == 700) {
 			pr_info("[OIS]  Apply Compensation angle as 0.7deg\n");
-			
-			RamWrite32A( 0x1808, 0x3FB33333 ) ;	
-			RamWrite32A( 0x1809, 0x3FB33333 ) ;	
-			RamWrite32A( 0x1908, 0x3FB33333 ) ;	
-			RamWrite32A( 0x1909, 0x3FB33333 ) ;	
+			// 0x3FB33333 : 1.4    about 0.7deg
+			RamWrite32A( 0x1808, 0x3FB33333 ) ;	// 0x1808
+			RamWrite32A( 0x1809, 0x3FB33333 ) ;	// 0x1809
+			RamWrite32A( 0x1908, 0x3FB33333 ) ;	// 0x1908
+			RamWrite32A( 0x1909, 0x3FB33333 ) ;	// 0x1909
 		} else if (cur_cmp_angle == 600) {
 			pr_info("[OIS]  Apply Compensation angle as 0.6deg\n");
-			
-			RamWrite32A( 0x1808, 0x3F99999A ) ;	
-			RamWrite32A( 0x1809, 0x3F99999A ) ;	
-			RamWrite32A( 0x1908, 0x3F99999A ) ;	
-			RamWrite32A( 0x1909, 0x3F99999A ) ;	
+			// 0x3F99999A : 1.2    about 0.6deg
+			RamWrite32A( 0x1808, 0x3F99999A ) ;	// 0x1808
+			RamWrite32A( 0x1809, 0x3F99999A ) ;	// 0x1809
+			RamWrite32A( 0x1908, 0x3F99999A ) ;	// 0x1908
+			RamWrite32A( 0x1909, 0x3F99999A ) ;	// 0x1909
 		} else {
 			pr_info("[OIS]  Apply Compensation angle : value is not allowed\n");
 		}

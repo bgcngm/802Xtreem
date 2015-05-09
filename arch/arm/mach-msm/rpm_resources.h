@@ -212,6 +212,6 @@ static inline int msm_rpmrs_levels_init(struct msm_rpmrs_platform_data *data)
 	return -ENODEV;
 }
 
-#endif 
+#endif /* CONFIG_MSM_RPM */
 
-#endif 
+#endif /* __ARCH_ARM_MACH_MSM_RPM_RESOURCES_H */

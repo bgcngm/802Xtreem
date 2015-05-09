@@ -43,6 +43,7 @@ static atomic_t modem_state;
 
 static wait_queue_head_t  dsp_wait;
 static wait_queue_head_t  modem_wait;
+/* Subsystem restart: QDSP6 data, functions */
 static struct workqueue_struct *apr_reset_workqueue;
 static void apr_reset_deregister(struct work_struct *work);
 struct apr_reset_work {
@@ -50,6 +51,7 @@ struct apr_reset_work {
 	struct work_struct work;
 };
 
+//htc audio ++
 #define APR_Q6_CHECK_TIMEOUT 20000
 static struct delayed_work apr_q6_check_work;
 static void apr_q6_check_worker(struct work_struct *work);
@@ -58,11 +60,12 @@ static void apr_q6_check_worker(struct work_struct *work)
 {
 	pr_info("[AUD] %s: %d\n", __func__, q6.state);
 
-	
+	// if Q6 is not loaded, trigger RAMDUMP
 	if (q6.state != APR_Q6_LOADED) {
 		BUG();
 	}
 }
+//htc audio --
 
 int apr_send_pkt(void *handle, uint32_t *buf)
 {
@@ -383,10 +386,12 @@ struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 	mutex_lock(&q6.lock);
 	if (q6.state == APR_Q6_NOIMG) {
 
+//htc audio ++
 		pr_info("[AUD] %s: Load Q6 image\n", __func__);
 		cancel_delayed_work_sync(&apr_q6_check_work);
 		queue_delayed_work(apr_reset_workqueue, &apr_q6_check_work,
 							msecs_to_jiffies(APR_Q6_CHECK_TIMEOUT));
+//htc audio --
 
 		q6.pil = pil_get("q6");
 		if (IS_ERR(q6.pil)) {
@@ -551,6 +556,7 @@ int adsp_state(int state)
 	return 0;
 }
 
+/* Dispatch the Reset events to Modem and audio clients */
 void dispatch_event(unsigned long code, unsigned short proc)
 {
 	struct apr_client *apr_client;
@@ -688,7 +694,9 @@ static int __init apr_init(void)
 	if (!apr_reset_workqueue)
 		return -ENOMEM;
 
+//htc audio ++
 	INIT_DELAYED_WORK(&apr_q6_check_work, apr_q6_check_worker);
+//htc audio --
 
 	return 0;
 }

@@ -1700,6 +1700,15 @@ int mask_request_validate(unsigned char mask_buf[])
 		case 0x0C:    
 		case 0x1C:    
 		case 0x1D:    
+		case 0x20:    
+		case 0x26:    
+		case 0x27:    
+		case 0x29:    
+		case 0x35:    
+		case 0x36:    
+		case 0x40:    
+		case 0x41:    
+		case 0x4B:    
 		case 0x60:    
 		case 0x63:    
 		case 0x73:    
@@ -1750,7 +1759,7 @@ static int diagchar_setup_cdev(dev_t devno)
 		return -1;
 	}
 
-	driver->diagchar_class = class_create(THIS_MODULE, "diag");
+	driver->diagchar_class = class_create(THIS_MODULE, "htc_diag");
 
 	if (IS_ERR(driver->diagchar_class)) {
 		printk(KERN_ERR "Error creating diagchar class.\n");
@@ -1758,7 +1767,7 @@ static int diagchar_setup_cdev(dev_t devno)
 	}
 
 	diagdev = device_create(driver->diagchar_class, NULL, devno,
-				  (void *)driver, "diag");
+				  (void *)driver, "htc_diag");
 
 
 	err = 	device_create_file(diagdev, &dev_attr_diag_reg_table);
@@ -1918,7 +1927,7 @@ static int __init diagchar_init(void)
 		driver->num = 1;
 #endif
 		driver->name = ((void *)driver) + sizeof(struct diagchar_dev);
-		strlcpy(driver->name, "diag", 4);
+		strlcpy(driver->name, "htc_diag", 4);
 #if DIAG_XPST
 		driver->debug_dmbytes_recv = 0;
 #endif

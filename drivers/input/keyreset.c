@@ -107,7 +107,7 @@ static void keyreset_event_ssr(struct input_handle *handle, unsigned int type,
 	if (value && !state->restart_disabled &&
 	    state->key_down == state->key_down_target) {
 
-#if 0 
+#if 0 /* FIXME */
 		if (state->reset_fn) {
 			restart_requested = state->reset_fn();
 		} else {
@@ -167,7 +167,7 @@ static void keyreset_event(struct input_handle *handle, unsigned int type,
 		state->restart_disabled = 1;
 		if (restart_requested) {
 			msm_watchdog_suspend(NULL);
-			
+			/* show blocked processes to debug hang problems */
 			printk(KERN_INFO "\n### Show Blocked State ###\n");
 			show_state_filter(TASK_UNINTERRUPTIBLE);
 			msm_watchdog_resume(NULL);
@@ -183,7 +183,7 @@ static void keyreset_event(struct input_handle *handle, unsigned int type,
 			restart_requested = 1;
 			restart_timeout = jiffies + 20 * HZ;
 			msm_watchdog_suspend(NULL);
-			
+			/* show blocked processes to debug hang problems */
 			printk(KERN_INFO "\n### Show Blocked State ###\n");
 			show_state_filter(TASK_UNINTERRUPTIBLE);
 			msm_watchdog_resume(NULL);

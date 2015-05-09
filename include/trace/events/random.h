@@ -128,6 +128,7 @@ DEFINE_EVENT(random__extract_entropy, extract_entropy_user,
 
 
 
-#endif 
+#endif /* _TRACE_RANDOM_H */
 
+/* This part must be outside protection */
 #include <trace/define_trace.h>

@@ -81,7 +81,7 @@ static void check_temp(struct work_struct *work)
 	if (max_freq == limited_max_freq)
 		goto reschedule;
 
-	
+	/* Update new limits */
 	for_each_possible_cpu(cpu) {
 		ret = update_cpu_max_freq(cpu, max_freq);
 		if (ret)
@@ -99,10 +99,12 @@ static void disable_msm_thermal(void)
 {
 	int cpu = 0;
 
-	
+	/* make sure check_temp is no longer running */
 	cancel_delayed_work_sync(&check_temp_work);
 	flush_scheduled_work();
 
+//	if (limited_max_freq == MSM_CPUFREQ_NO_LIMIT)
+//		return;
 
 	for_each_possible_cpu(cpu) {
 		update_cpu_max_freq(cpu, MSM_CPUFREQ_NO_LIMIT);

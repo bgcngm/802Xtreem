@@ -148,7 +148,7 @@ struct wcd9xxx {
 
 	enum wcd9xxx_pm_state pm_state;
 	struct mutex pm_lock;
-	
+	/* pm_wq notifies change of pm_state */
 	wait_queue_head_t pm_wq;
 	struct pm_qos_request pm_qos_req;
 	int wlock_holders;

@@ -12,6 +12,7 @@ void genlock_put_handle(struct genlock_handle *handle);
 struct genlock *genlock_create_lock(struct genlock_handle *);
 struct genlock *genlock_attach_lock(struct genlock_handle *, int fd);
 int genlock_wait(struct genlock_handle *handle, u32 timeout);
+/* genlock_release_lock was deprecated */
 int genlock_lock(struct genlock_handle *handle, int op, int flags,
 	u32 timeout);
 #endif
@@ -44,15 +45,18 @@ struct genlock_info {
 #define GENLOCK_IOC_ATTACH _IOW(GENLOCK_IOC_MAGIC, 2, \
 	struct genlock_lock)
 
+/* Deprecated */
 #define GENLOCK_IOC_LOCK _IOW(GENLOCK_IOC_MAGIC, 3, \
 	struct genlock_lock)
 
+/* Deprecated */
 #define GENLOCK_IOC_RELEASE _IO(GENLOCK_IOC_MAGIC, 4)
 #define GENLOCK_IOC_WAIT _IOW(GENLOCK_IOC_MAGIC, 5, \
 	struct genlock_lock)
 #define GENLOCK_IOC_DREADLOCK _IOW(GENLOCK_IOC_MAGIC, 6, \
 	struct genlock_lock)
 
+/* HTC: Add optional ioctl for fd leak debugging */
 #define GENLOCK_IOC_SETINFO _IOW(GENLOCK_IOC_MAGIC, 32, \
     struct genlock_info)
 

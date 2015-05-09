@@ -1,3 +1,6 @@
+/*
+ * descriptor table internals; you almost certainly want file.h instead.
+ */
 
 #ifndef __LINUX_FDTABLE_H
 #define __LINUX_FDTABLE_H
@@ -12,13 +15,17 @@
 
 #include <linux/atomic.h>
 
-#define FD_DEBUG 1 
+#define FD_DEBUG 1 /* fd debug*/
 
+/*
+ * The default fd array needs to be at least BITS_PER_LONG,
+ * as this is the granularity returned by copy_fdset().
+ */
 #define NR_OPEN_DEFAULT BITS_PER_LONG
 
 struct fdtable {
 	unsigned int max_fds;
-	struct file __rcu **fd;      
+	struct file __rcu **fd;      /* current fd array */
 	unsigned long *close_on_exec;
 	unsigned long *open_fds;
 	struct rcu_head rcu;
@@ -55,7 +62,13 @@ static inline bool fd_is_open(int fd, const struct fdtable *fdt)
 	return test_bit(fd, fdt->open_fds);
 }
 
+/*
+ * Open file table structure
+ */
 struct files_struct {
+  /*
+   * read mostly part
+   */
 	atomic_t count;
 	struct fdtable __rcu *fdt;
 	struct fdtable fdtab;
@@ -105,6 +118,9 @@ static inline struct file * fcheck_files(struct files_struct *files, unsigned in
 	return file;
 }
 
+/*
+ * Check whether the specified fd has an open file.
+ */
 #define fcheck(fd)	fcheck_files(current->files, fd)
 
 struct task_struct;
@@ -117,4 +133,4 @@ struct files_struct *dup_fd(struct files_struct *, int *);
 
 extern struct kmem_cache *files_cachep;
 
-#endif 
+#endif /* __LINUX_FDTABLE_H */

@@ -39,7 +39,7 @@
 		__func__, current->pid, current->comm, ## args)
 #else
 #define PDEBUG(fmt, args...) do {} while (0)
-#endif 
+#endif /* HTC_FINGERPRINT_DEBUG */
 
 #undef PERR
 #define PERR(fmt, args...) printk(KERN_ERR TAG "[E] %s(%i, %s): " fmt "\n", \
@@ -64,6 +64,7 @@ typedef struct _htc_fingerprint_msg_s{
 	int resp_len;
 } htc_fingerprint_msg_s;
 
+/* ATS structure, total size 6 * uint32 = 24 bytes */
 typedef struct {
 	struct {
 		uint8_t func_id;

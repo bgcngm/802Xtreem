@@ -39,7 +39,7 @@ static DEFINE_SEMAPHORE(riva_power_on_lock);
 #define RIVA_PMU_CFG_IRIS_XO_CFG          BIT(3)
 #define RIVA_PMU_CFG_IRIS_XO_EN           BIT(4)
 #define RIVA_PMU_CFG_GC_BUS_MUX_SEL_TOP   BIT(5)
-#define RIVA_PMU_CFG_IRIS_XO_CFG_STS      BIT(6) 
+#define RIVA_PMU_CFG_IRIS_XO_CFG_STS      BIT(6) /* 1: in progress, 0: done */
 
 #define RIVA_PMU_CFG_IRIS_XO_MODE         0x6
 #define RIVA_PMU_CFG_IRIS_XO_MODE_48      (3 << 1)
@@ -100,7 +100,7 @@ static int configure_iris_xo(struct device *dev, bool use_48mhz_xo, int on)
 			goto fail;
 		}
 
-		
+		/* Enable IRIS XO */
 		rc = clk_prepare_enable(cxo);
 		if (rc) {
 			pr_err("cxo enable failed\n");
@@ -112,7 +112,7 @@ static int configure_iris_xo(struct device *dev, bool use_48mhz_xo, int on)
 				RIVA_PMU_CFG_IRIS_XO_EN;
 		writel_relaxed(reg, RIVA_PMU_CFG);
 
-		
+		/* Clear XO_MODE[b2:b1] bits. Clear implies 19.2 MHz TCXO */
 		reg &= ~(RIVA_PMU_CFG_IRIS_XO_MODE);
 
 		if (use_48mhz_xo)
@@ -120,16 +120,16 @@ static int configure_iris_xo(struct device *dev, bool use_48mhz_xo, int on)
 
 		writel_relaxed(reg, RIVA_PMU_CFG);
 
-		
+		/* Start IRIS XO configuration */
 		reg |= RIVA_PMU_CFG_IRIS_XO_CFG;
 		writel_relaxed(reg, RIVA_PMU_CFG);
 
-		
+		/* Wait for XO configuration to finish */
 		while (readl_relaxed(RIVA_PMU_CFG) &
 						RIVA_PMU_CFG_IRIS_XO_CFG_STS)
 			cpu_relax();
 
-		
+		/* Stop IRIS XO configuration */
 		reg &= ~(RIVA_PMU_CFG_GC_BUS_MUX_SEL_TOP |
 				RIVA_PMU_CFG_IRIS_XO_CFG);
 		writel_relaxed(reg, RIVA_PMU_CFG);
@@ -160,7 +160,7 @@ static int configure_iris_xo(struct device *dev, bool use_48mhz_xo, int on)
 		}
 	}
 
-	
+	/* Add some delay for XO to settle */
 	msleep(20);
 
 	clk_put(cxo);
@@ -174,16 +174,17 @@ fail:
 	return rc;
 }
 
+/* Helper routine to turn off all WCNSS vregs e.g. IRIS, Riva */
 static void wcnss_vregs_off(struct vregs_info regulators[], uint size)
 {
 	int i, rc = 0;
 
-	
+	/* Regulators need to be turned off in the reverse order */
 	for (i = (size-1); i >= 0; i--) {
 		if (regulators[i].state == VREG_NULL_CONFIG)
 			continue;
 
-		
+		/* Remove PWM mode */
 		if (regulators[i].state & VREG_OPTIMUM_MODE_MASK) {
 			rc = regulator_set_optimum_mode(
 					regulators[i].regulator, 0);
@@ -192,7 +193,7 @@ static void wcnss_vregs_off(struct vregs_info regulators[], uint size)
 						regulators[i].name, rc);
 		}
 
-		
+		/* Set voltage to lowest level */
 		if (regulators[i].state & VREG_SET_VOLTAGE_MASK) {
 			rc = regulator_set_voltage(regulators[i].regulator,
 					regulators[i].low_power_min,
@@ -202,7 +203,7 @@ static void wcnss_vregs_off(struct vregs_info regulators[], uint size)
 						regulators[i].name, rc);
 		}
 
-		
+		/* Disable regulator */
 		if (regulators[i].state & VREG_ENABLE_MASK) {
 			rc = regulator_disable(regulators[i].regulator);
 			if (rc < 0)
@@ -210,7 +211,7 @@ static void wcnss_vregs_off(struct vregs_info regulators[], uint size)
 						regulators[i].name, rc);
 		}
 
-		
+		/* Free the regulator source */
 		if (regulators[i].state & VREG_GET_REGULATOR_MASK)
 			regulator_put(regulators[i].regulator);
 
@@ -218,13 +219,14 @@ static void wcnss_vregs_off(struct vregs_info regulators[], uint size)
 	}
 }
 
+/* Common helper routine to turn on all WCNSS vregs e.g. IRIS, Riva */
 static int wcnss_vregs_on(struct device *dev,
 		struct vregs_info regulators[], uint size)
 {
 	int i, rc = 0, reg_cnt;
 
 	for (i = 0; i < size; i++) {
-			
+			/* Get regulator source */
 		regulators[i].regulator =
 			regulator_get(dev, regulators[i].name);
 		if (IS_ERR(regulators[i].regulator)) {
@@ -235,7 +237,7 @@ static int wcnss_vregs_on(struct device *dev,
 		}
 		regulators[i].state |= VREG_GET_REGULATOR_MASK;
 		reg_cnt = regulator_count_voltages(regulators[i].regulator);
-		
+		/* Set voltage to nominal. Exclude swtiches e.g. LVS */
 		if ((regulators[i].nominal_min || regulators[i].max_voltage)
 				&& (reg_cnt > 0)) {
 			rc = regulator_set_voltage(regulators[i].regulator,
@@ -249,7 +251,7 @@ static int wcnss_vregs_on(struct device *dev,
 			regulators[i].state |= VREG_SET_VOLTAGE_MASK;
 		}
 
-		
+		/* Vote for PWM/PFM mode if needed */
 		if (regulators[i].uA_load && (reg_cnt > 0)) {
 			rc = regulator_set_optimum_mode(regulators[i].regulator,
 					regulators[i].uA_load);
@@ -261,7 +263,7 @@ static int wcnss_vregs_on(struct device *dev,
 			regulators[i].state |= VREG_OPTIMUM_MODE_MASK;
 		}
 
-		
+		/* Enable the regulator */
 		rc = regulator_enable(regulators[i].regulator);
 		if (rc) {
 			pr_err("[WCNSS]vreg %s enable failed (%d)\n",
@@ -307,17 +309,17 @@ int wcnss_wlan_power(struct device *dev,
 
 	if (on) {
 		down(&riva_power_on_lock);
-		
+		/* RIVA regulator settings */
 		rc = wcnss_riva_vregs_on(dev);
 		if (rc)
 			goto fail_riva_on;
 
-		
+		/* IRIS regulator settings */
 		rc = wcnss_iris_vregs_on(dev);
 		if (rc)
 			goto fail_iris_on;
 
-		
+		/* Configure IRIS XO */
 		rc = configure_iris_xo(dev, cfg->use_48mhz_xo,
 				WCNSS_WLAN_SWITCH_ON);
 		if (rc)
@@ -345,6 +347,12 @@ fail_riva_on:
 }
 EXPORT_SYMBOL(wcnss_wlan_power);
 
+/*
+ * During SSR Riva should not be 'powered on' until all the host drivers
+ * finish their shutdown routines.  Host drivers use below APIs to
+ * synchronize power-on. Riva will not be 'powered on' until all the
+ * requests(to lock power-on) are freed.
+ */
 int req_riva_power_on_lock(char *driver_name)
 {
 	struct host_driver *node;
@@ -358,7 +366,7 @@ int req_riva_power_on_lock(char *driver_name)
 	strncpy(node->name, driver_name, sizeof(node->name));
 
 	mutex_lock(&list_lock);
-	
+	/* Lock when the first request is added */
 	if (list_empty(&power_on_lock_list))
 		down(&riva_power_on_lock);
 	list_add(&node->list, &power_on_lock_list);
@@ -385,7 +393,7 @@ int free_riva_power_on_lock(char *driver_name)
 			break;
 		}
 	}
-	
+	/* unlock when the last host driver frees the lock */
 	if (list_empty(&power_on_lock_list))
 		up(&riva_power_on_lock);
 	mutex_unlock(&list_lock);

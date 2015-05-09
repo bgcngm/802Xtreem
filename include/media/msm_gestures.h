@@ -63,4 +63,4 @@ struct msm_ges_evt {
 	int evt_len;
 };
 
-#endif 
+#endif /*__LINUX_MSM_GESTURES_H*/

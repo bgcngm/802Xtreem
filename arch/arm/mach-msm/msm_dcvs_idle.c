@@ -79,7 +79,7 @@ static int msm_cpuidle_notifier(struct notifier_block *self, unsigned long cmd,
 	case CPU_PM_ENTER:
 		val = get_cpu_iowait_time_us(smp_processor_id(),
 					&last_update_time);
-		
+		/* val could be -1 when NOHZ is not enabled */
 		if (val == (u64)-1)
 			val = 0;
 		per_cpu(iowait_on_cpu, smp_processor_id()) = val;

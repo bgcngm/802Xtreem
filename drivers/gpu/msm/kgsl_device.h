@@ -28,6 +28,7 @@
 #define KGSL_TIMEOUT_DEFAULT        0xFFFFFFFF
 #define KGSL_TIMEOUT_PART           50 
 #define KGSL_TIMEOUT_LONG_IB_DETECTION  2000 
+#define KGSL_TIMEOUT_HANG_DETECT	200	
 
 #define FIRST_TIMEOUT (HZ / 2)
 
@@ -415,6 +416,9 @@ kgsl_device_get_drvdata(struct kgsl_device *dev)
 
 void kgsl_context_destroy(struct kref *kref);
 
+int kgsl_memfree_find_entry(pid_t pid, unsigned long *gpuaddr,
+	unsigned long *size, unsigned int *flags);
+
 static inline void
 kgsl_context_put(struct kgsl_context *context)
 {
@@ -476,6 +480,18 @@ static inline void kgsl_cancel_events_timestamp(struct kgsl_device *device,
 {
 	kgsl_signal_event(device, context, timestamp, KGSL_EVENT_CANCELLED);
 }
+
+static inline int kgsl_process_private_get(struct kgsl_process_private *process)
+{
+	int ret = 0;
+	if (process != NULL)
+		ret = kref_get_unless_zero(&process->refcount);
+	return ret;
+}
+
+void kgsl_process_private_put(struct kgsl_process_private *private);
+
+struct kgsl_process_private *kgsl_process_private_find(pid_t pid);
 
 static inline int kgsl_sysfs_store(const char *buf, unsigned int *ptr)
 {

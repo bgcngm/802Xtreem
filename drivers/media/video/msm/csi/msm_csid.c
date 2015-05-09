@@ -22,6 +22,7 @@
 
 #define V4L2_IDENT_CSID                            50002
 
+/* MIPI	CSID registers */
 #define CSID_HW_VERSION_ADDR                        0x0
 #define CSID_CORE_CTRL_ADDR                         0x4
 #define CSID_RST_CMD_ADDR                           0x8

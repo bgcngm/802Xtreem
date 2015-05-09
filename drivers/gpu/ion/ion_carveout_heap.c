@@ -250,6 +250,10 @@ int ion_carveout_cache_ops(struct ion_heap *heap, struct ion_buffer *buffer,
 	ion_phys_addr_t buff_phys = buffer->priv_phys;
 
 	if (!vaddr) {
+		/*
+		 * Split the vmalloc space into smaller regions in
+		 * order to clean and/or invalidate the cache.
+		 */
 		size_to_vmap = ((VMALLOC_END - VMALLOC_START)/8);
 		total_size = buffer->size;
 

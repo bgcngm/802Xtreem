@@ -1355,13 +1355,13 @@ static int rmnet_ctrl_set_itc( struct rmnet_ctrl_dev *dev, int value ) {
 
 	if ( is_oldversion ) {
 		switch(value) {
-			case 1://enable
+			case 1:
 				enable = 1;
 				break;
-			case 0://disable
+			case 0:
 				enable = 0;
 				break;
-			default://other
+			default:
 				pr_info("[%s][%s] value=[%d]\n", __func__, dev->name, value);
 				mutex_unlock(&dev->dev_lock);
 				return -ENODEV;

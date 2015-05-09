@@ -16,15 +16,17 @@
 #include <mach/gpio.h>
 
 #define	TI201_TOTAL_STEPS_NEAR_TO_FAR			30
-#define	TI201_TOTAL_STEPS_NEAR_TO_FAR_RAWCHIP_AF			256 
+#define	TI201_TOTAL_STEPS_NEAR_TO_FAR_RAWCHIP_AF			256 // HTC 20121004
 
 #define REG_VCM_NEW_CODE			0x30F2
 #define REG_VCM_I2C_ADDR			0x1C
 #define REG_VCM_CODE_MSB			0x03
 #define REG_VCM_CODE_LSB			0x04
+/*HTC_START steven_wu fix vcm damping 20120611*/
 #define REG_VCM_MODE			0x06
 #define REG_VCM_FREQ			0x07
 #define REG_VCM_RING_CTRL			0x400
+/*HTC_END steven_wu fix vcm damping 20120611*/
 
 int ti201_sharp_kernel_step_table[TI201_TOTAL_STEPS_NEAR_TO_FAR+1]
 	= {304, 309, 314, 319, 324, 329, 333, 339, 344, 350,
@@ -45,7 +47,10 @@ DEFINE_MUTEX(ti201_act_mutex);
 static struct msm_actuator_ctrl_t ti201_act_t;
 
 static struct region_params_t g_regions[] = {
-	
+	/* step_bound[0] - macro side boundary
+	 * step_bound[1] - infinity side boundary
+	 */
+	/* Region 1 */
 	{
 		.step_bound = {TI201_TOTAL_STEPS_NEAR_TO_FAR, 0},
 		.code_per_step = 2,
@@ -53,13 +58,13 @@ static struct region_params_t g_regions[] = {
 };
 
 static uint16_t g_scenario[] = {
-	
+	/* MOVE_NEAR and MOVE_FAR dir*/
 	TI201_TOTAL_STEPS_NEAR_TO_FAR,
 };
 
 static struct damping_params_t g_damping[] = {
-	
-	
+	/* MOVE_NEAR Dir */
+	/* Scene 1 => Damping params */
 	{
 		.damping_step = 2,
 		.damping_delay = 0,
@@ -67,8 +72,8 @@ static struct damping_params_t g_damping[] = {
 };
 
 static struct damping_t g_damping_params[] = {
-	
-	
+	/* MOVE_NEAR and MOVE_FAR dir */
+	/* Region 1 */
 	{
 		.ringing_params = g_damping,
 	},
@@ -119,6 +124,7 @@ int32_t ti201_msm_actuator_init_table(
 
 	if (a_ctrl->func_tbl.actuator_set_params)
 		a_ctrl->func_tbl.actuator_set_params(a_ctrl);
+// HTC_START 20121004
 #if 0
 	if (ti201_act_t.step_position_table) {
 		LINFO("%s table inited\n", __func__);
@@ -130,14 +136,15 @@ int32_t ti201_msm_actuator_init_table(
 		a_ctrl->set_info.total_steps = TI201_TOTAL_STEPS_NEAR_TO_FAR_RAWCHIP_AF;
 	else {
 		a_ctrl->set_info.total_steps = TI201_TOTAL_STEPS_NEAR_TO_FAR;
-		ref_table = (a_ctrl->af_OTP_info.VCM_Vendor == 0x1) ? ti201_sharp_kernel_step_table : ti201_liteon_kernel_step_table;
+		ref_table = (a_ctrl->af_OTP_info.VCM_Vendor == 0x1/*sharp*/) ? ti201_sharp_kernel_step_table : ti201_liteon_kernel_step_table;
 		if (a_ctrl->af_OTP_info.VCM_OTP_Read)
 			a_ctrl->initial_code = a_ctrl->af_OTP_info.VCM_Infinity;
 		else
 			a_ctrl->initial_code = ref_table[0];
 	}
+// HTC_END
 
-	
+	/* Fill step position table */
 	if (a_ctrl->step_position_table != NULL) {
 		kfree(a_ctrl->step_position_table);
 		a_ctrl->step_position_table = NULL;
@@ -156,7 +163,7 @@ int32_t ti201_msm_actuator_init_table(
 		a_ctrl->step_position_table[0] = a_ctrl->initial_code;
 
 		for (i = 1; i <= a_ctrl->set_info.total_steps; i++) {
-			if (ti201_msm_actuator_info->use_rawchip_af && a_ctrl->af_algo == AF_ALGO_RAWCHIP) 
+			if (ti201_msm_actuator_info->use_rawchip_af && a_ctrl->af_algo == AF_ALGO_RAWCHIP) // HTC 20121004
 				a_ctrl->step_position_table[i] =
 					a_ctrl->step_position_table[i-1] + 4;
 			else
@@ -208,7 +215,7 @@ int32_t ti201_msm_actuator_move_focus(
 		dir,
 		num_steps);
 
-	
+	/* Determine sign direction */
 	if (dir == MOVE_NEAR)
 		sign_dir = 1;
 	else if (dir == MOVE_FAR)
@@ -219,7 +226,7 @@ int32_t ti201_msm_actuator_move_focus(
 		return rc;
 	}
 
-	
+	/* Determine destination step position */
 	dest_step_pos = a_ctrl->curr_step_pos +
 		(sign_dir * num_steps);
 
@@ -249,10 +256,12 @@ int ti201_actuator_af_power_down(void *params)
 	int rc = 0;
 	LINFO("%s called\n", __func__);
 
+/* HTC_START 20130329 */
 #if defined(CONFIG_ACT_OIS_BINDER)
 	if (ti201_msm_actuator_info->oisbinder_power_down)
 		ti201_msm_actuator_info->oisbinder_power_down();
 #endif
+/* HTC_END */
 
 	rc = (int) msm_actuator_af_power_down(&ti201_act_t);
 	ti201_poweroff_af();
@@ -269,7 +278,7 @@ static int32_t ti201_wrapper_i2c_write(struct msm_actuator_ctrl_t *a_ctrl,
 
 	rc = msm_camera_i2c_write(&a_ctrl->i2c_client,
 		REG_VCM_CODE_MSB,
-		((next_lens_position & 0x0300) >> 8),	
+		((next_lens_position & 0x0300) >> 8),	/*HTC_START steven_wu fix vcm damping 20120611*/
 		MSM_CAMERA_I2C_BYTE_DATA);
 	if (rc < 0) {
 		pr_err("%s VCM_CODE_MSB i2c write failed (%d)\n", __func__, rc);
@@ -278,7 +287,7 @@ static int32_t ti201_wrapper_i2c_write(struct msm_actuator_ctrl_t *a_ctrl,
 
 	rc = msm_camera_i2c_write(&a_ctrl->i2c_client,
 		REG_VCM_CODE_LSB,
-		(next_lens_position & 0x00FF),	
+		(next_lens_position & 0x00FF),	/*HTC_START steven_wu fix vcm damping 20120611*/
 		MSM_CAMERA_I2C_BYTE_DATA);
 	if (rc < 0) {
 		pr_err("%s VCM_CODE_LSB i2c write failed (%d)\n", __func__, rc);
@@ -347,12 +356,12 @@ int32_t  ti201_act_set_af_value(struct msm_actuator_ctrl_t *a_ctrl, af_value_t a
 	OTP_data[3] = af_value.AF_INF_LSB;
 	OTP_data[4] = af_value.AF_MACRO_MSB;
 	OTP_data[5] = af_value.AF_MACRO_LSB;
-	
+	/*opt diviation depends on different trace wide*/
 
 	if (OTP_data[2] || OTP_data[3] || OTP_data[4] || OTP_data[5]) {
 		a_ctrl->af_OTP_info.VCM_OTP_Read = true;
 		a_ctrl->af_OTP_info.VCM_Vendor = af_value.VCM_VENDOR;
-		otp_deviation = (a_ctrl->af_OTP_info.VCM_Vendor == 0x1) ? 160 : 60;
+		otp_deviation = (a_ctrl->af_OTP_info.VCM_Vendor == 0x1/*sharp*/) ? 160 : 60;
 		a_ctrl->af_OTP_info.VCM_Start = 0;
 		VCM_Infinity = (int16_t)(OTP_data[2]<<8 | OTP_data[3]) - otp_deviation;
 		if (VCM_Infinity < 0){
@@ -371,6 +380,7 @@ int32_t  ti201_act_set_af_value(struct msm_actuator_ctrl_t *a_ctrl, af_value_t a
 	return rc;
 }
 
+/* HTC_START 20130329 */
 #if defined(CONFIG_ACT_OIS_BINDER)
 int32_t ti201_act_set_ois_mode(struct msm_actuator_ctrl_t *a_ctrl, int ois_mode)
 {
@@ -391,6 +401,7 @@ int32_t ti201_act_update_ois_tbl(struct msm_actuator_ctrl_t *a_ctrl, struct sens
 	return rc;
 }
 #endif
+/* HTC_END */
 
 static const struct i2c_device_id ti201_act_i2c_id[] = {
 	{"ti201_act", (kernel_ulong_t)&ti201_act_t},
@@ -402,7 +413,7 @@ static int ti201_act_config(
 {
 	LINFO("%s called\n", __func__);
 	return (int) msm_actuator_config(&ti201_act_t,
-		ti201_msm_actuator_info, argp); 
+		ti201_msm_actuator_info, argp); /* HTC Angie 20111212 - Rawchip */
 }
 
 static int ti201_i2c_add_driver_table(
@@ -418,6 +429,7 @@ static int ti201_i2c_add_driver_table(
 		return (int) rc;
 	}
 
+//john maje sure ring enable
 	rc = msm_camera_i2c_write(&ti201_act_t.i2c_client,
 		0x02,
 		0x02,
@@ -426,13 +438,14 @@ static int ti201_i2c_add_driver_table(
 		pr_err("%s 0x02 ring enable register i2c write failed (%d)\n", __func__, rc);
 		return rc;
 	}
-	
-	
-	
+//john maje sure ring enable
+	//RING_MODE:bit 0
+	// 0: 2x(1/fVCM)
+	// 1: 1x(1/fVCM) <-- Optical comment
 
-	
-	
-	
+	//PWM/LIN:bit 1
+	// 0:PWM mode	<-- used it
+	// 1:Linear mode
 	rc = msm_camera_i2c_write(&ti201_act_t.i2c_client,
 		REG_VCM_MODE,
 		0x03,
@@ -442,13 +455,13 @@ static int ti201_i2c_add_driver_table(
 		return rc;
 	}
 
-	
-	
-	
-	
+	//VCM frequence
+	//VCM _ FREQ:  383 - (19200/VCM mechanical ringing frequency)
+	//						VCM mechanical ringing frequency = 67 Hz
+	//						383 - (19200/67) = 128
 	rc = msm_camera_i2c_write(&ti201_act_t.i2c_client,
 		REG_VCM_FREQ,
-		0x61,
+		0x61,//john chnage valeu to 0x61// 0x80,
 		MSM_CAMERA_I2C_BYTE_DATA);
 	if (rc < 0) {
 		pr_err("%s VCM_CODE_LSB i2c write failed (%d)\n", __func__, rc);
@@ -470,10 +483,12 @@ static int ti201_i2c_add_driver_table(
 		return (int) rc;
 	}
 
+/* HTC_START 20130329 */
 #if defined(CONFIG_ACT_OIS_BINDER)
 	if (ti201_msm_actuator_info->oisbinder_open_init)
 		ti201_msm_actuator_info->oisbinder_open_init();
 #endif
+/* HTC_END */
 
 	return (int) rc;
 }
@@ -514,10 +529,12 @@ static int32_t ti201_act_create_subdevice(
 		ti201_msm_actuator_info->board_info,
 		(struct v4l2_subdev *)sdev);
 
+/* HTC_START 20130329 */
 #if defined(CONFIG_ACT_OIS_BINDER)
 	if (ti201_msm_actuator_info->oisbinder_i2c_add_driver)
 		ti201_msm_actuator_info->oisbinder_i2c_add_driver(&(ti201_act_t.i2c_client));
 #endif
+/* HTC_END */
 
 	return rc;
 }
@@ -531,6 +548,7 @@ static struct msm_actuator_ctrl_t ti201_act_t = {
 		.a_power_down = ti201_actuator_af_power_down,
 		.a_create_subdevice = ti201_act_create_subdevice,
 		.a_config = ti201_act_config,
+/* HTC_START 20130329 */
 #if defined(CONFIG_ACT_OIS_BINDER)
 		.is_ois_supported = 1,
 #endif
@@ -538,6 +556,7 @@ static struct msm_actuator_ctrl_t ti201_act_t = {
 		.medium_step_damping = 75,
 		.big_step_damping = 100,
 		.is_af_infinity_supported = 0,
+/* HTC_END */
 	},
 
 	.i2c_client = {
@@ -545,16 +564,16 @@ static struct msm_actuator_ctrl_t ti201_act_t = {
 	},
 
 	.set_info = {
-		.total_steps = TI201_TOTAL_STEPS_NEAR_TO_FAR_RAWCHIP_AF, 
-		.gross_steps = 3,	
-		.fine_steps = 1,	
+		.total_steps = TI201_TOTAL_STEPS_NEAR_TO_FAR_RAWCHIP_AF, // HTC 20121004
+		.gross_steps = 3,	/*[TBD]*/
+		.fine_steps = 1,	/*[TBD]*/
 	},
 
 	.curr_step_pos = 0,
 	.curr_region_index = 0,
-	.initial_code = 0,	
+	.initial_code = 0,	/*[TBD]*/
 	.actuator_mutex = &ti201_act_mutex,
-	.af_algo = AF_ALGO_RAWCHIP, 
+	.af_algo = AF_ALGO_RAWCHIP, // HTC 20121004
 
 	.func_tbl = {
 		.actuator_init_table = ti201_msm_actuator_init_table,
@@ -564,13 +583,15 @@ static struct msm_actuator_ctrl_t ti201_act_t = {
 		.actuator_init_focus = ti201_act_init_focus,
 		.actuator_i2c_write = ti201_wrapper_i2c_write,
 		.actuator_set_af_value = ti201_act_set_af_value,
+/* HTC_START 20130329 */
 #if defined(CONFIG_ACT_OIS_BINDER)
 		.actuator_set_ois_mode = ti201_act_set_ois_mode,
 		.actuator_update_ois_tbl = ti201_act_update_ois_tbl,
 #endif
+/* HTC_END */
 	},
 
-	.get_info = {	
+	.get_info = {	/*[TBD]*/
 		.focal_length_num = 46,
 		.focal_length_den = 10,
 		.f_number_num = 265,
@@ -581,17 +602,17 @@ static struct msm_actuator_ctrl_t ti201_act_t = {
 		.total_f_dist_den = 1000,
 	},
 
-	
+	/* Initialize scenario */
 	.ringing_scenario[MOVE_NEAR] = g_scenario,
 	.scenario_size[MOVE_NEAR] = ARRAY_SIZE(g_scenario),
 	.ringing_scenario[MOVE_FAR] = g_scenario,
 	.scenario_size[MOVE_FAR] = ARRAY_SIZE(g_scenario),
 
-	
+	/* Initialize region params */
 	.region_params = g_regions,
 	.region_size = ARRAY_SIZE(g_regions),
 
-	
+	/* Initialize damping params */
 	.damping[MOVE_NEAR] = g_damping_params,
 	.damping[MOVE_FAR] = g_damping_params,
 };

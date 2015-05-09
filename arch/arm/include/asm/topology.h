@@ -81,4 +81,4 @@ static inline int topology_unregister_notifier(struct notifier_block *nb)  { }
 
 #include <asm-generic/topology.h>
 
-#endif 
+#endif /* _ASM_ARM_TOPOLOGY_H */

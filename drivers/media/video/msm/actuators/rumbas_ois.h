@@ -1,8 +1,8 @@
 #ifndef RUMBAS_OIS_H_
 #define RUMBAS_OIS_H_
 
-#define DEFAULT_OIS_LEVEL 4       
-#define DEFAULT_MAX_ANGLE_COM 500 
+#define DEFAULT_OIS_LEVEL 4       //level 0 is the waekest, level 7 is the strongest
+#define DEFAULT_MAX_ANGLE_COM 500 //max value 1500
 #define ENDIAN(i)((i>>8)&0xff)+((i << 8)&0xff00)
 #define ENDIAN32(i)((i>>24)&0xff)+((i >> 8)&0xff00)+((i << 8)&0xff0000)+((i << 24)&0xff000000)
 
@@ -17,11 +17,13 @@ static table_data *mapping_tbl_ptr;
 
 static uint8_t ois_off_tbl  = 1;
 
+// HTC_START 20130110 Horng remove by HW request
 #if 0
 static uint8_t ois_level_value = 0;
 static uint8_t pan_mode_enable = 0;
 static uint8_t tri_moode_enable = 0;
 #endif
+// HTC_END
 
 typedef enum{
 USER_TABLE,

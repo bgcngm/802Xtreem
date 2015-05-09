@@ -35,8 +35,12 @@
 
 #define EVENT_CHANNEL		"APPS_RIVA_BT_CMD"
 #define DATA_CHANNEL		"APPS_RIVA_BT_ACL"
+/* release wakelock in 500ms, not immediately, because higher layers
+ * don't always take wakelocks when they should
+ * This is derived from the implementation for UART transport
+ */
 
-#define RX_Q_MONITOR		(500)	
+#define RX_Q_MONITOR		(500)	/* 500 milli second */
 #define HCI_REGISTER_SET	0
 
 
@@ -46,11 +50,12 @@ static DEFINE_MUTEX(hci_smd_enable);
 static int restart_in_progress;
 
 static int hcismd_set_enable(const char *val, struct kernel_param *kp);
-#if 1 
+#if 1 /* HTC_BT modify */
+/* note: add get parameter value feature */
 module_param_call(hcismd_set, hcismd_set_enable, param_get_uint, &hcismd_set, 0644);
-#else 
+#else /* QCT original */
 module_param_call(hcismd_set, hcismd_set_enable, NULL, &hcismd_set, 0644);
-#endif 
+#endif /* HTC_BT modify */
 
 static void hci_dev_smd_open(struct work_struct *worker);
 static void hci_dev_restart(struct work_struct *worker);
@@ -67,6 +72,7 @@ struct hci_smd_data {
 };
 static struct hci_smd_data hs;
 
+/* Rx queue monitor timer function */
 static int is_rx_q_empty(unsigned long arg)
 {
 	struct hci_dev *hdev = (struct hci_dev *) arg;
@@ -92,6 +98,7 @@ static void release_lock(void)
 			wake_unlock(&hs.wake_lock_rx);
 }
 
+/* Rx timer callback function */
 static void schedule_timer(unsigned long arg)
 {
 	struct hci_dev *hdev = (struct hci_dev *) arg;
@@ -100,9 +107,17 @@ static void schedule_timer(unsigned long arg)
 
 	if (is_rx_q_empty(arg) && wake_lock_active(&hs.wake_lock_rx)) {
 		BT_DBG("%s RX queue empty", hdev->name);
+		/*
+		 * Since the queue is empty, its ideal
+		 * to release the wake lock on Rx
+		 */
 		wake_unlock(&hs.wake_lock_rx);
 	} else{
 		BT_DBG("%s RX queue not empty", hdev->name);
+		/*
+		 * Restart the timer to monitor whether the Rx queue is
+		 * empty for releasing the Rx wake lock
+		 */
 		mod_timer(&hsmd->rx_q_timer,
 			jiffies + msecs_to_jiffies(RX_Q_MONITOR));
 	}
@@ -168,10 +183,18 @@ static void hci_smd_recv_data(void)
 	rc = hci_recv_frame(skb);
 	if (rc < 0) {
 		BT_ERR("Error in passing the packet to HCI Layer");
+		/*
+		 * skb is getting freed in hci_recv_frame, making it
+		 * to null to avoid multiple access
+		 */
 		skb = NULL;
 		goto out_data;
 	}
 
+	/*
+	 * Start the timer to monitor whether the Rx queue is
+	 * empty for releasing the Rx wake lock
+	 */
 	BT_DBG("Rx Timer is starting");
 	mod_timer(&hsmd->rx_q_timer,
 			jiffies + msecs_to_jiffies(RX_Q_MONITOR));
@@ -219,11 +242,19 @@ static void hci_smd_recv_event(void)
 		rc = hci_recv_frame(skb);
 		if (rc < 0) {
 			BT_ERR("Error in passing the packet to HCI Layer");
+			/*
+			 * skb is getting freed in hci_recv_frame, making it
+			 *  to null to avoid multiple access
+			 */
 			skb = NULL;
 			goto out_event;
 		}
 
 		len = smd_read_avail(hsmd->event_channel);
+		/*
+		 * Start the timer to monitor whether the Rx queue is
+		 * empty for releasing the Rx wake lock
+		 */
 		BT_DBG("Rx Timer is starting");
 		mod_timer(&hsmd->rx_q_timer,
 				jiffies + msecs_to_jiffies(RX_Q_MONITOR));
@@ -397,7 +428,7 @@ static int hci_smd_register_smd(struct hci_smd_data *hsmd)
 	struct hci_dev *hdev;
 	int rc;
 
-	
+	/* Initialize and register HCI device */
 	hdev = hci_alloc_dev();
 	if (!hdev) {
 		BT_ERR("Can't allocate HCI device");
@@ -416,10 +447,14 @@ static int hci_smd_register_smd(struct hci_smd_data *hsmd)
 
 	tasklet_init(&hsmd->rx_task,
 			hci_smd_rx, (unsigned long) hsmd);
+	/*
+	 * Setup the timer to monitor whether the Rx queue is empty,
+	 * to control the wake lock release
+	 */
 	setup_timer(&hsmd->rx_q_timer, schedule_timer,
 			(unsigned long) hsmd->hdev);
 
-	
+	/* Open the SMD Channel and device and register the callback function */
 	rc = smd_named_open_on_edge(EVENT_CHANNEL, SMD_APPS_WCNSS,
 			&hsmd->event_channel, hdev, hci_smd_notify_event);
 	if (rc < 0) {
@@ -438,7 +473,7 @@ static int hci_smd_register_smd(struct hci_smd_data *hsmd)
 		return -ENODEV;
 	}
 
-	
+	/* Disable the read interrupts on the channel */
 	smd_disable_read_intr(hsmd->event_channel);
 	smd_disable_read_intr(hsmd->data_channel);
 	return 0;
@@ -470,7 +505,7 @@ static void hci_smd_deregister_dev(struct hci_smd_data *hsmd)
 	if (wake_lock_active(&hs.wake_lock_tx))
 		wake_unlock(&hs.wake_lock_tx);
 
-	
+	/*Destroy the timer used to monitor the Rx queue for emptiness */
 	if (hs.rx_q_timer.function) {
 		del_timer_sync(&hs.rx_q_timer);
 		hs.rx_q_timer.function = NULL;
@@ -492,7 +527,7 @@ static void hci_dev_smd_open(struct work_struct *worker)
 {
 	mutex_lock(&hci_smd_enable);
 	if (restart_in_progress == 1) {
-		
+		/* Allow wcnss to initialize */
 		restart_in_progress = 0;
 		msleep(10000);
 	}
@@ -503,8 +538,8 @@ static void hci_dev_smd_open(struct work_struct *worker)
 
 static int hcismd_set_enable(const char *val, struct kernel_param *kp)
 {
-#if 1 
-	
+#if 1 /* HTC_BT modify */
+	/* note: add get parameter value feature */
 	int ret = 0;
 	unsigned long enable;
 
@@ -533,7 +568,7 @@ static int hcismd_set_enable(const char *val, struct kernel_param *kp)
 
 	mutex_unlock(&hci_smd_enable);
 	return ret;
-#else 
+#else /* QCT original */
 	int ret = 0;
 
 	mutex_lock(&hci_smd_enable);
@@ -558,7 +593,7 @@ static int hcismd_set_enable(const char *val, struct kernel_param *kp)
 done:
 	mutex_unlock(&hci_smd_enable);
 	return ret;
-#endif 
+#endif /* HTC_BT modify */
 }
 static int  __init hci_smd_init(void)
 {

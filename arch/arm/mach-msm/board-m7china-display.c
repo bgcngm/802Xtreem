@@ -40,23 +40,23 @@
 #endif
 #include <linux/i2c.h>
 #include <mach/msm_xo.h>
-#if defined(CONFIG_MACH_M7_DCG)
+#if defined(CONFIG_MACH_DUMMY)
 #include "board-m7dcg.h"
-#elif defined(CONFIG_MACH_M7_DTU)
+#elif defined(CONFIG_MACH_DUMMY)
 #include "board-m7dtu.h"
-#elif defined(CONFIG_MACH_M7_DUG)
+#elif defined(CONFIG_MACH_DUMMY)
 #include "board-m7dug.h"
-#elif defined(CONFIG_MACH_M7C_DTU)
+#elif defined(CONFIG_MACH_DUMMY)
 #include "board-m7cdtu.h"
 #elif defined(CONFIG_MACH_M7C_DUG)
 #include "board-m7cdug.h"
-#elif defined(CONFIG_MACH_M7C_DWG)
+#elif defined(CONFIG_MACH_DUMMY)
 #include "board-m7cdwg.h"
-#elif defined(CONFIG_MACH_DLP_DTU)
+#elif defined(CONFIG_MACH_DUMMY)
 #include "board-dlp_dtu.h"
-#elif defined(CONFIG_MACH_DLP_DUG)
+#elif defined(CONFIG_MACH_DUMMY)
 #include "board-dlp_dug.h"
-#elif defined(CONFIG_MACH_DLP_DWG)
+#elif defined(CONFIG_MACH_DUMMY)
 #include "board-dlp_dwg.h"
 #endif
 
@@ -64,14 +64,14 @@
 #define hr_msleep(x) msleep(x)
 
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
-#if defined(CONFIG_MACH_M7C_DTU) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_M7C_DWG)
+#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_DUMMY)
 #define MSM_FB_PRIM_BUF_SIZE (1920 * ALIGN(1080, 32) * 4 * 3)
 #else
 #define MSM_FB_PRIM_BUF_SIZE (1280 * ALIGN(720, 32) * 4 * 3)
 #endif
 
 #else
-#if defined(CONFIG_MACH_M7C_DTU) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_M7C_DWG)
+#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_DUMMY)
 #define MSM_FB_PRIM_BUF_SIZE (1920 * ALIGN(1080, 32) * 4 * 2)
 #else
 #define MSM_FB_PRIM_BUF_SIZE (1280 * ALIGN(720, 32) * 4 * 2)
@@ -843,7 +843,7 @@ static struct msm_panel_common_pdata mdp_pdata = {
 	.cont_splash_enabled = 0x00,
 	.mdp_gamma = m7china_mdp_gamma,
 	.mdp_iommu_split_domain = 1,
-	.mdp_max_clk = 200000000,
+	.mdp_max_clk = 266667000,
 };
 
 static char wfd_check_mdp_iommu_split_domain(void)
@@ -884,7 +884,7 @@ static struct dcs_cmd_req cmdreq;
 uint32_t cfg_panel_te_active[] = {GPIO_CFG(LCD_TE, 1, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA)};
 uint32_t cfg_panel_te_sleep[] = {GPIO_CFG(LCD_TE, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA)};
 
-#if !defined(CONFIG_MACH_M7C_DTU) && !defined(CONFIG_MACH_M7C_DUG) && !defined(CONFIG_MACH_M7C_DWG)
+#if !defined(CONFIG_MACH_DUMMY) && !defined(CONFIG_MACH_M7C_DUG) && !defined(CONFIG_MACH_DUMMY)
 static struct dsi_cmd_desc nvt_LowTemp_wrkr_enter[] = {
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, (char[]){0xFF, 0xEE}},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 1, 2, (char[]){0x26, 0x08}},
@@ -896,7 +896,7 @@ static struct dsi_cmd_desc nvt_LowTemp_wrkr_exit[] = {
 };
 #endif
 
-#if defined(CONFIG_MACH_M7C_DTU) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_M7C_DWG)
+#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_DUMMY)
 static  struct pm8xxx_mpp_config_data MPP_ENABLE = {
 	.type           = PM8XXX_MPP_TYPE_D_OUTPUT,
 	.level          = PM8921_MPP_DIG_LEVEL_S4,
@@ -910,11 +910,15 @@ static  struct pm8xxx_mpp_config_data MPP_DISABLE = {
 };
 #endif
 
+#ifdef CONFIG_HTC_PNPMGR
+extern void set_screen_status(bool onoff);
+#endif
+
 static int mipi_dsi_panel_power(int on)
 {
 	static bool dsi_power_on = false;
 	static struct regulator *reg_lvs5, *reg_l2;
-#if !defined(CONFIG_MACH_M7C_DTU) && !defined(CONFIG_MACH_M7C_DUG) && !defined(CONFIG_MACH_M7C_DWG)
+#if !defined(CONFIG_MACH_DUMMY) && !defined(CONFIG_MACH_M7C_DUG) && !defined(CONFIG_MACH_DUMMY)
 	static struct regulator *reg_l22;
 #endif
 	int rc;
@@ -944,7 +948,7 @@ static int mipi_dsi_panel_power(int on)
 			return -EINVAL;
 		}
 
-#if !defined(CONFIG_MACH_M7C_DTU) && !defined(CONFIG_MACH_M7C_DUG) && !defined(CONFIG_MACH_M7C_DWG)
+#if !defined(CONFIG_MACH_DUMMY) && !defined(CONFIG_MACH_M7C_DUG) && !defined(CONFIG_MACH_DUMMY)
 		reg_l22 = regulator_get(&msm_mipi_dsi1_device.dev,
 				"dsi1_avdd");
 		if (IS_ERR_OR_NULL(reg_l22)) {
@@ -965,7 +969,7 @@ static int mipi_dsi_panel_power(int on)
 
 	if (on) {
 		if (!first_init) {
-#if defined(CONFIG_MACH_M7C_DTU) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_M7C_DWG)
+#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_DUMMY)
 			rc = regulator_set_optimum_mode(reg_l2, 100000);
 			if (rc < 0) {
 				pr_err("set_optimum_mode l2 failed, rc=%d\n", rc);
@@ -1044,7 +1048,7 @@ static int mipi_dsi_panel_power(int on)
 				pr_err("enable lvs5 failed, rc=%d\n", rc);
 				return -ENODEV;
 			}
-#if !defined(CONFIG_MACH_M7C_DTU) && !defined(CONFIG_MACH_M7C_DUG) && !defined(CONFIG_MACH_M7C_DWG)
+#if !defined(CONFIG_MACH_DUMMY) && !defined(CONFIG_MACH_M7C_DUG) && !defined(CONFIG_MACH_DUMMY)
 			rc = regulator_set_optimum_mode(reg_l22, 110000);
 			if (rc < 0) {
 				pr_err("set_optimum_mode l22 failed, rc=%d\n", rc);
@@ -1086,7 +1090,7 @@ static int mipi_dsi_panel_power(int on)
 					cfg_panel_te_sleep[0], rc);
 		}
 
-#if defined(CONFIG_MACH_M7C_DTU) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_M7C_DWG)
+#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_DUMMY)
 		rc = pm8xxx_mpp_config(BL_HW_EN_MPP_8, &MPP_DISABLE);
 		if (rc < 0) {
 			pr_err("disable bl_hw failed, rc=%d\n", rc);
@@ -1145,10 +1149,17 @@ static int mipi_dsi_panel_power(int on)
 #endif
 	}
 
+#ifdef CONFIG_HTC_PNPMGR
+	if (on)
+		set_screen_status(true);
+	else
+		set_screen_status(false);
+#endif
+
 	return 0;
 }
 
-#if !defined(CONFIG_MACH_M7C_DTU) && !defined(CONFIG_MACH_M7C_DUG) && !defined(CONFIG_MACH_M7C_DWG)
+#if !defined(CONFIG_MACH_DUMMY) && !defined(CONFIG_MACH_M7C_DUG) && !defined(CONFIG_MACH_DUMMY)
 static int m7china_deferred_reset_driver_ic(void)
 {
 	if (first_init) {
@@ -1191,12 +1202,12 @@ done:
 static struct mipi_dsi_platform_data mipi_dsi_pdata = {
 	
 	.dsi_power_save = mipi_dsi_panel_power,
-#if !defined(CONFIG_MACH_M7C_DTU) && !defined(CONFIG_MACH_M7C_DUG) && !defined(CONFIG_MACH_M7C_DWG)
+#if !defined(CONFIG_MACH_DUMMY) && !defined(CONFIG_MACH_M7C_DUG) && !defined(CONFIG_MACH_DUMMY)
 	.deferred_reset_driver_ic = m7china_deferred_reset_driver_ic,
 #endif
 };
 
-#if defined(CONFIG_MACH_M7C_DTU) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_M7C_DWG)
+#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_DUMMY)
 static atomic_t lcd_backlight_off;
 #define CABC_DIMMING_SWITCH
 #endif
@@ -1964,7 +1975,7 @@ struct dsi_cmd_desc sharp_nt_cmd_on_cmds[] = {
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, (char[]){0x53, 0x24}},
 };
 
-#if defined(CONFIG_MACH_M7C_DTU) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_M7C_DWG)
+#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_DUMMY)
 static int resume_blk = 0;
 #endif
 static struct i2c_client *blk_pwm_client;
@@ -2013,7 +2024,7 @@ static int m7china_lcd_off(struct platform_device *pdev)
 	if (mfd->key != MFD_KEY)
 		return -EINVAL;
 
-#if defined(CONFIG_MACH_M7C_DTU) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_M7C_DWG)
+#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_DUMMY)
 	resume_blk = 1;
 #endif
 
@@ -2101,7 +2112,7 @@ static void m7china_dim_on(struct msm_fb_data_type *mfd)
 #define BRI_SETTING_DEF                 142
 #define BRI_SETTING_MAX                 255
 
-#if defined(CONFIG_MACH_M7C_DTU) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_M7C_DWG)
+#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_DUMMY)
 static unsigned char pwm_value;
 static int blk_low = 0;
 #endif
@@ -2128,7 +2139,7 @@ static unsigned char m7china_shrink_pwm(int val)
 	} else if (val > BRI_SETTING_MAX)
 		shrink_br = pwm_max;
 
-#if defined(CONFIG_MACH_M7C_DTU) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_M7C_DWG)
+#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_DUMMY)
 	pwm_value = shrink_br; 
 #endif
 
@@ -2137,7 +2148,7 @@ static unsigned char m7china_shrink_pwm(int val)
 	return shrink_br;
 }
 
-#if defined(CONFIG_MACH_M7C_DTU) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_M7C_DWG)
+#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_DUMMY)
 void pwmic_config(unsigned char* index, unsigned char* value, int count)
 {
 	int i, rc;
@@ -2164,7 +2175,7 @@ unsigned char val4[6] = {0x14, 0xF0, 0xA0, 0x50, 0x11, 0x08};
 
 static void m7china_set_backlight(struct msm_fb_data_type *mfd)
 {
-#if defined(CONFIG_MACH_M7C_DTU) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_M7C_DWG)
+#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_DUMMY)
 	int rc;
 #endif
 
@@ -2186,7 +2197,7 @@ static void m7china_set_backlight(struct msm_fb_data_type *mfd)
 	else
 		write_display_brightness[2] = m7china_shrink_pwm((unsigned char)(mfd->bl_level));
 
-#if defined(CONFIG_MACH_M7C_DTU) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_M7C_DWG)
+#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_DUMMY)
 	if(pwmic_ver >= 2) { 
 		if (resume_blk) {
 			resume_blk = 0;
@@ -2276,7 +2287,7 @@ static void m7china_set_backlight(struct msm_fb_data_type *mfd)
 	}
 #endif
 
-#if defined(CONFIG_MACH_M7C_DTU) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_M7C_DWG)
+#if defined(CONFIG_MACH_DUMMY) || defined(CONFIG_MACH_M7C_DUG) || defined(CONFIG_MACH_DUMMY)
 	if (mfd && (mfd->bl_level) == 0) {
 		rc = pm8xxx_mpp_config(BL_HW_EN_MPP_8, &MPP_DISABLE);
 		if (rc < 0) {

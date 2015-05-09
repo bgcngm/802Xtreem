@@ -17,6 +17,17 @@
 
 struct rpm_regulator;
 
+/**
+ * enum rpm_regulator_voltage_corner - possible voltage corner values
+ *
+ * These should be used in regulator_set_voltage() and
+ * rpm_regulator_set_voltage() calls for corner type regulators as if they had
+ * units of uV.
+ *
+ * Note, the meaning of corner values is set by the RPM.  It is possible that
+ * future platforms will utilize different corner values.  The values specified
+ * in this enum correspond to MSM8974 for PMIC PM8841 SMPS 2 (VDD_Dig).
+ */
 enum rpm_regulator_voltage_corner {
 	RPM_REGULATOR_CORNER_RETENTION = 1,
 	RPM_REGULATOR_CORNER_SVS_KRAIT,
@@ -59,6 +70,6 @@ static inline int rpm_regulator_set_voltage(struct rpm_regulator *regulator,
 
 static inline int __init rpm_regulator_smd_driver_init(void) { return 0; }
 
-#endif 
+#endif /* CONFIG_MSM_RPM_REGULATOR_SMD */
 
 #endif

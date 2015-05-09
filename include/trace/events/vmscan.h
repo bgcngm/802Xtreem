@@ -477,6 +477,7 @@ TRACE_EVENT_CONDITION(update_swap_token_priority,
 		  __entry->swap_token_mm, __entry->swap_token_prio)
 );
 
-#endif 
+#endif /* _TRACE_VMSCAN_H */
 
+/* This part must be outside protection */
 #include <trace/define_trace.h>

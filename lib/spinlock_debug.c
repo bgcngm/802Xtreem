@@ -58,9 +58,9 @@ static void spin_dump(raw_spinlock_t *lock, const char *msg)
 	printk(KERN_EMERG "BUG: spinlock %s on CPU#%d, %s/%d\n",
 		msg, raw_smp_processor_id(),
 		current->comm, task_pid_nr(current));
-	printk(KERN_EMERG " lock: %p, .magic: %08x, .owner: %s/%d, "
+	printk(KERN_EMERG " lock: %ps, .raw lock: 0x%08x, .magic: %08x, .owner: %s/%d, "
 			".owner_cpu: %d\n",
-		lock, lock->magic,
+		lock, *(unsigned *)lock, lock->magic,
 		owner ? owner->comm : "<none>",
 		owner ? task_pid_nr(owner) : -1,
 		lock->owner_cpu);
@@ -118,6 +118,11 @@ static void __spin_lock_debug(raw_spinlock_t *lock)
 		/* lockup suspected: */
 		if (print_once) {
 			print_once = 0;
+			printk(KERN_EMERG "BUG: spinlock lockup on CPU#%d, "
+					"%s/%d, %ps\n",
+				raw_smp_processor_id(), current->comm,
+				task_pid_nr(current), lock);
+			printk(KERN_EMERG "%s: loops_per_jiffy=%lu, HZ=%d, loops=%llu\n", __func__, loops_per_jiffy, HZ, loops);	/* Added by HTC */
 			spin_dump(lock, "lockup");
 #ifdef CONFIG_SMP
 			trigger_all_cpu_backtrace();

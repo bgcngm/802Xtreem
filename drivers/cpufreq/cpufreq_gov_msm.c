@@ -138,7 +138,7 @@ static int __devinit msm_gov_probe(struct platform_device *pdev)
 {
 	int ret = 0;
 	int cpu;
-	uint32_t group_id = 0x43505530; 
+	uint32_t group_id = 0x43505530; /* CPU0 */
 	struct msm_dcvs_core_info *core = NULL;
 
 	core = pdev->dev.platform_data;

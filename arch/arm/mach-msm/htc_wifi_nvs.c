@@ -26,7 +26,8 @@
 
 #include <asm/setup.h>
 
-#define ATAG_MSM_WIFI	0x57494649 
+/* configuration tags specific to msm */
+#define ATAG_MSM_WIFI	0x57494649 /* MSM WiFi */
 
 #define NVS_MAX_SIZE	0x800U
 #define NVS_LEN_OFFSET	0x0C
@@ -84,7 +85,7 @@ static unsigned wifi_get_nvs_size( void )
 	unsigned len;
 
 	ptr = get_wifi_nvs_ram();
-	
+	/* Size in format LE assumed */
 	memcpy(&len, ptr + NVS_LEN_OFFSET, sizeof(len));
 	len = min(len, (NVS_MAX_SIZE - NVS_DATA_OFFSET));
 	return len;

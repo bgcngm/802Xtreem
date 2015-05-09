@@ -33,6 +33,9 @@ void show_meminfo(void)
 	unsigned long kgsl_alloc = kgsl_get_alloc_size(1);
 	unsigned long subtotal;
 
+	/*
+	 * display in kilobytes.
+	 */
 #define K(x) ((x) << (PAGE_SHIFT - 10))
 	si_meminfo(&i);
 	si_swapinfo(&i);
@@ -94,6 +97,9 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 	int lru;
 	unsigned long kgsl_alloc = kgsl_get_alloc_size(0);
 
+/*
+ * display in kilobytes.
+ */
 #define K(x) ((x) << (PAGE_SHIFT - 10))
 	si_meminfo(&i);
 	si_swapinfo(&i);
@@ -111,6 +117,9 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 	for (lru = LRU_BASE; lru < NR_LRU_LISTS; lru++)
 		pages[lru] = global_page_state(NR_LRU_BASE + lru);
 
+	/*
+	 * Tagged format, for easy grepping and expansion.
+	 */
 	seq_printf(m,
 		"MemTotal:       %8lu kB\n"
 		"MemFree:        %8lu kB\n"

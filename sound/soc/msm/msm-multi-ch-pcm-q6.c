@@ -93,6 +93,7 @@ static struct snd_pcm_hardware msm_pcm_hardware_playback = {
 	.fifo_size =            0,
 };
 
+/* Conventional and unconventional sample rate supported */
 static unsigned int supported_sample_rates[] = {
 	8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000
 };
@@ -218,7 +219,7 @@ static int msm_pcm_playback_prepare(struct snd_pcm_substream *substream)
 	prtd->pcm_size = snd_pcm_lib_buffer_bytes(substream);
 	prtd->pcm_count = snd_pcm_lib_period_bytes(substream);
 	prtd->pcm_irq_pos = 0;
-	
+	/* rate and channels are sent to audio driver */
 	prtd->samp_rate = runtime->rate;
 	prtd->channel_mode = runtime->channels;
 	if (prtd->enabled)
@@ -253,7 +254,7 @@ static int msm_pcm_capture_prepare(struct snd_pcm_substream *substream)
 	prtd->pcm_count = snd_pcm_lib_period_bytes(substream);
 	prtd->pcm_irq_pos = 0;
 
-	
+	/* rate and channels are sent to audio driver */
 	prtd->samp_rate = runtime->rate;
 	prtd->channel_mode = runtime->channels;
 
@@ -343,7 +344,9 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 		kfree(prtd);
 		return -ENOMEM;
 	}
+/* HTC_AUD_LOWL_START */
 	prtd->audio_client->perf_mode = false;
+/* HTC_AUD_LOWL_END */
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		runtime->hw = msm_pcm_hardware_playback;
 		ret = q6asm_open_write(prtd->audio_client,
@@ -355,7 +358,7 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 			return -ENOMEM;
 		}
 	}
-	
+	/* Capture path */
 	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
 		runtime->hw = msm_pcm_hardware_capture;
 		ret = q6asm_open_read(prtd->audio_client, FORMAT_LINEAR_PCM);
@@ -371,7 +374,9 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 
 	prtd->session_id = prtd->audio_client->session;
 	msm_pcm_routing_reg_phy_stream(soc_prtd->dai_link->be_id,
+/* HTC_AUD_LOWL_START */
 	        prtd->audio_client->perf_mode,
+/* HTC_AUD_LOWL_END */
 			prtd->session_id, substream->stream);
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
@@ -382,7 +387,7 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 				&constraints_sample_rates);
 	if (ret < 0)
 		pr_err("snd_pcm_hw_constraint_list failed\n");
-	
+	/* Ensure that buffer size is a multiple of period size */
 	ret = snd_pcm_hw_constraint_integer(runtime,
 					    SNDRV_PCM_HW_PARAM_PERIODS);
 	if (ret < 0)
@@ -715,6 +720,10 @@ static int msm_pcm_hw_params(struct snd_pcm_substream *substream,
 	else
 		dir = OUT;
 
+	/*
+	 *TODO : Need to Add Async IO changes. All period
+	 * size might not be supported.
+	 */
 	ret = q6asm_audio_client_buf_alloc_contiguous(dir,
 		prtd->audio_client,
 		(params_buffer_bytes(params) / params_periods(params)),

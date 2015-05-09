@@ -32,6 +32,7 @@ struct handoff_clk {
 };
 static LIST_HEAD(handoff_list);
 
+/* Find the voltage level required for a given rate. */
 static int find_vdd_level(struct clk *clk, unsigned long rate)
 {
 	int level;
@@ -49,6 +50,7 @@ static int find_vdd_level(struct clk *clk, unsigned long rate)
 	return level;
 }
 
+/* Update voltage level given the current votes. */
 static int update_vdd(struct clk_vdd_class *vdd_class)
 {
 	int level, rc;
@@ -67,6 +69,7 @@ static int update_vdd(struct clk_vdd_class *vdd_class)
 	return rc;
 }
 
+/* Vote for a voltage level. */
 int vote_vdd_level(struct clk_vdd_class *vdd_class, int level)
 {
 	unsigned long flags;
@@ -82,6 +85,7 @@ int vote_vdd_level(struct clk_vdd_class *vdd_class, int level)
 	return rc;
 }
 
+/* Remove vote for a voltage level. */
 int unvote_vdd_level(struct clk_vdd_class *vdd_class, int level)
 {
 	unsigned long flags;
@@ -101,6 +105,7 @@ out:
 	return rc;
 }
 
+/* Vote for a voltage level corresponding to a clock's rate. */
 static int vote_rate_vdd(struct clk *clk, unsigned long rate)
 {
 	int level;
@@ -115,6 +120,7 @@ static int vote_rate_vdd(struct clk *clk, unsigned long rate)
 	return vote_vdd_level(clk->vdd_class, level);
 }
 
+/* Remove vote for a voltage level corresponding to a clock's rate. */
 static void unvote_rate_vdd(struct clk *clk, unsigned long rate)
 {
 	int level;
@@ -129,6 +135,7 @@ static void unvote_rate_vdd(struct clk *clk, unsigned long rate)
 	unvote_vdd_level(clk->vdd_class, level);
 }
 
+/* Returns true if the rate is valid without voting for it */
 static bool is_rate_valid(struct clk *clk, unsigned long rate)
 {
 	int level;
@@ -177,8 +184,12 @@ err_prepare_depends:
 	goto out;
 }
 EXPORT_SYMBOL(clk_prepare);
+/* added by htc for clock debugging */
 LIST_HEAD(clk_enable_list);
 DEFINE_SPINLOCK(clk_enable_list_lock);
+/*
+ * Standard clock functions defined in include/linux/clk.h
+ */
 int clk_enable(struct clk *clk)
 {
 	int ret = 0;
@@ -214,10 +225,10 @@ int clk_enable(struct clk *clk)
 			ret = clk->ops->enable(clk);
 		if (ret)
 			goto err_enable_clock;
-		
+		/* added by htc for clock debugging */
 		spin_lock(&clk_enable_list_lock);
 		if (!(clk->flags&CLKFLAG_IGNORE))
-			list_add(&clk->enable_list, &clk_enable_list);	
+			list_add(&clk->enable_list, &clk_enable_list);	/* added by htc for clock debugging */
 		spin_unlock(&clk_enable_list_lock);
 	}
 	clk->count++;
@@ -260,7 +271,7 @@ void clk_disable(struct clk *clk)
 			clk->ops->disable(clk);
 		unvote_rate_vdd(clk, clk->rate);
 
-		
+		/* added by htc for clock debugging */
 		if (!(clk->flags&CLKFLAG_IGNORE)) {
 			clk_disable(clk->depends);
 			clk_disable(parent);
@@ -343,21 +354,21 @@ int clk_set_rate(struct clk *clk, unsigned long rate)
 
 	spin_lock_irqsave(&clk->lock, flags);
 
-	
+	/* Return early if the rate isn't going to change */
 	if (clk->rate == rate)
 		goto out;
 
 	trace_clock_set_rate(clk->dbg_name, rate, smp_processor_id());
 	if (clk->count) {
 		start_rate = clk->rate;
-		
+		/* Enforce vdd requirements for target frequency. */
 		rc = vote_rate_vdd(clk, rate);
 		if (rc)
 			goto out;
 		rc = clk->ops->set_rate(clk, rate);
 		if (rc)
 			goto err_set_rate;
-		
+		/* Release vdd requirements for starting frequency. */
 		unvote_rate_vdd(clk, start_rate);
 	} else if (is_rate_valid(clk, rate)) {
 		rc = clk->ops->set_rate(clk, rate);
@@ -442,13 +453,23 @@ static enum handoff __init __handoff_clk(struct clk *clk)
 	unsigned long rate;
 	int err = 0;
 
+	/*
+	 * Tree roots don't have parents, but need to be handed off. So,
+	 * terminate recursion by returning "enabled". Also return "enabled"
+	 * for clocks with non-zero enable counts since they must have already
+	 * been handed off.
+	 */
 	if (clk == NULL || clk->count)
 		return HANDOFF_ENABLED_CLK;
 
-	
+	/* Clocks without handoff functions are assumed to be disabled. */
 	if (!clk->ops->handoff || (clk->flags & CLKFLAG_SKIP_HANDOFF))
 		return HANDOFF_DISABLED_CLK;
 
+	/*
+	 * Handoff functions for children must be called before their parents'
+	 * so that the correct parent is returned by the clk_get_parent() below.
+	 */
 	ret = clk->ops->handoff(clk);
 	if (ret == HANDOFF_ENABLED_CLK) {
 		ret = __handoff_clk(clk_get_parent(clk));
@@ -499,6 +520,10 @@ void __init msm_clock_init(struct clock_init_data *data)
 			list_add(&clk->siblings, &parent->children);
 	}
 
+	/*
+	 * Detect and preserve initial clock state until clock_late_init() or
+	 * a driver explicitly changes it, whichever is first.
+	 */
 	for (n = 0; n < num_clocks; n++)
 		__handoff_clk(clock_tbl[n].clk);
 

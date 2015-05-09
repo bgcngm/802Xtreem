@@ -28,10 +28,12 @@
 #include <mach/qdsp6v2/apr.h>
 #include "q6core.h"
 
+//htc audio ++
 #undef pr_info
 #undef pr_err
 #define pr_info(fmt, ...) pr_aud_info(fmt, ##__VA_ARGS__)
 #define pr_err(fmt, ...) pr_aud_err(fmt, ##__VA_ARGS__)
+//htc audio --
 
 #define TIMEOUT_MS 1000
 
@@ -404,7 +406,7 @@ static int __init core_init(void)
 #ifdef CONFIG_DEBUG_FS
 	dentry = debugfs_create_file("apr", S_IFREG | S_IRUGO | S_IWUSR
 		| S_IWGRP, NULL, (void *) NULL, &apr_debug_fops);
-#endif 
+#endif /* CONFIG_DEBUG_FS */
 
 	return 0;
 }

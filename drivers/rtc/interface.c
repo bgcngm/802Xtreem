@@ -17,6 +17,11 @@
 #include <linux/log2.h>
 #include <linux/workqueue.h>
 
+#ifdef CONFIG_HTC_PNPMGR
+#include <mach/board_htc.h>
+extern int board_mfg_mode(void);
+#endif
+
 static int rtc_timer_enqueue(struct rtc_device *rtc, struct rtc_timer *timer);
 static void rtc_timer_remove(struct rtc_device *rtc, struct rtc_timer *timer);
 
@@ -264,10 +269,88 @@ int rtc_read_alarm(struct rtc_device *rtc, struct rtc_wkalrm *alarm)
 }
 EXPORT_SYMBOL_GPL(rtc_read_alarm);
 
+#ifdef CONFIG_HTC_PNPMGR
+#define SCREENOFF_POLICY_60	0
+#define SCREENOFF_POLICY_30	1
+#define SCREENOFF_POLICY_15	2
+
+extern int grp_alarm_sec;
+extern int nightmode_enabled;
+extern int powersave_enabled;
+extern int screenoff_policy;
+
+static int screen_off;
+static int screen_off_sec1, screen_off_sec2, screen_off_sec3, screen_off_sec4;
+static int offmode_alarm_sec, offmode_alarm_min;
+
+void screenoff_policy_change(void) {
+	struct timespec ts;
+	int screen_off_alarm_sec;
+
+	getnstimeofday(&ts);
+	screen_off_alarm_sec = (ts.tv_sec)%60;
+
+	if (screenoff_policy == SCREENOFF_POLICY_15) {
+		if (screen_off_alarm_sec >= 45) {
+			screen_off_sec1 = screen_off_alarm_sec;
+			screen_off_sec2 = screen_off_alarm_sec - 15;
+			screen_off_sec3 = screen_off_alarm_sec - 30;
+			screen_off_sec4 = screen_off_alarm_sec - 45;
+		} else if (screen_off_alarm_sec >= 30) {
+			screen_off_sec1 = screen_off_alarm_sec + 15;
+			screen_off_sec2 = screen_off_alarm_sec;
+			screen_off_sec3 = screen_off_alarm_sec - 15;
+			screen_off_sec4 = screen_off_alarm_sec - 30;
+		} else if (screen_off_alarm_sec >= 15) {
+			screen_off_sec1 = screen_off_alarm_sec + 30;
+			screen_off_sec2 = screen_off_alarm_sec + 15;
+			screen_off_sec3 = screen_off_alarm_sec;
+			screen_off_sec4 = screen_off_alarm_sec - 15;
+		} else {
+			screen_off_sec1 = screen_off_alarm_sec + 45;
+			screen_off_sec2 = screen_off_alarm_sec + 30;
+			screen_off_sec3 = screen_off_alarm_sec + 15;
+			screen_off_sec4 = screen_off_alarm_sec;
+		}
+		pr_info("[RTC] policy change: %d, align to %d:%d:%d:%d\n", screenoff_policy, screen_off_sec1, screen_off_sec2, screen_off_sec3, screen_off_sec4);
+	} else if (screenoff_policy == SCREENOFF_POLICY_30) {
+		if (screen_off_alarm_sec >= 30) {
+			screen_off_sec1 = screen_off_alarm_sec;
+			screen_off_sec2 = screen_off_alarm_sec - 30;
+		} else {
+			screen_off_sec1 = screen_off_alarm_sec + 30;
+			screen_off_sec2 = screen_off_alarm_sec;
+		}
+		pr_info("[RTC] policy change: %d, align to %d:%d\n", screenoff_policy, screen_off_sec1, screen_off_sec2);
+	} else if (screenoff_policy == SCREENOFF_POLICY_60) {
+		screen_off_sec1 = screen_off_alarm_sec;
+		pr_info("[RTC] policy change: %d, align to %d\n", screenoff_policy, screen_off_sec1);
+	} else
+		pr_info("[RTC] policy change: %d. Out of range! \n", screenoff_policy);
+}
+EXPORT_SYMBOL_GPL(screenoff_policy_change);
+
+void set_screen_status(bool onoff)
+{
+	screen_off = !onoff;
+
+	if (screen_off) {
+		pr_info("[RTC] screen status: %d, enable alarm group\n", onoff);
+		screenoff_policy_change();
+	} else
+		pr_info("[RTC] screen status: %d, disable alarm group\n", onoff);
+}
+EXPORT_SYMBOL_GPL(set_screen_status);
+#endif
+
+
 static int __rtc_set_alarm(struct rtc_device *rtc, struct rtc_wkalrm *alarm)
 {
 	struct rtc_time tm;
 	long now, scheduled;
+#ifdef CONFIG_HTC_PNPMGR
+	unsigned long tmp;
+#endif
 	int err;
 
 	err = rtc_valid_tm(&alarm->time);
@@ -285,9 +368,70 @@ static int __rtc_set_alarm(struct rtc_device *rtc, struct rtc_wkalrm *alarm)
 		err = -ENODEV;
 	else if (!rtc->ops->set_alarm)
 		err = -EINVAL;
-	else
-		err = rtc->ops->set_alarm(rtc->dev.parent, alarm);
+	else {
+#ifdef CONFIG_HTC_PNPMGR
+		if (board_mfg_mode() == MFG_MODE_OFFMODE_CHARGING) {
+			if (alarm->time.tm_min > offmode_alarm_min) {
+				rtc_tm_to_time(&alarm->time, &tmp);
+				rtc_time_to_tm(tmp + 3600, &alarm->time);
+				alarm->time.tm_min = offmode_alarm_min;
+				alarm->time.tm_sec = offmode_alarm_sec;
+			} else if (alarm->time.tm_min == offmode_alarm_min) {
+				if (alarm->time.tm_sec > offmode_alarm_sec) {
+					rtc_tm_to_time(&alarm->time, &tmp);
+					rtc_time_to_tm(tmp + 3600, &alarm->time);
+					alarm->time.tm_min = offmode_alarm_min;
+					alarm->time.tm_sec = offmode_alarm_sec;
+				} else
+					alarm->time.tm_sec = offmode_alarm_sec;
+			} else {
+				alarm->time.tm_min = offmode_alarm_min;
+				alarm->time.tm_sec = offmode_alarm_sec;
+			}
+			pr_info("[RTC] offmode alarm group to: %02d:%02d:%02d\n", alarm->time.tm_hour, offmode_alarm_min, offmode_alarm_sec);
+		} else if ((powersave_enabled == 2) || (nightmode_enabled == 1)) {
+			if (alarm->time.tm_sec > grp_alarm_sec) {
+				rtc_tm_to_time(&alarm->time, &tmp);
+				rtc_time_to_tm(tmp + 60, &alarm->time);
+			}
+			alarm->time.tm_sec = grp_alarm_sec;
+			pr_info("[RTC] powersave/nightmode alarm group to: %0d:%02d:%02d\n", alarm->time.tm_hour, alarm->time.tm_min, grp_alarm_sec);
+		} else if (screen_off) {
+			pr_info("[RTC] screeoff original alarm to: %02d:%02d:%02d\n", alarm->time.tm_hour, alarm->time.tm_min, alarm->time.tm_sec);
+			if (screenoff_policy == SCREENOFF_POLICY_15) {
+				if (alarm->time.tm_sec > screen_off_sec1) {
+					rtc_tm_to_time(&alarm->time, &tmp);
+					rtc_time_to_tm(tmp + 60, &alarm->time);
+					alarm->time.tm_sec = screen_off_sec4;
+				} else if (alarm->time.tm_sec > screen_off_sec2)
+					alarm->time.tm_sec = screen_off_sec1;
+				else if (alarm->time.tm_sec > screen_off_sec3)
+					alarm->time.tm_sec = screen_off_sec2;
+				else if (alarm->time.tm_sec > screen_off_sec4)
+					alarm->time.tm_sec = screen_off_sec3;
+				else
+					alarm->time.tm_sec = screen_off_sec4;
+			} else if (screenoff_policy == SCREENOFF_POLICY_30) {
+				if (alarm->time.tm_sec > screen_off_sec1) {
+					rtc_tm_to_time(&alarm->time, &tmp);
+					rtc_time_to_tm(tmp + 60, &alarm->time);
+					alarm->time.tm_sec = screen_off_sec2;
+				} else if (alarm->time.tm_sec > screen_off_sec2)
+					alarm->time.tm_sec = screen_off_sec1;
+				else
+					alarm->time.tm_sec = screen_off_sec2;
+			} else if (screenoff_policy == SCREENOFF_POLICY_60) {
+				if (alarm->time.tm_sec > screen_off_sec1)
+					alarm->time.tm_min++;
+				alarm->time.tm_sec = screen_off_sec1;
+			} else
+				pr_info("[RTC] out of range.\n");
 
+			pr_info("[RTC] screeoff alarm group to: %02d:%02d:%02d\n", alarm->time.tm_hour, alarm->time.tm_min, alarm->time.tm_sec);
+		}
+#endif
+		err = rtc->ops->set_alarm(rtc->dev.parent, alarm);
+	}
 	return err;
 }
 
@@ -320,6 +464,11 @@ int rtc_initialize_alarm(struct rtc_device *rtc, struct rtc_wkalrm *alarm)
 	int err;
 	struct rtc_time now;
 
+#ifdef  CONFIG_HTC_PNPMGR
+	struct timespec ts;
+	pr_info("[RTC] %s: bootmode: %d\n", __func__, board_mfg_mode());
+#endif
+
 	err = rtc_valid_tm(&alarm->time);
 	if (err != 0)
 		return err;
@@ -331,6 +480,13 @@ int rtc_initialize_alarm(struct rtc_device *rtc, struct rtc_wkalrm *alarm)
 	err = mutex_lock_interruptible(&rtc->ops_lock);
 	if (err)
 		return err;
+#ifdef  CONFIG_HTC_PNPMGR
+	if (board_mfg_mode() == MFG_MODE_OFFMODE_CHARGING) {
+		getnstimeofday(&ts);
+		offmode_alarm_min = (ts.tv_sec/60)%60;
+		offmode_alarm_sec = (ts.tv_sec)%60;
+	}
+#endif
 
 	rtc->aie_timer.node.expires = rtc_tm_to_ktime(alarm->time);
 	rtc->aie_timer.period = ktime_set(0, 0);

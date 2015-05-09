@@ -107,7 +107,7 @@ struct zbud_hdr {
 	uint16_t pool_id;
 	struct tmem_oid oid;
 	uint32_t index;
-	uint16_t size; 
+	uint16_t size; /* compressed size in bytes, zero means unused */
 	DECL_SENTINEL
 };
 
@@ -116,7 +116,7 @@ struct zbud_page {
 	spinlock_t lock;
 	struct zbud_hdr buddy[ZBUD_MAX_BUDS];
 	DECL_SENTINEL
-	
+	/* followed by NUM_CHUNK aligned CHUNK_SIZE-byte chunks */
 };
 
 #define CHUNK_SHIFT	6
@@ -130,11 +130,14 @@ static struct {
 	struct list_head list;
 	unsigned count;
 } zbud_unbuddied[NCHUNKS];
+/* list N contains pages with N chunks USED and NCHUNKS-N unused */
+/* element 0 is never used but optimizing that isn't worth it */
 static unsigned long zbud_cumul_chunk_counts[NCHUNKS];
 
 struct list_head zbud_buddied_list;
 static unsigned long zcache_zbud_buddied_count;
 
+/* protects the buddied list and all unbuddied lists */
 static DEFINE_SPINLOCK(zbud_budlists_spinlock);
 
 static atomic_t zcache_zbud_curr_raw_pages;
@@ -145,6 +148,7 @@ static unsigned long zcache_zbud_cumul_zbytes;
 static unsigned long zcache_compress_poor;
 static unsigned long zcache_mean_compress_poor;
 
+/* forward references */
 static void *zcache_get_free_page(void);
 
 static void *qcache_alloc(void)
@@ -188,6 +192,9 @@ static void qcache_free(void *addr)
 	spin_unlock_irqrestore(&qc->lock, flags);
 }
 
+/*
+ * zbud helper functions
+ */
 
 static inline unsigned zbud_max_buddy_size(void)
 {
@@ -235,6 +242,9 @@ static char *zbud_data(struct zbud_hdr *zh, unsigned size)
 	return p;
 }
 
+/*
+ * zbud raw page management
+ */
 
 static struct zbud_page *zbud_alloc_raw_page(void)
 {
@@ -269,6 +279,9 @@ static void zbud_free_raw_page(struct zbud_page *zbpg)
 	qcache_free(zbpg);
 }
 
+/*
+ * core zbud handling routines
+ */
 
 static unsigned zbud_free(struct zbud_hdr *zh)
 {
@@ -301,7 +314,7 @@ static void zbud_free_and_delist(struct zbud_hdr *zh)
 	}
 	size = zbud_free(zh);
 	zh_other = &zbpg->buddy[(budnum == 0) ? 1 : 0];
-	if (zh_other->size == 0) { 
+	if (zh_other->size == 0) { /* was unbuddied: unlist and free */
 		chunks = zbud_size_to_chunks(size) ;
 		spin_lock(&zbud_budlists_spinlock);
 		BUG_ON(list_empty(&zbud_unbuddied[chunks].list));
@@ -309,7 +322,7 @@ static void zbud_free_and_delist(struct zbud_hdr *zh)
 		zbud_unbuddied[chunks].count--;
 		spin_unlock(&zbud_budlists_spinlock);
 		zbud_free_raw_page(zbpg);
-	} else { 
+	} else { /* was buddied: move remaining buddy to unbuddied list */
 		chunks = zbud_size_to_chunks(zh_other->size) ;
 		spin_lock(&zbud_budlists_spinlock);
 		list_del_init(&zbpg->bud_list);
@@ -346,11 +359,11 @@ static struct zbud_hdr *zbud_create(uint16_t client_id, uint16_t pool_id,
 		}
 		spin_unlock(&zbud_budlists_spinlock);
 	}
-	
+	/* didn't find a good buddy, try allocating a new page */
 	zbpg = zbud_alloc_raw_page();
 	if (unlikely(zbpg == NULL))
 		goto out;
-	
+	/* ok, have a page, now compress the data before taking locks */
 	spin_lock(&zbpg->lock);
 	spin_lock(&zbud_budlists_spinlock);
 	list_add_tail(&zbpg->bud_list, &zbud_unbuddied[nchunks].list);
@@ -361,10 +374,10 @@ static struct zbud_hdr *zbud_create(uint16_t client_id, uint16_t pool_id,
 found_unbuddied:
 	zh0 = &zbpg->buddy[0]; zh1 = &zbpg->buddy[1];
 	BUG_ON(!((zh0->size == 0) ^ (zh1->size == 0)));
-	if (zh0->size != 0) { 
+	if (zh0->size != 0) { /* buddy0 in use, buddy1 is vacant */
 		ASSERT_SENTINEL(zh0, ZBH);
 		zh = zh1;
-	} else if (zh1->size != 0) { 
+	} else if (zh1->size != 0) { /* buddy1 in use, buddy0 is vacant */
 		ASSERT_SENTINEL(zh1, ZBH);
 		zh = zh0;
 	} else
@@ -381,7 +394,7 @@ init_zh:
 	zh->oid = *oid;
 	zh->pool_id = pool_id;
 	zh->client_id = client_id;
-	
+	/* can wait to copy the data until the list locks are dropped */
 	spin_unlock(&zbud_budlists_spinlock);
 
 	to = zbud_data(zh, size);
@@ -442,6 +455,11 @@ static void zbud_init(void)
 }
 
 #ifdef CONFIG_SYSFS
+/*
+ * These sysfs routines show a nice distribution of how many zbpg's are
+ * currently (and have ever been placed) in each unbuddied list.  It's fun
+ * to watch but can probably go away before final merge.
+ */
 static int zbud_show_unbuddied_list_counts(char *buf)
 {
 	int i;
@@ -478,13 +496,24 @@ static int zbud_show_cumul_chunk_counts(char *buf)
 }
 #endif
 
+/*
+ * zcache core code starts here
+ */
 
+/* useful stats not collected by cleancache or frontswap */
 static unsigned long zcache_flush_total;
 static unsigned long zcache_flush_found;
 static unsigned long zcache_flobj_total;
 static unsigned long zcache_flobj_found;
 static unsigned long zcache_failed_eph_puts;
 
+/*
+ * Tmem operations assume the poolid implies the invoking client.
+ * Zcache only has one client (the kernel itself): LOCAL_CLIENT.
+ * RAMster has each client numbered by cluster node, and a KVM version
+ * of zcache would have one client per guest and each client might
+ * have a poolid==N.
+ */
 static struct tmem_pool *zcache_get_pool_by_id(uint16_t cli_id, uint16_t poolid)
 {
 	struct tmem_pool *pool = NULL;
@@ -539,14 +568,25 @@ out:
 	return ret;
 }
 
+/* counters for debugging */
 static unsigned long zcache_failed_get_free_pages;
 static unsigned long zcache_failed_alloc;
 static unsigned long zcache_put_to_flush;
 static unsigned long zcache_aborted_preload;
 static unsigned long zcache_aborted_shrink;
 
+/*
+ * Ensure that memory allocation requests in zcache don't result
+ * in direct reclaim requests via the shrinker, which would cause
+ * an infinite loop.  Maybe a GFP flag would be better?
+ */
 static DEFINE_SPINLOCK(zcache_direct_reclaim_lock);
 
+/*
+ * for now, used named slabs so can easily track usage; later can
+ * either just use kmalloc, or perhaps add a slab-like allocator
+ * to more carefully manage total memory utilization
+ */
 static struct kmem_cache *zcache_objnode_cache;
 static struct kmem_cache *zcache_obj_cache;
 static atomic_t zcache_curr_obj_count = ATOMIC_INIT(0);
@@ -554,6 +594,11 @@ static unsigned long zcache_curr_obj_count_max;
 static atomic_t zcache_curr_objnode_count = ATOMIC_INIT(0);
 static unsigned long zcache_curr_objnode_count_max;
 
+/*
+ * to avoid memory allocation recursion (e.g. due to direct reclaim), we
+ * preload all necessary data structures so the hostops callbacks never
+ * actually do a malloc
+ */
 struct zcache_preload {
 	void *page;
 	struct tmem_obj *obj;
@@ -636,6 +681,9 @@ static void *zcache_get_free_page(void)
 	return page;
 }
 
+/*
+ * zcache implementation for tmem host ops
+ */
 
 static struct tmem_objnode *zcache_objnode_alloc(struct tmem_pool *pool)
 {
@@ -711,6 +759,13 @@ static void zcache_flush_all_obj(void)
 			zcache_qc_used);
 }
 
+/*
+ * When zcache is disabled ("frozen"), pools can be created and destroyed,
+ * but all puts (and thus all other operations that require memory allocation)
+ * must fail.  If zcache is unfrozen, accepts puts, then frozen again,
+ * data consistency requires all puts while frozen to be converted into
+ * flushes.
+ */
 static bool zcache_freeze;
 
 static void zcache_control(bool freeze)
@@ -727,10 +782,14 @@ static struct tmem_hostops zcache_hostops = {
 	.control = zcache_control,
 };
 
+/*
+ * zcache implementations for PAM page descriptor ops
+ */
 
 static atomic_t zcache_curr_eph_pampd_count = ATOMIC_INIT(0);
 static unsigned long zcache_curr_eph_pampd_count_max;
 
+/* forward reference */
 static int zcache_compress(struct page *from, void **out_va, size_t *out_len);
 
 static void *zcache_pampd_create(char *data, size_t size, bool raw, int eph,
@@ -763,6 +822,10 @@ out:
 	return pampd;
 }
 
+/*
+ * fill the pageframe corresponding to the struct page with the data
+ * from the passed pampd
+ */
 static int zcache_pampd_get_data(char *data, size_t *bufsize, bool raw,
 					void *pampd, struct tmem_pool *pool,
 					struct tmem_oid *oid, uint32_t index)
@@ -771,6 +834,10 @@ static int zcache_pampd_get_data(char *data, size_t *bufsize, bool raw,
 	return 0;
 }
 
+/*
+ * fill the pageframe corresponding to the struct page with the data
+ * from the passed pampd
+ */
 static int zcache_pampd_get_data_and_free(char *data, size_t *bufsize, bool raw,
 					void *pampd, struct tmem_pool *pool,
 					struct tmem_oid *oid, uint32_t index)
@@ -783,6 +850,10 @@ static int zcache_pampd_get_data_and_free(char *data, size_t *bufsize, bool raw,
 	return ret;
 }
 
+/*
+ * free the pampd and remove it from any zcache lists
+ * pampd must no longer be pointed to from any tmem data structures!
+ */
 static void zcache_pampd_free(void *pampd, struct tmem_pool *pool,
 				struct tmem_oid *oid, uint32_t index)
 {
@@ -820,6 +891,9 @@ static struct tmem_pamops zcache_pamops = {
 	.is_remote = zcache_pampd_is_remote,
 };
 
+/*
+ * zcache compression/decompression and related per-cpu stuff
+ */
 
 #define LZO_WORKMEM_BYTES LZO1X_1_MEM_COMPRESS
 #define LZO_DSTMEM_PAGE_ORDER 1
@@ -835,7 +909,7 @@ static int zcache_compress(struct page *from, void **out_va, size_t *out_len)
 
 	BUG_ON(!irqs_disabled());
 	if (unlikely(dmem == NULL || wmem == NULL))
-		goto out;  
+		goto out;  /* no buffer, so can't compress */
 	from_va = kmap_atomic(from);
 	mb();
 	ret = lzo1x_1_compress(from_va, PAGE_SIZE, dmem, out_len, wmem);
@@ -949,8 +1023,11 @@ static struct attribute_group qcache_attr_group = {
 	.name = "qcache",
 };
 
-#endif 
+#endif /* CONFIG_SYSFS */
 
+/*
+ * zcache shims between cleancache ops and tmem
+ */
 
 static int zcache_put_page(int cli_id, int pool_id, struct tmem_oid *oidp,
 				uint32_t index, struct page *page)
@@ -963,7 +1040,7 @@ static int zcache_put_page(int cli_id, int pool_id, struct tmem_oid *oidp,
 	if (unlikely(pool == NULL))
 		goto out;
 	if (!zcache_freeze && zcache_do_preload(pool) == 0) {
-		
+		/* preload does preempt_disable on success */
 		ret = tmem_put(pool, oidp, index, (char *)(page),
 				PAGE_SIZE, 0, is_ephemeral(pool));
 		if (ret < 0) {
@@ -974,7 +1051,7 @@ static int zcache_put_page(int cli_id, int pool_id, struct tmem_oid *oidp,
 	} else {
 		zcache_put_to_flush++;
 		if (atomic_read(&pool->obj_count) > 0)
-			
+			/* the put fails whether the flush succeeds or not */
 			(void)tmem_flush_page(pool, oidp, index);
 		zcache_put_pool(pool);
 	}
@@ -1063,7 +1140,7 @@ static int zcache_destroy_pool(int cli_id, int pool_id)
 	if (pool == NULL)
 		goto out;
 	cli->tmem_pools[pool_id] = NULL;
-	
+	/* wait for pool activity on other cpus to quiesce */
 	while (atomic_read(&pool->refcount) != 0)
 		;
 	atomic_dec(&cli->refcount);
@@ -1119,6 +1196,13 @@ out:
 	return poolid;
 }
 
+/**********
+ * Two kernel functionalities currently can be layered on top of tmem.
+ * These are "cleancache" which is used as a second-chance cache for clean
+ * page cache pages; and "frontswap" which is used for swap pages
+ * to avoid writes to disk.  A generic "shim" is provided here for each
+ * to translate in-kernel semantics to zcache semantics.
+ */
 
 static void zcache_cleancache_put_page(int pool_id,
 					struct cleancache_filekey key,
@@ -1179,7 +1263,7 @@ static int zcache_cleancache_init_fs(size_t pagesize)
 
 static int zcache_cleancache_init_shared_fs(char *uuid, size_t pagesize)
 {
-	
+	/* shared pools are unsupported and map to private */
 	BUG_ON(sizeof(struct cleancache_filekey) !=
 				sizeof(struct tmem_oid));
 	BUG_ON(pagesize != PAGE_SIZE);
@@ -1219,7 +1303,7 @@ static int __init qcache_init(void)
 		pr_err("qcache: can't create sysfs\n");
 		goto out;
 	}
-#endif 
+#endif /* CONFIG_SYSFS */
 
 	fdp = fmem_get_info();
 	qc->addr = fdp->virt;

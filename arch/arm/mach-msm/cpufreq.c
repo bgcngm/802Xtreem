@@ -288,6 +288,11 @@ static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
 	table = cpufreq_frequency_get_table(policy->cpu);
 	if (table == NULL)
 		return -ENODEV;
+	/*
+	 * In 8625 both cpu core's frequency can not
+	 * be changed independently. Each cpu is bound to
+	 * same frequency. Hence set the cpumask to all cpu.
+	 */
 	if (cpu_is_msm8625())
 		cpumask_setall(policy->cpus);
 
@@ -388,7 +393,7 @@ static struct freq_attr *msm_freq_attr[] = {
 };
 
 static struct cpufreq_driver msm_cpufreq_driver = {
-	
+	/* lps calculations are handled here. */
 	.flags		= CPUFREQ_STICKY | CPUFREQ_CONST_LOOPS,
 	.init		= msm_cpufreq_init,
 	.verify		= msm_cpufreq_verify,

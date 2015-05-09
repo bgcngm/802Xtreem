@@ -44,7 +44,7 @@ struct smem_heap_entry {
 	unsigned allocated;
 	unsigned offset;
 	unsigned size;
-	unsigned reserved; 
+	unsigned reserved; /* bits 1:0 reserved, bits 31:2 aux smem base addr */
 };
 #define BASE_ADDR_MASK 0xfffffffc
 
@@ -79,6 +79,7 @@ struct smsm_interrupt_info {
   uint32_t aArm_wakeup_reason;
 };
 #elif !defined(CONFIG_MSM_SMD)
+/* Don't trigger the error */
 #else
 #error No SMD Package Specified; aborting
 #endif
@@ -101,6 +102,12 @@ struct smsm_interrupt_info {
 #define SMD_CHANNELS             64
 #define SMD_HEADER_SIZE          20
 
+/* 'type' field of smd_alloc_elm structure
+ * has the following breakup
+ * bits 0-7   -> channel type
+ * bits 8-11  -> xfer type
+ * bits 12-31 -> reserved
+ */
 struct smd_alloc_elm {
 	char name[20];
 	uint32_t cid;
@@ -174,19 +181,19 @@ struct smem_ram_ptn {
 	unsigned start;
 	unsigned size;
 
-	
+	/* RAM Partition attribute: READ_ONLY, READWRITE etc.  */
 	unsigned attr;
 
-	
+	/* RAM Partition category: EBI0, EBI1, IRAM, IMEM */
 	unsigned category;
 
-	
+	/* RAM Partition domain: APPS, MODEM, APPS & MODEM (SHARED) etc. */
 	unsigned domain;
 
-	
+	/* RAM Partition type: system, bootloader, appsboot, apps etc. */
 	unsigned type;
 
-	
+	/* reserved for future expansion without changing version number */
 	unsigned reserved2, reserved3, reserved4, reserved5;
 } __attribute__ ((__packed__));
 
@@ -202,6 +209,7 @@ struct smem_ram_ptable {
 	unsigned buf;
 } __attribute__ ((__packed__));
 
+/* SMEM RAM Partition */
 enum {
 	DEFAULT_ATTRB = ~0x0,
 	READ_ONLY = 0x0,
@@ -231,11 +239,11 @@ enum {
 };
 
 enum {
-	SYS_MEMORY = 1,        
-	BOOT_REGION_MEMORY1,   
-	BOOT_REGION_MEMORY2,   
-	APPSBL_MEMORY,         
-	APPS_MEMORY,           
+	SYS_MEMORY = 1,        /* system memory*/
+	BOOT_REGION_MEMORY1,   /* boot loader memory 1*/
+	BOOT_REGION_MEMORY2,   /* boot loader memory 2,reserved*/
+	APPSBL_MEMORY,         /* apps boot loader memory*/
+	APPS_MEMORY,           /* apps  usage memory*/
 };
 
 extern spinlock_t smem_lock;

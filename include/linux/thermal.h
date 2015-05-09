@@ -113,10 +113,11 @@ struct thermal_zone_device {
 	const struct thermal_zone_device_ops *ops;
 	struct list_head cooling_devices;
 	struct idr idr;
-	struct mutex lock;	
+	struct mutex lock;	/* protect cooling devices list */
 	struct list_head node;
 	struct delayed_work poll_queue;
 };
+/* Adding event notification support elements */
 #define THERMAL_GENL_FAMILY_NAME                "thermal_event"
 #define THERMAL_GENL_VERSION                    0x01
 #define THERMAL_GENL_MCAST_GROUP_NAME           "thermal_mc_group"
@@ -132,6 +133,7 @@ struct thermal_genl_event {
 	u32 orig;
 	enum events event;
 };
+/* attributes of thermal_genl_family */
 enum {
 	THERMAL_GENL_ATTR_UNSPEC,
 	THERMAL_GENL_ATTR_EVENT,
@@ -139,6 +141,7 @@ enum {
 };
 #define THERMAL_GENL_ATTR_MAX (__THERMAL_GENL_ATTR_MAX - 1)
 
+/* commands supported by the thermal_genl_family */
 enum {
 	THERMAL_GENL_CMD_UNSPEC,
 	THERMAL_GENL_CMD_EVENT,
@@ -169,4 +172,4 @@ static inline int thermal_generate_netlink_event(u32 orig, enum events event)
 }
 #endif
 
-#endif 
+#endif /* __THERMAL_H__ */

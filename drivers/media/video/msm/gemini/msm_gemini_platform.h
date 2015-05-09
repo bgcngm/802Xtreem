@@ -35,4 +35,4 @@ int msm_gemini_platform_init(struct platform_device *pdev,
 int msm_gemini_platform_release(struct resource *mem, void *base, int irq,
 	void *context);
 
-#endif 
+#endif /* MSM_GEMINI_PLATFORM_H */

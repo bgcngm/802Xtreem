@@ -10,6 +10,10 @@
  * GNU General Public License for more details.
  *
  */
+/*
+ * Qualcomm MSM8960 TSENS driver
+ *
+ */
 
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -26,6 +30,7 @@
 #include <mach/msm_iomap.h>
 #include <mach/socinfo.h>
 
+/* Trips: from very hot to very cold */
 enum tsens_trip_type {
 	TSENS_TRIP_STAGE3 = 0,
 	TSENS_TRIP_STAGE2,
@@ -34,6 +39,7 @@ enum tsens_trip_type {
 	TSENS_TRIP_NUM,
 };
 
+/* MSM8960 TSENS register info */
 #define TSENS_CAL_DEGC					30
 #define TSENS_MAIN_SENSOR				0
 
@@ -59,7 +65,7 @@ enum tsens_trip_type {
 #define TSENS_UPPER_STATUS_CLR		BIT((tsens_status_cntl_start + 2))
 #define TSENS_MAX_STATUS_MASK		BIT((tsens_status_cntl_start + 3))
 
-#define TSENS_MEASURE_PERIOD				4 
+#define TSENS_MEASURE_PERIOD				4 /* 1 sec. default */
 #define TSENS_8960_SLP_CLK_ENA				BIT(26)
 
 #define TSENS_THRESHOLD_ADDR		(MSM_CLK_CTL_BASE + 0x00003624)
@@ -77,11 +83,16 @@ enum tsens_trip_type {
 					TSENS_THRESHOLD_UPPER_LIMIT_SHIFT)
 #define TSENS_THRESHOLD_LOWER_LIMIT_MASK	(TSENS_THRESHOLD_MAX_CODE << \
 					TSENS_THRESHOLD_LOWER_LIMIT_SHIFT)
+/* Initial temperature threshold values */
 #define TSENS_LOWER_LIMIT_TH				0x50
 #define TSENS_UPPER_LIMIT_TH				0xdf
 #define TSENS_MIN_LIMIT_TH				0x0
 #define TSENS_MAX_LIMIT_TH				0xff
 
+/* HW system of view operating temperature is -30 ~ 90. Add some buffer for sensor detect accuracy is poor.
+ * Here is chip of view, the accuracy of the TSENS sensors is
+ * 99.5% devices at 60 degree [-3.7, +4], 99.5% devices at 90 degree - [-4.47, 4.9]
+ */
 #define TSENS_MIN_LIMIT_TEMP				-60
 #define TSENS_MAX_LIMIT_TEMP				120
 
@@ -168,6 +179,7 @@ static struct workqueue_struct *monitor_tsense_wq = NULL;
 struct delayed_work monitor_tsens_status_worker;
 static void monitor_tsens_status(struct work_struct *work);
 
+/* Temperature on y axis and ADC-code on x-axis */
 static int tsens_tz_code_to_degC(int adc_code, int sensor_num)
 {
 	int degcbeforefactor, degc;
@@ -275,6 +287,12 @@ static int tsens_tz_get_mode(struct thermal_zone_device *thermal,
 	return 0;
 }
 
+/* Function to enable the mode.
+ * If the main sensor is disabled all the sensors are disable and
+ * the clock is disabled.
+ * If the main sensor is not enabled and sub sensor is enabled
+ * returns with an error stating the main sensor is not enabled.
+ */
 static int tsens_tz_set_mode(struct thermal_zone_device *thermal,
 			      enum thermal_device_mode mode)
 {
@@ -508,6 +526,9 @@ static int tsens_tz_get_crit_temp(struct thermal_zone_device *thermal,
 static int tsens_tz_notify(struct thermal_zone_device *thermal,
 				int count, enum thermal_trip_type type)
 {
+	/* TSENS driver does not shutdown the device.
+	   All Thermal notification are sent to the
+	   thermal daemon to take appropriate action */
 	return 1;
 }
 
@@ -717,7 +738,7 @@ static void tsens_scheduler_fn(struct work_struct *work)
 			if (lower_th_x)
 				mask |= TSENS_LOWER_STATUS_CLR;
 			if (upper_th_x || lower_th_x) {
-				
+				/* Notify user space */
 				schedule_work(&tm->sensor[i].work);
 				adc_code = readl_relaxed(sensor_addr);
 				pr_debug("Trigger (%d degrees) for sensor %d\n",
@@ -890,7 +911,7 @@ static void tsens_hw_init(void)
 			else  if (tmdev->sensor[i].offset < tmdev->sensor[sort_min].offset)
 				sort_min = i;
 		}
-		
+		/* select the min and max temperatur to be limit threshold */
 		tsens_min_limit_th = tsens_tz_degC_to_code(TSENS_MIN_LIMIT_TEMP, sort_min);
 		tsens_max_limit_th = tsens_tz_degC_to_code(TSENS_MAX_LIMIT_TEMP, sort_max);
 
@@ -912,6 +933,8 @@ static void tsens_hw_init(void)
 			(((1 << tmdev->tsens_num_sensor) - 1) <<
 			TSENS_SENSOR0_SHIFT);
 
+		/* set TSENS_CONFIG bits (bits 29:28 of TSENS_CNTL) to '01';
+			this setting found to be optimal. */
 		reg_cntl = (reg_cntl & ~TSENS_8660_CONFIG_MASK) |
 				(TSENS_8660_CONFIG << TSENS_8660_CONFIG_SHIFT);
 
@@ -1081,7 +1104,7 @@ int msm_tsens_early_init(struct tsens_platform_data *pdata)
 	tsens_hw_init();
 
 	if (monitor_tsense_wq == NULL) {
-		
+		/* Create private workqueue... */
 		monitor_tsense_wq = create_workqueue("monitor_tsense_wq");
 		printk(KERN_INFO "Create monitor tsense workqueue(0x%x)...\n", (unsigned int)monitor_tsense_wq);
 	}

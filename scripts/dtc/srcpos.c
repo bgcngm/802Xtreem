@@ -40,11 +40,12 @@ static char *dirname(const char *path)
 	return NULL;
 }
 
-FILE *depfile; 
-struct srcfile_state *current_srcfile; 
+FILE *depfile; /* = NULL */
+struct srcfile_state *current_srcfile; /* = NULL */
 
+/* Detect infinite include recursion. */
 #define MAX_SRCFILE_DEPTH     (100)
-static int srcfile_depth; 
+static int srcfile_depth; /* = 0 */
 
 FILE *srcfile_relative_open(const char *fname, char **fullnamep)
 {
@@ -109,10 +110,18 @@ int srcfile_pop(void)
 		die("Error closing \"%s\": %s\n", srcfile->name,
 		    strerror(errno));
 
+	/* FIXME: We allow the srcfile_state structure to leak,
+	 * because it could still be referenced from a location
+	 * variable being carried through the parser somewhere.  To
+	 * fix this we could either allocate all the files from a
+	 * table, or use a pool allocator. */
 
 	return current_srcfile ? 1 : 0;
 }
 
+/*
+ * The empty source position.
+ */
 
 struct srcpos srcpos_empty = {
 	.first_line = 0,

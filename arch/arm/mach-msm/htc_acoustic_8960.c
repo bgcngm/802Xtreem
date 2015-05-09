@@ -99,6 +99,8 @@ acoustic_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if (the_ops->get_htc_revision)
 			hw_rev = the_ops->get_htc_revision();
 		else
+			/* return 1 means lastest hw using
+			 * default configuration */
 			hw_rev = 1;
 
 		D("Audio HW revision:  %u\n", hw_rev);
@@ -172,7 +174,7 @@ acoustic_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if (mode >= 4100 && mode <= 4800) {
 			dump_stack();
 			pr_err("msgid = %d\n", mode);
-                       
+                       /* modem restart is disabled then trigger BUG() for radio */
 			if (get_restart_level() == RESET_SOC)
 			   BUG();
 		}
