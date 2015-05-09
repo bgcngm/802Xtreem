@@ -18,6 +18,13 @@
 
 extern int panel_type;
 
+/* BIT0 - BIT15 : panel id */
+/* BIT16 - BIT18 : backlight interface */
+/* BIT19- BIT21 : display interface */
+/* BIT22- BIT24 : color depth */
+/* BIT25- BIT27 : lcm revision */
+/* BIT28- BIT29 : mipi control mode */
+/* BIT30- BIT31 : reserved */
 
 #define BL_SHIFT	16
 #define BL_MASK		(0x7 << BL_SHIFT)
@@ -210,5 +217,5 @@ extern int panel_type;
 
 #define	PANEL_ID_END		0xFFFF
 
-#endif	
+#endif	/*__PANEL_ID_H */
 

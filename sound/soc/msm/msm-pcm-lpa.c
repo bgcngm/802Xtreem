@@ -38,10 +38,12 @@
 
 #define Q6_EFFECT_DEBUG 0
 
+//htc audio ++
 #undef pr_info
 #undef pr_err
 #define pr_info(fmt, ...) pr_aud_info(fmt, ##__VA_ARGS__)
 #define pr_err(fmt, ...) pr_aud_err(fmt, ##__VA_ARGS__)
+//htc audio --
 
 static struct audio_locks the_locks;
 
@@ -65,6 +67,7 @@ static struct snd_pcm_hardware msm_pcm_hardware = {
 	.channels_min =         1,
 	.channels_max =         2,
 	.buffer_bytes_max =     1024 * 1024,
+/* TODO: Check on the lowest period size we can support */
 	.period_bytes_min =	128 * 1024,
 	.period_bytes_max =     256 * 1024,
 	.periods_min =          4,
@@ -72,6 +75,7 @@ static struct snd_pcm_hardware msm_pcm_hardware = {
 	.fifo_size =            0,
 };
 
+/* Conventional and unconventional sample rate supported */
 static unsigned int supported_sample_rates[] = {
 	8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000
 };
@@ -209,7 +213,7 @@ static int msm_pcm_playback_prepare(struct snd_pcm_substream *substream)
 	prtd->pcm_size = snd_pcm_lib_buffer_bytes(substream);
 	prtd->pcm_count = snd_pcm_lib_period_bytes(substream);
 	prtd->pcm_irq_pos = 0;
-	
+	/* rate and channels are sent to audio driver */
 	prtd->samp_rate = runtime->rate;
 	prtd->channel_mode = runtime->channels;
 	prtd->out_head = 0;
@@ -302,7 +306,9 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 		kfree(prtd);
 		return -ENOMEM;
 	}
+/* HTC_AUD_LOWL_START */
 	prtd->audio_client->perf_mode = false;
+/* HTC_AUD_LOWL_END */
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		ret = q6asm_open_write(prtd->audio_client, FORMAT_LINEAR_PCM);
 		if (ret < 0) {
@@ -319,22 +325,22 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 			return -ENOMEM;
 		}
 	}
-	
+	/* Capture path */
 	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE)
 		return -EPERM;
 	pr_debug("%s: session ID %d\n", __func__, prtd->audio_client->session);
 	prtd->session_id = prtd->audio_client->session;
 	msm_pcm_routing_reg_phy_stream(soc_prtd->dai_link->be_id,
-		
+		/* HTC_AUD_LOWL_START */
 		prtd->audio_client->perf_mode,
-		
+		/* HTC_AUD_LOWL_END */
 		prtd->session_id, substream->stream);
 	ret = snd_pcm_hw_constraint_list(runtime, 0,
 				SNDRV_PCM_HW_PARAM_RATE,
 				&constraints_sample_rates);
 	if (ret < 0)
 		pr_debug("snd_pcm_hw_constraint_list failed\n");
-	
+	/* Ensure that buffer size is a multiple of period size */
 	ret = snd_pcm_hw_constraint_integer(runtime,
 					    SNDRV_PCM_HW_PARAM_PERIODS);
 	if (ret < 0)
@@ -380,6 +386,12 @@ static int msm_pcm_playback_close(struct snd_pcm_substream *substream)
 	int dir = 0;
 	int rc = 0;
 
+	/*
+	If routing is still enabled, we need to issue EOS to
+	the DSP
+	To issue EOS to dsp, we need to be run state otherwise
+	EOS is not honored.
+	*/
 	if (msm_routing_check_backend_enabled(soc_prtd->dai_link->be_id) &&
 		(!atomic_read(&prtd->stop))) {
 		rc = q6asm_run(prtd->audio_client, 0, 0, 0);
@@ -551,7 +563,7 @@ static int msm_pcm_ioctl(struct snd_pcm_substream *substream,
 	case SNDRV_PCM_IOCTL1_ENABLE_EFFECT:
 	{
 		struct param {
-			uint32_t effect_type; 
+			uint32_t effect_type; /* 0 for POPP, 1 for COPP */
 			uint32_t module_id;
 			uint32_t param_id;
 			uint32_t payload_size;
@@ -590,7 +602,7 @@ static int msm_pcm_ioctl(struct snd_pcm_substream *substream,
 			return -EFAULT;
 		}
 
-		if (q6_param.effect_type == 0) { 
+		if (q6_param.effect_type == 0) { /* POPP */
 			if (!prtd->audio_client) {
 				pr_debug("%s: audio_client not found\n",
 					__func__);
@@ -604,7 +616,7 @@ static int msm_pcm_ioctl(struct snd_pcm_substream *substream,
 						payload);
 			pr_info("%s: call q6asm_enable_effect, rc %d\n",
 				__func__, rc);
-		} else { 
+		} else { /* COPP */
 			int port_id = msm_pcm_routing_get_port(substream);
 			int index = afe_get_port_index(port_id);
 			pr_info("%s: use copp topology, port id %d, index %d\n",

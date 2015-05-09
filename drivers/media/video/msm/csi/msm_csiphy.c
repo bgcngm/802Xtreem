@@ -25,6 +25,7 @@
 
 #define V4L2_IDENT_CSIPHY                        50003
 
+/*MIPI CSI PHY registers*/
 #define MIPI_CSIPHY_LNn_CFG1_ADDR                0x0
 #define MIPI_CSIPHY_LNn_CFG2_ADDR                0x4
 #define MIPI_CSIPHY_LNn_CFG3_ADDR                0x8
@@ -104,7 +105,7 @@ int msm_csiphy_config(struct csiphy_cfg_params *cfg_params)
 	msm_io_w(0x24,
 		csiphybase + MIPI_CSIPHY_INTERRUPT_CLEAR0_ADDR);
 
-	
+	//msm_csi_io_dump(csiphybase, 0x200);
 	return rc;
 }
 
@@ -188,7 +189,7 @@ static int msm_csiphy_init(struct v4l2_subdev *sd)
 		&csiphy_dev->csi_vdd, 1);
 	if (rc < 0) {
 		pr_err("%s: regulator on failed\n", __func__);
-		
+		//goto vreg_config_failed;
 	}
 
 	rc = msm_camera_enable_vreg(&csiphy_dev->pdev->dev,
@@ -196,7 +197,7 @@ static int msm_csiphy_init(struct v4l2_subdev *sd)
 		&csiphy_dev->csi_vdd, 1);
 	if (rc < 0) {
 		pr_err("%s: regulator enable failed\n", __func__);
-		
+		//goto vreg_enable_failed;
 	}
 
 	rc = msm_cam_clk_enable(&csiphy_dev->pdev->dev, csiphy_clk_info,
@@ -233,7 +234,7 @@ static int msm_csiphy_release(struct v4l2_subdev *sd)
 	disable_irq(csiphy_dev->irq->start);
 #endif
 
-	
+	//msm_csi_io_dump(csiphy_dev->base, 0x200);
 
 	pr_info("%s MIPI_CSIPHY_GLBL_PWR_CFG_ADDR=0x%x",
 		__func__, msm_io_r(csiphy_dev->base + MIPI_CSIPHY_GLBL_PWR_CFG_ADDR));

@@ -13,6 +13,7 @@
 #ifndef _ARCH_ARM_MACH_KGSL_H
 #define _ARCH_ARM_MACH_KGSL_H
 
+/* Clock flags to show which clocks should be controled by a given platform */
 #define KGSL_CLK_SRC	0x00000001
 #define KGSL_CLK_CORE	0x00000002
 #define KGSL_CLK_IFACE	0x00000004

@@ -2232,7 +2232,7 @@ static void msm_hs_shutdown(struct uart_port *uport)
 		irq_set_irq_wake(msm_uport->wakeup.irq, 0);
 	spin_unlock_irqrestore(&uport->lock, flags);
 
-	BUG_ON(msm_uport->rx.flush < FLUSH_STOP);
+	WARN_ON(msm_uport->rx.flush < FLUSH_STOP);
 	tasklet_kill(&msm_uport->tx.tlet);
 #if 1 
 	wait_event_timeout(msm_uport->rx.wait, msm_uport->rx.flush == FLUSH_SHUTDOWN,

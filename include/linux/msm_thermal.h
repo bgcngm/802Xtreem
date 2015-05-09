@@ -31,4 +31,4 @@ static inline int msm_thermal_init(struct msm_thermal_data *pdata)
 }
 #endif
 
-#endif 
+#endif /*__MSM_THERMAL_H*/

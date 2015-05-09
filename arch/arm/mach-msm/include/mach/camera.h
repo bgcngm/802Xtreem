@@ -69,36 +69,36 @@ enum vfe_mode_of_operation{
 };
 
 enum msm_queue {
-	MSM_CAM_Q_CTRL,     
-	MSM_CAM_Q_VFE_EVT,  
-	MSM_CAM_Q_VFE_MSG,  
-	MSM_CAM_Q_V4L2_REQ, 
-	MSM_CAM_Q_VPE_MSG,  
-	MSM_CAM_Q_PP_MSG,  
+	MSM_CAM_Q_CTRL,     /* control command or control command status */
+	MSM_CAM_Q_VFE_EVT,  /* adsp event */
+	MSM_CAM_Q_VFE_MSG,  /* adsp message */
+	MSM_CAM_Q_V4L2_REQ, /* v4l2 request */
+	MSM_CAM_Q_VPE_MSG,  /* vpe message */
+	MSM_CAM_Q_PP_MSG,  /* pp message */
 };
 
 enum vfe_resp_msg {
 	VFE_EVENT,
 	VFE_MSG_GENERAL,
 	VFE_MSG_SNAPSHOT,
-	VFE_MSG_OUTPUT_P,   
-	VFE_MSG_OUTPUT_T,   
-	VFE_MSG_OUTPUT_S,   
-	VFE_MSG_OUTPUT_V,   
+	VFE_MSG_OUTPUT_P,   /* preview (continuous mode ) */
+	VFE_MSG_OUTPUT_T,   /* thumbnail (snapshot mode )*/
+	VFE_MSG_OUTPUT_S,   /* main image (snapshot mode )*/
+	VFE_MSG_OUTPUT_V,   /* video   (continuous mode ) */
 	VFE_MSG_STATS_AEC,
 	VFE_MSG_STATS_AF,
 	VFE_MSG_STATS_AWB,
-	VFE_MSG_STATS_RS, 
+	VFE_MSG_STATS_RS, /* 10 */
 	VFE_MSG_STATS_CS,
 	VFE_MSG_STATS_IHIST,
 	VFE_MSG_STATS_SKIN,
-	VFE_MSG_STATS_WE, 
+	VFE_MSG_STATS_WE, /* AEC + AWB */
 	VFE_MSG_SYNC_TIMER0,
 	VFE_MSG_SYNC_TIMER1,
 	VFE_MSG_SYNC_TIMER2,
 	VFE_MSG_COMMON,
 	VFE_MSG_V32_START,
-	VFE_MSG_V32_START_RECORDING, 
+	VFE_MSG_V32_START_RECORDING, /* 20 */
 	VFE_MSG_V32_CAPTURE,
 	VFE_MSG_V32_JPEG_CAPTURE,
 	VFE_MSG_OUTPUT_IRQ,
@@ -111,7 +111,7 @@ enum vfe_resp_msg {
 
 enum vpe_resp_msg {
 	VPE_MSG_GENERAL,
-	VPE_MSG_OUTPUT_V,   
+	VPE_MSG_OUTPUT_V,   /* video   (continuous mode ) */
 	VPE_MSG_OUTPUT_ST_L,
 	VPE_MSG_OUTPUT_ST_R,
 };
@@ -173,7 +173,7 @@ struct msm_vpe_phy_info {
 	uint32_t p0_phy;
 	uint32_t p1_phy;
 	uint32_t p2_phy;
-	uint8_t  output_id; 
+	uint8_t  output_id; /* VFE31_OUTPUT_MODE_PT/S/V */
 	uint32_t frame_id;
 };
 
@@ -234,7 +234,7 @@ struct msm_vfe_phy_info {
 	uint32_t p0_phy;
 	uint32_t p1_phy;
 	uint32_t p2_phy;
-	uint8_t  output_id; 
+	uint8_t  output_id; /* VFE31_OUTPUT_MODE_PT/S/V */
 	uint32_t frame_id;
 };
 
@@ -354,19 +354,21 @@ struct msm_actuator_ctrl {
 	int (*a_power_down)(void *);
 	int (*a_create_subdevice)(void *, void *);
 	int (*a_config)(void __user *);
+/* HTC_START Horng 20121105 - OIS MODE */
 	int is_ois_supported;
-	int is_cal_supported; 
+/* HTC_END */
+	int is_cal_supported; // HTC pg 20130225 vcm cal
 	int small_step_damping;
 	int medium_step_damping;
 	int big_step_damping;
 	int is_af_infinity_supported;
-	
+	/* HTC_START - for HW VCM work-around */
 	void (*do_vcm_on_cb)(void);
 	void (*do_vcm_off_cb)(void);
 	void (*actuator_poweroff_af)(void);
-	struct mutex *actrl_vcm_on_mut; 
+	struct mutex *actrl_vcm_on_mut; /* mutex of protecting power on/off */
 	enum cam_vcm_onoff_type *actrl_vcm_wa_camera_on;
-	
+	/* HTC_END */
 };
 
 struct msm_strobe_flash_ctrl {
@@ -377,6 +379,7 @@ struct msm_strobe_flash_ctrl {
 	int (*strobe_flash_charge)(int32_t, int32_t, uint32_t);
 };
 
+/* this structure is used in kernel */
 struct msm_queue_cmd {
 	struct list_head list_config;
 	struct list_head list_control;
@@ -406,17 +409,32 @@ struct msm_mctl_stats_t {
 };
 
 struct msm_sync {
+	/* These two queues are accessed from a process context only
+	 * They contain pmem descriptors for the preview frames and the stats
+	 * coming from the camera sensor.
+	*/
 	struct hlist_head pmem_frames;
 	struct hlist_head pmem_stats;
 
+	/* The message queue is used by the control thread to send commands
+	 * to the config thread, and also by the DSP to send messages to the
+	 * config thread.  Thus it is the only queue that is accessed from
+	 * both interrupt and process context.
+	 */
 	struct msm_device_queue event_q;
 
+	/* This queue contains preview frames. It is accessed by the DSP (in
+	 * in interrupt context, and by the frame thread.
+	 */
 	struct msm_device_queue frame_q;
 	int unblock_poll_frame;
 	int unblock_poll_pic_frame;
 
 
 
+	/* This queue contains snapshot frames.  It is accessed by the DSP (in
+	 * interrupt context, and by the control thread.
+	 */
 	struct msm_device_queue pict_q;
 	int get_pic_abort;
 	struct msm_device_queue vpe_q;
@@ -472,20 +490,26 @@ struct msm_sync {
 #define MSM_APPS_ID_PROP "msm_qct"
 
 struct msm_cam_device {
-	struct msm_sync *sync; 
+	struct msm_sync *sync; /* most-frequently accessed */
 	struct device *device;
 	struct cdev cdev;
+	/* opened is meaningful only for the config and frame nodes,
+	 * which may be opened only once.
+	 */
 	atomic_t opened;
 };
 
 struct msm_control_device {
 	struct msm_cam_device *pmsm;
 
-	
+	/* Used for MSM_CAM_IOCTL_CTRL_CMD_DONE responses */
 	uint8_t ctrl_data[max_control_command_size];
 	struct msm_ctrl_cmd ctrl;
 	struct msm_queue_cmd qcmd;
 
+	/* This queue used by the config thread to send responses back to the
+	 * control thread.  It is accessed only from a process context.
+	 */
 	struct msm_device_queue ctrl_q;
 };
 
@@ -587,7 +611,7 @@ enum msm_camio_clk_type {
 	CAMIO_CSI1_PHY_CLK,
 	CAMIO_CSIPHY_TIMER_SRC_CLK,
 	CAMIO_IMEM_CLK,
-	CAMIO_CAM_RAWCHIP_MCLK_CLK, 
+	CAMIO_CAM_RAWCHIP_MCLK_CLK, /* HTC add for camera rawchip mclk */
 
 	CAMIO_MAX_CLK
 };
@@ -612,13 +636,13 @@ enum msm_s_resolution {
 };
 
 enum msm_s_reg_update {
-	
+	/* Sensor egisters that need to be updated during initialization */
 	S_REG_INIT,
-	
+	/* Sensor egisters that needs periodic I2C writes */
 	S_UPDATE_PERIODIC,
-	
+	/* All the sensor Registers will be updated */
 	S_UPDATE_ALL,
-	
+	/* Not valid update */
 	S_UPDATE_INVALID
 };
 
@@ -648,6 +672,7 @@ int msm_camio_enable(struct platform_device *dev);
 int msm_camio_vpe_clk_enable(uint32_t);
 int msm_camio_vpe_clk_disable(void);
 
+//void msm_camio_mode_config(enum msm_camera_i2c_mux_mode mode);
 int  msm_camio_clk_enable(struct msm_camera_sensor_info* sinfo,enum msm_camio_clk_type clk);
 int  msm_camio_clk_disable(struct msm_camera_sensor_info* sinfo,enum msm_camio_clk_type clk);
 int  msm_camio_clk_config(uint32_t freq);
@@ -662,12 +687,16 @@ void msm_camio_camif_pad_reg_reset_2(void);
 
 void msm_camio_vfe_blk_reset(void);
 
+//int32_t msm_camio_3d_enable(const struct msm_camera_sensor_info *sinfo);
+//void msm_camio_3d_disable(void);
 void msm_camio_clk_sel(enum msm_camio_clk_src_type);
 void msm_camio_disable(struct platform_device *);
-int msm_camio_probe_on(void *s_info);
-int msm_camio_probe_off(void *s_info);
+int msm_camio_probe_on(void *s_info);//(struct platform_device *);
+int msm_camio_probe_off(void *s_info);//(struct platform_device *);
+//HTC_START steven 20120619 fix display dark screen on bootup stage
 int msm_camio_probe_on_bootup(void *s_info);
 int msm_camio_probe_off_bootup(void *s_info);
+//HTC_END steven 20120619 fix display dark screen on bootup stage
 int msm_camio_sensor_clk_off(struct platform_device *);
 int msm_camio_sensor_clk_on(struct platform_device *);
 int msm_camio_csi_config(struct msm_camera_csi_params *csi_params);

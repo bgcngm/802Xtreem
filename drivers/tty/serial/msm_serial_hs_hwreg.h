@@ -59,6 +59,7 @@ enum msm_hsl_regs {
 #define UARTDM_MR1_ADDR 0x0
 #define UARTDM_MR2_ADDR 0x4
 
+/* write only register */
 #define UARTDM_CSR_ADDR    0x8
 #define UARTDM_CSR_115200 0xFF
 #define UARTDM_CSR_57600  0xEE
@@ -77,12 +78,15 @@ enum msm_hsl_regs {
 #define UARTDM_CSR_150    0x11
 #define UARTDM_CSR_75     0x00
 
+/* write only register */
 #define UARTDM_TF_ADDR 0x70
 #define UARTDM_TF2_ADDR 0x74
 #define UARTDM_TF3_ADDR 0x78
 #define UARTDM_TF4_ADDR 0x7C
 
+/* write only register */
 #define UARTDM_CR_ADDR 0x10
+/* write only register */
 #define UARTDM_IMR_ADDR 0x14
 
 #define UARTDM_IPR_ADDR 0x18
@@ -93,27 +97,33 @@ enum msm_hsl_regs {
 #define UARTDM_IRDA_ADDR 0x38
 #define UARTDM_DMEN_ADDR 0x3c
 
+/* UART_DM_NO_CHARS_FOR_TX */
 #define UARTDM_NCF_TX_ADDR 0x40
 
 #define UARTDM_BADR_ADDR 0x44
 
 #define UARTDM_SIM_CFG_ADDR 0x80
 
+/* Read Only register */
 #define UARTDM_SR_ADDR 0x8
 
+/* Read Only register */
 #define UARTDM_RF_ADDR  0x70
 #define UARTDM_RF2_ADDR 0x74
 #define UARTDM_RF3_ADDR 0x78
 #define UARTDM_RF4_ADDR 0x7C
 
+/* Read Only register */
 #define UARTDM_MISR_ADDR 0x10
 
+/* Read Only register */
 #define UARTDM_ISR_ADDR 0x14
 #define UARTDM_RX_TOTAL_SNAP_ADDR 0x38
 
 #define UARTDM_TXFS_ADDR 0x4C
 #define UARTDM_RXFS_ADDR 0x50
 
+/* Register field Mask Mapping */
 #define UARTDM_SR_RX_BREAK_BMSK	        BIT(6)
 #define UARTDM_SR_PAR_FRAME_BMSK	BIT(5)
 #define UARTDM_SR_OVERRUN_BMSK		BIT(4)
@@ -126,6 +136,7 @@ enum msm_hsl_regs {
 #define UARTDM_CR_TX_EN_BMSK		BIT(2)
 #define UARTDM_CR_RX_EN_BMSK		BIT(0)
 
+/* UARTDM_CR channel_comman bit value (register field is bits 8:4) */
 #define RESET_RX		0x10
 #define RESET_TX		0x20
 #define RESET_ERROR_STATUS	0x30
@@ -158,6 +169,7 @@ enum msm_hsl_regs {
 
 #define UARTDM_MR2_BITS_PER_CHAR_8	(0x3 << 4)
 
+/* bits per character configuration */
 #define FIVE_BPC  (0 << 4)
 #define SIX_BPC   (1 << 4)
 #define SEVEN_BPC (2 << 4)
@@ -169,6 +181,7 @@ enum msm_hsl_regs {
 
 #define UARTDM_MR2_PARITY_MODE_BMSK 0x3
 
+/* Parity configuration */
 #define NO_PARITY 0x0
 #define EVEN_PARITY 0x1
 #define ODD_PARITY 0x2
@@ -177,6 +190,7 @@ enum msm_hsl_regs {
 #define UARTDM_IPR_STALE_TIMEOUT_MSB_BMSK 0xffffff80
 #define UARTDM_IPR_STALE_LSB_BMSK 0x1f
 
+/* These can be used for both ISR and IMR register */
 #define UARTDM_ISR_TX_READY_BMSK	BIT(7)
 #define UARTDM_ISR_CURRENT_CTS_BMSK	BIT(6)
 #define UARTDM_ISR_DELTA_CTS_BMSK	BIT(5)
@@ -186,7 +200,8 @@ enum msm_hsl_regs {
 #define UARTDM_ISR_RXHUNT_BMSK		BIT(1)
 #define UARTDM_ISR_TXLEV_BMSK		BIT(0)
 
+/* Field definitions for UART_DM_DMEN*/
 #define UARTDM_TX_DM_EN_BMSK 0x1
 #define UARTDM_RX_DM_EN_BMSK 0x2
 
-#endif 
+#endif /* MSM_SERIAL_HS_HWREG_H */

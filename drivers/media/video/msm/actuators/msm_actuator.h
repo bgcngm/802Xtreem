@@ -65,11 +65,17 @@ struct msm_actuator_func_tbl {
 			struct damping_params_t *,
 			int8_t,
 			int16_t);
+/* HTC_START Horng 20121105 - OIS MODE */
 	int32_t (*actuator_set_ois_mode) (struct msm_actuator_ctrl_t *, int);
+/* HTC_END */
+/* HTC_START Robert 20121126 - update OIS table */
 	int32_t (*actuator_update_ois_tbl) (struct msm_actuator_ctrl_t *, struct sensor_actuator_info_t *);
+/* HTC_END */
 	int32_t (*actuator_set_af_value) (struct msm_actuator_ctrl_t *, af_value_t);
+/* HTC_START Horng 20130118 - OIS calibration */
 	int32_t (*actuator_set_ois_calibration) (struct msm_actuator_ctrl_t *, struct msm_actuator_get_ois_cal_info_t *);
-    int32_t (*actuator_do_cal)(struct msm_actuator_ctrl_t *, struct msm_actuator_get_vcm_cal_info_t *); 
+/* HTC_END */
+    int32_t (*actuator_do_cal)(struct msm_actuator_ctrl_t *, struct msm_actuator_get_vcm_cal_info_t *); // HTC pg 20130225 vcm cal
 
 };
 
@@ -97,9 +103,9 @@ struct msm_actuator_ctrl_t {
 	void *user_data;
 	uint32_t vcm_pwd;
 	uint32_t vcm_enable;
-	af_algo_t af_algo; 
-	int ois_ready_version; 
-	uint8_t ois_mfgtest_in_progress; 
+	af_algo_t af_algo; // HTC 20121004
+	int ois_ready_version; // HTC 20121204
+	uint8_t ois_mfgtest_in_progress; // HTC joey 20130106 - ois mfg test
 	uint8_t enable_focus_step_log;
 	struct msm_actuator_get_ois_info_t get_ois_info;
 	struct msm_actuator_get_ois_tbl_t get_ois_tbl;
@@ -111,7 +117,7 @@ int32_t msm_actuator_i2c_write_b_af(struct msm_actuator_ctrl_t *a_ctrl,
 		uint8_t lsb);
 int32_t msm_actuator_config(struct msm_actuator_ctrl_t *a_ctrl,
 		struct msm_actuator_info *board_info,
-		void __user *cfg_data); 
+		void __user *cfg_data); /* HTC Angie 20111212 - Rawchip */
 int32_t msm_actuator_move_focus(struct msm_actuator_ctrl_t *a_ctrl,
 		int direction,
 		int32_t num_steps);

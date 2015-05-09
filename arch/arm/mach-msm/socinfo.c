@@ -10,6 +10,10 @@
  * GNU General Public License for more details.
  *
  */
+/*
+ * SOC Info Routines
+ *
+ */
 
 #include <linux/types.h>
 #include <linux/sysdev.h>
@@ -29,7 +33,7 @@ enum {
 	HW_PLATFORM_SVLTE_SURF	= 5,
 	HW_PLATFORM_MTP  = 8,
 	HW_PLATFORM_LIQUID  = 9,
-	
+	/* Dragonboard platform id is assigned as 10 in CDT */
 	HW_PLATFORM_DRAGON	= 10,
 	HW_PLATFORM_QRD = 11,
 	HW_PLATFORM_INVALID
@@ -68,6 +72,7 @@ const char *hw_platform_subtype[] = {
 	[PLATFORM_SUBTYPE_STRANGE_2A] = "strange_2a,"
 };
 
+/* Used to parse shared memory.  Must match the modem. */
 struct socinfo_v1 {
 	uint32_t format;
 	uint32_t id;
@@ -78,7 +83,7 @@ struct socinfo_v1 {
 struct socinfo_v2 {
 	struct socinfo_v1 v1;
 
-	
+	/* only valid when format==2 */
 	uint32_t raw_id;
 	uint32_t raw_version;
 };
@@ -86,35 +91,35 @@ struct socinfo_v2 {
 struct socinfo_v3 {
 	struct socinfo_v2 v2;
 
-	
+	/* only valid when format==3 */
 	uint32_t hw_platform;
 };
 
 struct socinfo_v4 {
 	struct socinfo_v3 v3;
 
-	
+	/* only valid when format==4 */
 	uint32_t platform_version;
 };
 
 struct socinfo_v5 {
 	struct socinfo_v4 v4;
 
-	
+	/* only valid when format==5 */
 	uint32_t accessory_chip;
 };
 
 struct socinfo_v6 {
 	struct socinfo_v5 v5;
 
-	
+	/* only valid when format==6 */
 	uint32_t hw_platform_subtype;
 };
 
 struct socinfo_v7 {
 	struct socinfo_v6 v6;
 
-	
+	/* only valid when format==7 */
 	uint32_t pmic_model;
 	uint32_t pmic_die_revision;
 };
@@ -131,7 +136,7 @@ static union {
 
 static enum msm_cpu cpu_of_id[] = {
 
-	
+	/* 7x01 IDs */
 	[1]  = MSM_CPU_7X01,
 	[16] = MSM_CPU_7X01,
 	[17] = MSM_CPU_7X01,
@@ -145,135 +150,138 @@ static enum msm_cpu cpu_of_id[] = {
 	[34] = MSM_CPU_7X01,
 	[35] = MSM_CPU_7X01,
 
-	
+	/* 7x25 IDs */
 	[20] = MSM_CPU_7X25,
-	[21] = MSM_CPU_7X25, 
-	[24] = MSM_CPU_7X25, 
-	[27] = MSM_CPU_7X25, 
+	[21] = MSM_CPU_7X25, /* 7225 */
+	[24] = MSM_CPU_7X25, /* 7525 */
+	[27] = MSM_CPU_7X25, /* 7625 */
 	[39] = MSM_CPU_7X25,
 	[40] = MSM_CPU_7X25,
 	[41] = MSM_CPU_7X25,
 	[42] = MSM_CPU_7X25,
-	[62] = MSM_CPU_7X25, 
-	[63] = MSM_CPU_7X25, 
-	[66] = MSM_CPU_7X25, 
+	[62] = MSM_CPU_7X25, /* 7625-1 */
+	[63] = MSM_CPU_7X25, /* 7225-1 */
+	[66] = MSM_CPU_7X25, /* 7225-2 */
 
 
-	
+	/* 7x27 IDs */
 	[43] = MSM_CPU_7X27,
 	[44] = MSM_CPU_7X27,
 	[61] = MSM_CPU_7X27,
-	[67] = MSM_CPU_7X27, 
-	[68] = MSM_CPU_7X27, 
-	[69] = MSM_CPU_7X27, 
+	[67] = MSM_CPU_7X27, /* 7227-1 */
+	[68] = MSM_CPU_7X27, /* 7627-1 */
+	[69] = MSM_CPU_7X27, /* 7627-2 */
 
 
-	
+	/* 8x50 IDs */
 	[30] = MSM_CPU_8X50,
 	[36] = MSM_CPU_8X50,
 	[37] = MSM_CPU_8X50,
 	[38] = MSM_CPU_8X50,
 
-	
+	/* 7x30 IDs */
 	[59] = MSM_CPU_7X30,
 	[60] = MSM_CPU_7X30,
 
-	
+	/* 8x55 IDs */
 	[74] = MSM_CPU_8X55,
 	[75] = MSM_CPU_8X55,
 	[85] = MSM_CPU_8X55,
 
-	
+	/* 8x60 IDs */
 	[70] = MSM_CPU_8X60,
 	[71] = MSM_CPU_8X60,
 	[86] = MSM_CPU_8X60,
 
-	
+	/* 8960 IDs */
 	[87] = MSM_CPU_8960,
 
-	
+	/* 7x25A IDs */
 	[88] = MSM_CPU_7X25A,
 	[89] = MSM_CPU_7X25A,
 	[96] = MSM_CPU_7X25A,
 
-	
+	/* 7x27A IDs */
 	[90] = MSM_CPU_7X27A,
 	[91] = MSM_CPU_7X27A,
 	[92] = MSM_CPU_7X27A,
 	[97] = MSM_CPU_7X27A,
 
-	
+	/* FSM9xxx ID */
 	[94] = FSM_CPU_9XXX,
 	[95] = FSM_CPU_9XXX,
 
-	
+	/*  7x25AA ID */
 	[98] = MSM_CPU_7X25AA,
 	[99] = MSM_CPU_7X25AA,
 	[100] = MSM_CPU_7X25AA,
 
-	
+	/*  7x27AA ID */
 	[101] = MSM_CPU_7X27AA,
 	[102] = MSM_CPU_7X27AA,
 	[103] = MSM_CPU_7X27AA,
 	[136] = MSM_CPU_7X27AA,
 
-	
+	/* 9x15 ID */
 	[104] = MSM_CPU_9615,
 	[105] = MSM_CPU_9615,
 	[106] = MSM_CPU_9615,
 	[107] = MSM_CPU_9615,
 
-	
+	/* 8064 IDs */
 	[109] = MSM_CPU_8064,
 
-	
+	/* 8930 IDs */
 	[116] = MSM_CPU_8930,
 	[117] = MSM_CPU_8930,
 	[118] = MSM_CPU_8930,
 	[119] = MSM_CPU_8930,
 
-	
+	/* 8627 IDs */
 	[120] = MSM_CPU_8627,
 	[121] = MSM_CPU_8627,
 
-	
+	/* 8660A ID */
 	[122] = MSM_CPU_8960,
 
-	
+	/* 8260A ID */
 	[123] = MSM_CPU_8960,
 
-	
+	/* 8060A ID */
 	[124] = MSM_CPU_8960,
 
-	
+	/* 8974 IDs */
 	[126] = MSM_CPU_8974,
 
-	
+	/* 8625 IDs */
 	[127] = MSM_CPU_8625,
 	[128] = MSM_CPU_8625,
 	[129] = MSM_CPU_8625,
 	[137] = MSM_CPU_8625,
 
-	
+	/* 8064 MPQ ID */
 	[130] = MSM_CPU_8064,
 
-	
+	/* 7x25AB IDs */
 	[131] = MSM_CPU_7X25AB,
 	[132] = MSM_CPU_7X25AB,
 	[133] = MSM_CPU_7X25AB,
 	[135] = MSM_CPU_7X25AB,
 
-	
+	/* 9625 IDs */
 	[134] = MSM_CPU_9625,
 
-	
+	/* 8930AA IDs */
 	[142] = MSM_CPU_8930AA,
 	[143] = MSM_CPU_8930AA,
 	[144] = MSM_CPU_8930AA,
 
-	
+	/* 8064AB IDs */
 	[153] = MSM_CPU_8064AB,
 
+	/* Uninitialized IDs are not known to run Linux.
+	   MSM_CPU_UNKNOWN is set to 0 to ensure these IDs are
+	   considered as unknown CPU. */
 };
 
 static enum msm_cpu cur_cpu;
@@ -328,6 +336,8 @@ uint32_t socinfo_get_platform_version(void)
 		: 0;
 }
 
+/* This information is directly encoded by the machine id */
+/* Thus no external callers rely on this information at the moment */
 static uint32_t socinfo_get_accessory_chip(void)
 {
 	return socinfo ?
@@ -842,7 +852,7 @@ const int get_core_count(void)
 		!machine_is_apq8064_sim())
 		return 1;
 
-	
+	/* 1 + the PART[1:0] field of MIDR */
 	return ((read_cpuid_id() >> 4) & 3) + 1;
 }
 
@@ -867,7 +877,7 @@ const int read_msm_cpu_type(void)
 	case 0x512F04D0:
 		return MSM_CPU_8960;
 
-	case 0x51404D11: 
+	case 0x51404D11: /* We can't get here unless we are in bringup */
 		return MSM_CPU_8930;
 
 	case 0x510F06F0:

@@ -43,6 +43,9 @@
 #define BAYER_FOCUS_BUF_SIZE 		(18 * 14 * 10 * 4)
 #define SW_FOCUS_BUF_SIZE 			32*1024
 
+/*
+ * This function executes in interrupt context.
+ */
 
 void *msm_isp_sync_alloc(int size,
 	  gfp_t gfp)
@@ -170,7 +173,7 @@ static int msm_isp_notify_VFE_BUF_EVT
 		msm_isp_sync_free(vdata);
 		return rc;
 	}
-	
+	/* Convert the vfe msg to the image mode */
 	image_mode = msm_isp_vfe_msg_to_img_mode(pmctl, vfe_id);
 	BUG_ON(image_mode < 0);
 	switch (vdata->type) {
@@ -208,7 +211,7 @@ static int msm_isp_notify_VFE_BUF_EVT
 		temp_free_buf = free_buf;
 		if (msm_mctl_reserve_free_buf(pmctl, NULL,
 					image_mode, &free_buf)) {
-			
+			/* Write the same buffer into PONG */
 			free_buf = temp_free_buf;
 		}
 		cfgcmd.cmd_type = CMD_CONFIG_PONG_ADDR;
@@ -230,7 +233,7 @@ static int msm_isp_notify_VFE_BUF_EVT
 		D("%s:VFE_MSG_V32_JPEG_CAPTURE y_ping=%x cbcr_ping=%x\n",
 			__func__, free_buf.ch_paddr[0], free_buf.ch_paddr[1]);
 		rc = v4l2_subdev_call(sd, core, ioctl, 0, &vfe_params);
-		
+		/* Write the same buffer into PONG */
 		free_buf.ch_paddr[0] = pmctl->pong_imem_y;
 		free_buf.ch_paddr[1] = pmctl->pong_imem_cbcr;
 		cfgcmd.cmd_type = CMD_CONFIG_PONG_ADDR;
@@ -259,6 +262,10 @@ static int msm_isp_notify_VFE_BUF_EVT
 	return rc;
 }
 
+/* HTC_START */
+/*
+ * This function enables/disables dropframe mode
+ */
 static int msm_enable_dropframe(struct v4l2_subdev *sd,
 			struct msm_cam_media_controller *pmctl, void __user *arg)
 {
@@ -271,7 +278,7 @@ static int msm_enable_dropframe(struct v4l2_subdev *sd,
 		atomic_set(&pmctl->dropframe_enabled, dropframe_enabled);
 		pr_info("%s: set dropframe_enabled %d", __func__, atomic_read(&pmctl->dropframe_enabled));
 
-		
+		/* reset dropframe_num if dropframe is disabled */
 		if (!dropframe_enabled)
 			atomic_set(&pmctl->snap_dropframe_num, 0);
 	}
@@ -279,6 +286,9 @@ static int msm_enable_dropframe(struct v4l2_subdev *sd,
 	return 0;
 }
 
+/*
+ * This function sets number of snapshot frames to drop
+ */
 static int msm_set_dropframe_num(struct v4l2_subdev *sd,
 			struct msm_cam_media_controller *pmctl, void __user *arg)
 {
@@ -295,6 +305,9 @@ static int msm_set_dropframe_num(struct v4l2_subdev *sd,
 	return 0;
 }
 
+/*
+ * This function decides whether to drop frame or not
+ */
 static int msm_isp_should_drop_frame(struct msm_cam_media_controller *pmctl, uint8_t msgid)
 {
 	int drop_frame = 0;
@@ -305,11 +318,17 @@ static int msm_isp_should_drop_frame(struct msm_cam_media_controller *pmctl, uin
 			atomic_set(&pmctl->snap_dropframe, 0);
 
 			if (atomic_read(&pmctl->dropframe_enabled)) {
-				if (atomic_read(&pmctl->snap_dropframe_num) == 0) { 
+				/*
+				 * sync->snap_dropframe_num -
+				 *	= 0 : no drop
+				 *	> 0 : drop frame count
+				 *	= -1 : drop all frames
+				 */
+				if (atomic_read(&pmctl->snap_dropframe_num) == 0) { /* no drop -> drop all frames*/
 					atomic_sub(1, &pmctl->snap_dropframe_num);
-				} else { 
+				} else { /* drop frames */
 					atomic_set(&pmctl->snap_dropframe, 1);
-					
+					/* countdown snap_dropframe_num */
 					if (atomic_read(&pmctl->snap_dropframe_num) > 0)
 						atomic_sub(1, &pmctl->snap_dropframe_num);
 					drop_frame = 1;
@@ -319,7 +338,7 @@ static int msm_isp_should_drop_frame(struct msm_cam_media_controller *pmctl, uin
 		break;
 	case VFE_MSG_OUTPUT_SECONDARY:
 		{
-			
+			/* drop this snapshot frame if its coupled thumbnail frame is dropped */
 			if (atomic_read(&pmctl->snap_dropframe))
 				drop_frame = 1;
 		}
@@ -337,7 +356,11 @@ static int msm_isp_should_drop_frame(struct msm_cam_media_controller *pmctl, uin
 
 	return drop_frame;
 }
+/* HTC_END */
 
+/*
+ * This function executes in interrupt context.
+ */
 static int msm_isp_notify_vfe(struct v4l2_subdev *sd,
 	unsigned int notification,  void *arg, uint32_t interface)
 {
@@ -398,6 +421,7 @@ static int msm_isp_notify_vfe(struct v4l2_subdev *sd,
 		isp_event->isp_data.isp_msg.msg_id = isp_msg->msg_id;
 		isp_event->isp_data.isp_msg.frame_id = isp_msg->sof_count;
         getnstimeofday(&(isp_event->isp_data.isp_msg.timestamp));
+/* HTC_START */
 		if(atomic_read(&pmctl->dropframe_enabled) &&
 			atomic_read(&pmctl->snap_dropframe_num) == 0 &&
 			isp_msg->msg_id == MSG_ID_SOF_ACK)
@@ -405,14 +429,15 @@ static int msm_isp_notify_vfe(struct v4l2_subdev *sd,
 			isp_event->isp_data.isp_msg.msg_id = MSG_ID_HDR_SOF_ACK;
 			pr_info("%s MSG_ID_HDR_SOF_ACK", __func__);
 		}
+/* HTC_END */
 
 		break;
 	}
 	case NOTIFY_VFE_MSG_OUT: {
-		
+		/* HTC_START (klockwork issue)*/
 		int8_t msgid;
-		
-		int image_mode; 
+		/* HTC_END */
+		int image_mode; /* HTC_START sungfeng 20120807 klocwork */
 		struct isp_msg_output *isp_output =
 				(struct isp_msg_output *)arg;
 		if (!isp_output) {
@@ -451,25 +476,29 @@ static int msm_isp_notify_vfe(struct v4l2_subdev *sd,
 		}
 
 		if (!rc) {
+/* HTC_START */
             if (msm_isp_should_drop_frame(pmctl, msgid)) {
                 msgid = msm_isp_vfe_msg_to_img_mode(pmctl, msgid);
-                
+                /* return dropped frame buffer to free_vq directly */
                 msm_mctl_return_free_buf(pmctl, msgid, &(isp_output->buf));
                 kfree(isp_event);
                 return rc;
             } else {
+/* HTC_END */
 			isp_event->isp_data.isp_msg.msg_id =
 				isp_output->output_id;
 			isp_event->isp_data.isp_msg.frame_id =
 				isp_output->frameCounter;
 			buf = isp_output->buf;
-			
-			image_mode  = msm_isp_vfe_msg_to_img_mode(pmctl, msgid);
-			BUG_ON(image_mode  < 0);
-			msm_mctl_buf_done(pmctl, image_mode ,
+			/* HTC_START sungfeng 20120807 klocwork */
+			image_mode /*msgid*/ = msm_isp_vfe_msg_to_img_mode(pmctl, msgid);
+			BUG_ON(image_mode /*msgid*/ < 0);
+			msm_mctl_buf_done(pmctl, image_mode /*msgid*/,
 				&buf, isp_output->frameCounter);
-			
+			/* HTC_END sungfeng 20120807 klocwork */
+/* HTC_START */
             }
+/* HTC_END */
 		}
 		}
 		break;
@@ -496,7 +525,7 @@ static int msm_isp_notify_vfe(struct v4l2_subdev *sd,
 		stats->cs.buff = msm_pmem_stats_ptov_lookup(pmctl,
 					stats->cs.buff, &(stats->cs.fd));
 		stats->skin.buff = msm_pmem_stats_ptov_lookup(pmctl,
-					stats->skin.buff, &(stats->skin.fd)); 
+					stats->skin.buff, &(stats->skin.fd)); //QCT - BAYER STATS
 
 		stats_buf = kmalloc(sizeof(struct msm_stats_buf), GFP_ATOMIC);
 		if (!stats_buf) {
@@ -523,11 +552,12 @@ static int msm_isp_notify_vfe(struct v4l2_subdev *sd,
 			isp_stats->frameCounter;
 #ifdef CONFIG_ARCH_MSM8X60
 		stats.frame_id = isp_stats->frameCounter;
-#endif 
+#endif //CONFIG_ARCH_MSM8X60
 		stats.buffer = msm_pmem_stats_ptov_lookup(pmctl,
 						isp_stats->buffer,
 						&(stats.fd));
 		switch (isp_stats->id) {
+//QCT - BAYER STATS - MB
 		case MSG_ID_STATS_AEC:
 		case MSG_ID_STATS_BG:
 			stats.aec.buff = stats.buffer;
@@ -590,6 +620,7 @@ static int msm_isp_notify_vfe(struct v4l2_subdev *sd,
 			stats.skin.buff = stats.buffer;
 			stats.skin.fd = stats.fd;
 			break;
+//QCT - BAYER STATS - MB
 		case MSG_ID_STATS_AWB_AEC:
 			break;
 		default:
@@ -668,10 +699,11 @@ static int msm_isp_notify(struct v4l2_subdev *sd,
 	return msm_isp_notify_vfe(sd, notification, arg, interface);
 }
 
+/* This function is called by open() function, so we need to init HW*/
 static int msm_isp_open(struct v4l2_subdev *sd,
 	struct msm_cam_media_controller *mctl)
 {
-	
+	/* init vfe and senor, register sync callbacks for init*/
 	int rc = 0;
 	D("%s\n", __func__);
 	if (!mctl) {
@@ -747,6 +779,7 @@ static int msm_config_vfe(struct v4l2_subdev *sd,
 	memset(&axi_data, 0, sizeof(axi_data));
 	CDBG("%s: cmd_type %d\n", __func__, cfgcmd.cmd_type);
 	switch (cfgcmd.cmd_type) {
+//QCT - BAYER STATS - MB
 	case CMD_STATS_BG_ENABLE:
 		axi_data.bufnum1 =
 			msm_pmem_region_lookup(
@@ -789,6 +822,7 @@ static int msm_config_vfe(struct v4l2_subdev *sd,
 		axi_data.region = &region[0];
 		return msm_isp_subdev_ioctl(sd, &cfgcmd,
 							&axi_data);
+//QCT - BAYER STATS - ME
 	case CMD_STATS_AF_ENABLE:
 		axi_data.bufnum1 =
 			msm_pmem_region_lookup(
@@ -922,6 +956,10 @@ static int msm_axi_config(struct v4l2_subdev *sd,
 	case CMD_AXI_START:
 	case CMD_AXI_STOP:
 	case CMD_AXI_CFG_TERT1:
+		/* Dont need to pass buffer information.
+		 * subdev will get the buffer from media
+		 * controller free queue.
+		 */
 		return msm_isp_subdev_ioctl(sd, &cfgcmd, NULL);
 
 	default:
@@ -967,12 +1005,14 @@ static int msm_put_stats_buffer(struct v4l2_subdev *sd,
 			cfgcmd.cmd_type = CMD_STATS_CS_BUF_RELEASE;
 		else if (buf.type == STAT_AEAW)
 			cfgcmd.cmd_type = CMD_STATS_BUF_RELEASE;
+//QCT - BAYER STATS - MB
 		else if (buf.type == STAT_BG)
 			cfgcmd.cmd_type = CMD_STATS_BG_BUF_RELEASE;
 		else if (buf.type == STAT_BF)
 			cfgcmd.cmd_type = CMD_STATS_BF_BUF_RELEASE;
 		else if (buf.type == STAT_BHIST)
 			cfgcmd.cmd_type = CMD_STATS_BHIST_BUF_RELEASE;
+//QCT - BAYER STATS - ME
 		else {
 			pr_err("%s: invalid buf type %d\n",
 				__func__,
@@ -993,6 +1033,7 @@ put_done:
 	return rc;
 }
 
+/* config function simliar to origanl msm_ioctl_config*/
 static int msm_isp_config(struct msm_cam_media_controller *pmctl,
 			 unsigned int cmd, unsigned long arg)
 {
@@ -1004,17 +1045,20 @@ static int msm_isp_config(struct msm_cam_media_controller *pmctl,
 	D("%s: cmd %d\n", __func__, _IOC_NR(cmd));
 	switch (cmd) {
 	case MSM_CAM_IOCTL_PICT_PP_DONE:
-		
+		/* Release the preview of snapshot frame
+		 * that was grabbed.
+		 */
+		/*rc = msm_pp_release(pmsm->sync, arg);*/
 		break;
 
 	case MSM_CAM_IOCTL_CONFIG_VFE:
-		
+		/* Coming from config thread for update */
 		rc = msm_config_vfe(sd, pmctl, argp);
 		break;
 
 	case MSM_CAM_IOCTL_CONFIG_VPE:
-		
-		
+		/* Coming from config thread for update */
+		/*rc = msm_config_vpe(pmsm->sync, argp);*/
 		rc = 0;
 		break;
 
@@ -1027,6 +1071,7 @@ static int msm_isp_config(struct msm_cam_media_controller *pmctl,
 		rc = msm_put_stats_buffer(sd, pmctl, argp);
 		break;
 
+/* HTC_START */
 	case MSM_CAM_IOCTL_ENABLE_DROP_FRAME :
 		rc = msm_enable_dropframe(sd, pmctl, argp);
 		break;
@@ -1034,6 +1079,7 @@ static int msm_isp_config(struct msm_cam_media_controller *pmctl,
 	case MSM_CAM_IOCTL_SET_DROP_FRAME_NUM :
 		rc = msm_set_dropframe_num(sd, pmctl, argp);
 		break;
+/* HTC_END */
 
 	default:
 		break;
@@ -1046,6 +1092,7 @@ static int msm_isp_config(struct msm_cam_media_controller *pmctl,
 
 static struct msm_isp_ops isp_subdev[MSM_MAX_CAMERA_CONFIGS];
 
+/**/
 int msm_isp_init_module(int g_num_config_nodes)
 {
 	int i = 0;
@@ -1060,6 +1107,8 @@ int msm_isp_init_module(int g_num_config_nodes)
 }
 EXPORT_SYMBOL(msm_isp_init_module);
 
+/*
+*/
 int msm_isp_register(struct msm_cam_server_dev *psvr)
 {
 	int i = 0;
@@ -1068,7 +1117,7 @@ int msm_isp_register(struct msm_cam_server_dev *psvr)
 
 	BUG_ON(!psvr);
 
-	
+	/* Initialize notify function for v4l2_dev */
 	for (i = 0; i < psvr->config_info.num_config_nodes; i++)
 		psvr->isp_subdev[i] = &(isp_subdev[i]);
 
@@ -1076,6 +1125,7 @@ int msm_isp_register(struct msm_cam_server_dev *psvr)
 }
 EXPORT_SYMBOL(msm_isp_register);
 
+/**/
 void msm_isp_unregister(struct msm_cam_server_dev *psvr)
 {
 	int i = 0;

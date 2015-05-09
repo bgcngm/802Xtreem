@@ -302,6 +302,7 @@ TRACE_EVENT(mm_page_alloc_extfrag,
 		__entry->alloc_migratetype == __entry->fallback_migratetype)
 );
 
-#endif 
+#endif /* _TRACE_KMEM_H */
 
+/* This part must be outside protection */
 #include <trace/define_trace.h>

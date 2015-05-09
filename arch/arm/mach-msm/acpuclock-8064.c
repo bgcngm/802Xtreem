@@ -99,13 +99,17 @@ static struct scalable scalable[] __initdata = {
 	},
 };
 
+/*
+ * The correct maximum rate for 8064ab in 600 MHZ.
+ * We rely on the RPM rounding requests up here.
+*/
 static struct msm_bus_paths bw_level_tbl[] __initdata = {
-	[0] =  BW_MBPS(640), 
-	[1] = BW_MBPS(1064), 
-	[2] = BW_MBPS(1600), 
-	[3] = BW_MBPS(2128), 
-	[4] = BW_MBPS(3200), 
-	[5] = BW_MBPS(4264), 
+	[0] =  BW_MBPS(640), /* At least  80 MHz on bus. */
+	[1] = BW_MBPS(1064), /* At least 133 MHz on bus. */
+	[2] = BW_MBPS(1600), /* At least 200 MHz on bus. */
+	[3] = BW_MBPS(2128), /* At least 266 MHz on bus. */
+	[4] = BW_MBPS(3200), /* At least 400 MHz on bus. */
+	[5] = BW_MBPS(4264), /* At least 533 MHz on bus. */
 };
 
 static struct msm_bus_scale_pdata bus_scale_data __initdata = {
@@ -534,11 +538,11 @@ static struct acpuclk_krait_params acpuclk_8064_params __initdata = {
 
 #ifdef CONFIG_PERFLOCK
 unsigned msm8064_perf_acpu_table[] = {
-	594000000, 
-	810000000, 
-	1026000000,
-	1134000000,
-	1512000000, 
+	594000000, /* LOWEST */
+	810000000, /* LOW */
+	1026000000,/* MEDIUM */
+	1134000000,/* HIGH */
+	1512000000, /* HIGHEST */
 };
 
 static struct perflock_data msm8064_floor_data = {
@@ -569,16 +573,16 @@ static void __init perftable_fix_up(void)
 {
 	uint32_t speed;
 	speed = msm_get_cpu_speed_bin();
-	
+	/*1.5G*/
 	if(speed == 0)
 		msm8064_perf_acpu_table[PERF_LOCK_HIGHEST] = 1512000000;
-	
+	/*1.7G*/
 	else if(speed == 1)
 		msm8064_perf_acpu_table[PERF_LOCK_HIGHEST] = 1566000000;
-	
+	/*2.0G*/
 	else if(speed == 2)
 		msm8064_perf_acpu_table[PERF_LOCK_HIGHEST] = 1566000000;
-	
+	/*others*/
 	else
 		msm8064_perf_acpu_table[PERF_LOCK_HIGHEST] = 1512000000;
 }

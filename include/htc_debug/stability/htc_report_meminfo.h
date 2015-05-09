@@ -30,7 +30,7 @@ void report_meminfo_item(struct seq_file *m, enum meminfo_stat_item item);
 
 void report_meminfo(struct seq_file *m, struct sysinfo *sysinfo);
 
-#else 
+#else /* CONFIG_HTC_DEBUG_REPORT_MEMINFO  */
 
 static inline void kmalloc_count(struct page *page, int to_alloc)
 {
@@ -69,6 +69,6 @@ static inline void report_meminfo(struct seq_file *m, struct sysinfo *sysinfo)
 {
 }
 
-#endif 
+#endif /* CONFIG_HTC_DEBUG_REPORT_MEMINFO */
 
-#endif 
+#endif /* _HTC_DEBUG_STABILITY_REPORT_MEMINFO */

@@ -37,6 +37,7 @@ int chk_polling_response(void);
 void diag_update_userspace_clients(unsigned int type);
 void diag_update_sleeping_process(int process_id, int data_type);
 void encode_rsp_and_send(int buf_length);
+/* State for diag forwarding */
 #ifdef CONFIG_DIAG_OVER_USB
 int diagfwd_connect(void);
 int diagfwd_disconnect(void);

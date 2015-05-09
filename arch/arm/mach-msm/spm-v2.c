@@ -84,6 +84,9 @@ static uint32_t msm_spm_reg_offsets_v2[MSM_SPM_REG_NR] = {
 	[MSM_SPM_REG_SAW2_VERSION]		= 0xFD0,
 };
 
+/******************************************************************************
+ * Internal helper functions
+ *****************************************************************************/
 
 static inline uint32_t msm_spm_drv_get_num_spm_entry(
 		struct msm_spm_driver_data *dev)
@@ -209,6 +212,9 @@ static inline uint32_t msm_spm_drv_get_saw2_ver(struct msm_spm_driver_data *dev,
 	return ret;
 }
 
+/******************************************************************************
+ * Public functions
+ *****************************************************************************/
 
 inline int msm_spm_drv_set_spm_enable(
 		struct msm_spm_driver_data *dev, bool enable)
@@ -283,6 +289,8 @@ int msm_spm_drv_set_low_power_mode(struct msm_spm_driver_data *dev,
 		uint32_t addr)
 {
 
+	/* SPM is configured to reset start address to zero after end of Program
+	 */
 	if (!dev)
 		return -EINVAL;
 
@@ -321,7 +329,7 @@ int msm_spm_drv_set_vdd(struct msm_spm_driver_data *dev, unsigned int vlevel)
 	msm_spm_drv_flush_shadow(dev, MSM_SPM_REG_SAW2_PMIC_DATA_1);
 	mb();
 
-	
+	/* Wait for PMIC state to return to idle or until timeout */
 	timeout_us = dev->vctl_timeout_us;
 	while (msm_spm_drv_get_sts_pmic_state(dev) != MSM_SPM_PMIC_STATE_IDLE) {
 		if (!timeout_us)
@@ -368,7 +376,7 @@ int msm_spm_drv_set_phase(struct msm_spm_driver_data *dev,
 	msm_spm_drv_flush_shadow(dev, MSM_SPM_REG_SAW2_VCTL);
 	mb();
 
-	
+	/* Wait for PMIC state to return to idle or until timeout */
 	timeout_us = dev->vctl_timeout_us;
 	while (msm_spm_drv_get_sts_pmic_state(dev) != MSM_SPM_PMIC_STATE_IDLE) {
 		if (!timeout_us)
@@ -433,12 +441,15 @@ int __devinit msm_spm_drv_init(struct msm_spm_driver_data *dev,
 
 	for (i = 0; i < MSM_SPM_REG_NR_INITIALIZE; i++)
 		msm_spm_drv_flush_shadow(dev, i);
+	/* barrier to ensure write completes before we update shadow
+	 * registers
+	 */
 	mb();
 
 	for (i = 0; i < MSM_SPM_REG_NR_INITIALIZE; i++)
 		msm_spm_drv_load_shadow(dev, i);
 
-	
+	/* barrier to ensure read completes before we proceed further*/
 	mb();
 
 	msm_spm_drv_get_saw2_ver(dev, &dev->major, &dev->minor);

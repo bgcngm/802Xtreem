@@ -682,7 +682,10 @@ int ieee80211_register_hw(struct ieee80211_hw *hw)
 		WLAN_CIPHER_SUITE_CCMP,
 
 		/* keep last -- depends on hw flags! */
-		WLAN_CIPHER_SUITE_AES_CMAC
+		WLAN_CIPHER_SUITE_AES_CMAC,
+/* WAPI */
+		WLAN_CIPHER_SUITE_SMS4
+/* WAPI */
 	};
 
 	if ((hw->wiphy->wowlan.flags || hw->wiphy->wowlan.n_patterns)

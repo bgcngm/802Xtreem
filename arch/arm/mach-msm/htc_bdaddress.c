@@ -18,6 +18,7 @@
 
 #define ATAG_BT_DEBUG
 
+/* configuration tags specific to Bluetooth*/
 #define ATAG_BLUETOOTH 0x43294329
 #define MAX_BT_SIZE 0x8U
 

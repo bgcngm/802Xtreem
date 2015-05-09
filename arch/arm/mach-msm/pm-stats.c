@@ -39,6 +39,9 @@ static DEFINE_SPINLOCK(msm_pm_stats_lock);
 static DEFINE_PER_CPU_SHARED_ALIGNED(
 	struct msm_pm_cpu_time_stats, msm_pm_stats);
 
+/*
+ * Add the given time data to the statistics collection.
+ */
 void msm_pm_add_stat(enum msm_pm_time_stats_id id, int64_t t)
 {
 	unsigned long flags;
@@ -79,6 +82,12 @@ add_bail:
 	spin_unlock_irqrestore(&msm_pm_stats_lock, flags);
 }
 
+/*
+ * Helper function of snprintf where buf is auto-incremented, size is auto-
+ * decremented, and there is no return value.
+ *
+ * NOTE: buf and size must be l-values (e.g. variables)
+ */
 #define SNPRINTF(buf, size, format, ...) \
 	do { \
 		if (size > 0) { \
@@ -94,6 +103,9 @@ add_bail:
 		} \
 	} while (0)
 
+/*
+ * Write out the power management statistics.
+ */
 static int msm_pm_read_proc
 	(char *page, char **start, off_t off, int count, int *eof, void *data)
 {
@@ -118,7 +130,7 @@ static int msm_pm_read_proc
 		spin_lock_irqsave(&msm_pm_stats_lock, flags);
 		stats = per_cpu(msm_pm_stats, cpu).stats;
 
-		
+		/* Skip the disabled ones */
 		if (!stats[id].enabled) {
 			*p = '\0';
 			p++;
@@ -166,6 +178,9 @@ again:
 
 #define MSM_PM_STATS_RESET "reset"
 
+/*
+ * Reset the power management statistics values.
+ */
 static int msm_pm_write_proc(struct file *file, const char __user *buffer,
 	unsigned long count, void *data)
 {

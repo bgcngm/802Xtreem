@@ -3,6 +3,9 @@
 
 #include <net/checksum.h>
 
+/*
+ *	IPv6 transport protocols
+ */
 
 extern struct proto rawv6_prot;
 extern struct proto udpv6_prot;
@@ -14,11 +17,13 @@ struct flowi6;
 
 extern void initialize_hashidentrnd(void);
 
+/* extension headers */
 extern int				ipv6_exthdrs_init(void);
 extern void				ipv6_exthdrs_exit(void);
 extern int				ipv6_frag_init(void);
 extern void				ipv6_frag_exit(void);
 
+/* transport protocols */
 extern int				pingv6_init(void);
 extern void				pingv6_exit(void);
 extern int				rawv6_init(void);
@@ -48,6 +53,9 @@ extern int			datagram_send_ctl(struct net *net,
 
 #define		LOOPBACK4_IPV6		cpu_to_be32(0x7f000006)
 
+/*
+ *	address family specific functions
+ */
 extern const struct inet_connection_sock_af_ops ipv4_specific;
 
 extern void inet6_destroy_sock(struct sock *sk);

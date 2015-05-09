@@ -30,7 +30,11 @@
 #include "board-m7evm.h"
 #include <asm/setup.h>
 
+//void m7dug_pm8xxx_adc_device_register(void);
+//void m7dcg_pm8xxx_adc_device_register(void);
+//void m7dtu_pm8xxx_adc_device_register(void);
 void m7evm_pm8xxx_adc_device_register(void);
+//void m7cdtu_pm8xxx_adc_device_register(void);
 
 struct pm8xxx_gpio_init {
 	unsigned			gpio;
@@ -114,25 +118,28 @@ struct pm8xxx_mpp_init {
 			PM_GPIO_STRENGTH_HIGH, \
 			PM_GPIO_FUNC_NORMAL, 0, 0)
 
+/* Initial PM8921 GPIO configurations. Modify the structure need to inform kernel team*/
 static struct pm8xxx_gpio_init pm8921_gpios[] __initdata = {
 	PM8921_GPIO_OUTPUT_FUNC(26, 0, PM_GPIO_FUNC_2),
-	
+	/* TABLA CODEC RESET */
 	PM8921_GPIO_OUTPUT(34, 1, MED),
 };
 
 static struct pm8xxx_gpio_init pm8921_cdp_kp_gpios[] __initdata = {
-	
+	//PM8921_GPIO_INPUT(37, PM_GPIO_PULL_UP_1P5),
 };
 
+/* For EVM only */
 static struct pm8xxx_gpio_init pm8921_dsda_gpios_evm[] __initdata = {
-	PM8921_GPIO_OUTPUT(12, 0, HIGH),		
-	PM8921_GPIO_OUTPUT(8, 0, HIGH),			
-	PM8921_GPIO_OUTPUT(16, 0, HIGH),		
+	PM8921_GPIO_OUTPUT(12, 0, HIGH),		/* PM2QSC_SOFT_RESET */
+	PM8921_GPIO_OUTPUT(8, 0, HIGH),			/* PM2QSC_PWR_EN */
+	PM8921_GPIO_OUTPUT(16, 0, HIGH),		/* PM2QSC_KEYPADPWR */
 };
 
+/* Initial PM8XXX MPP configurations */
 static struct pm8xxx_mpp_init pm8xxx_mpps[] __initdata = {
 	PM8921_MPP_INIT(3, D_OUTPUT, PM8921_MPP_DIG_LEVEL_VPH, DOUT_CTRL_LOW),
-	
+	/* External 5V regulator enable; shared by HDMI and USB_OTG switches. */
 	PM8921_MPP_INIT(7, D_OUTPUT, PM8921_MPP_DIG_LEVEL_VPH, DOUT_CTRL_LOW),
 	PM8921_MPP_INIT(PM8XXX_AMUX_MPP_8, A_INPUT, PM8XXX_MPP_AIN_AMUX_CH5, AOUT_CTRL_DISABLE),
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
@@ -195,11 +202,26 @@ static struct pm8xxx_misc_platform_data m7evm_pm8921_misc_pdata = {
 	.priority		= 0,
 };
 
-#define PM8921_LC_LED_MAX_CURRENT	4	
-#define PM8921_LC_LED_LOW_CURRENT	1	
+#define PM8921_LC_LED_MAX_CURRENT	4	/* I = 4mA */
+#define PM8921_LC_LED_LOW_CURRENT	1	/* I = 1mA */
 #define PM8XXX_LED_PWM_PERIOD		1000
 #define PM8XXX_LED_PWM_DUTY_MS		20
+/**
+ * PM8XXX_PWM_CHANNEL_NONE shall be used when LED shall not be
+ * driven using PWM feature.
+ */
 #define PM8XXX_PWM_CHANNEL_NONE		-1
+/*
+static void green_back_gpio_config(bool enable)
+{
+
+}
+
+static void amber_back_gpio_config(bool enable)
+{
+
+}
+*/
 static DEFINE_MUTEX(led_lock);
 static struct regulator *led_reg_l29;
 static int led_power_LPM(int on)
@@ -218,6 +240,11 @@ static int led_power_LPM(int on)
 		}
 	}
 	if (on == 1) {
+		/*
+		 * LDO_29 minimum hight power mode loads 10000uA
+		 * If set the threshold (100 in this case), the loads will greater than threshold (10000 > 100)
+		 * The regulator will enter LPM
+		 */
 		rc = regulator_set_optimum_mode(led_reg_l29, 100);
 	   if (rc < 0)
 		pr_err("[LED] %s: enter LMP,set_optimum_mode l29 failed, rc=%d\n", __func__, rc);
@@ -323,7 +350,7 @@ static struct pm8xxx_adc_amux m7evm_pm8921_adc_channels_data[] = {
 };
 
 static struct pm8xxx_adc_properties m7evm_pm8921_adc_data = {
-	.adc_vdd_reference	= 1800, 
+	.adc_vdd_reference	= 1800, /* milli-voltage for this adc */
 	.bitresolution		= 15,
 	.bipolar                = 0,
 };
@@ -496,7 +523,7 @@ pm8921_chg_pdata __devinitdata = {
 	.warm_bat_chg_current	= 1025,
 	.cool_bat_voltage	= 4200,
 	.warm_bat_voltage	= 4000,
-	.mbat_in_gpio		= 0, 
+	.mbat_in_gpio		= 0, /* No MBAT_IN*/
 	.is_embeded_batt	= 1,
 	.eoc_ibat_thre_ma	= 50,
 	.ichg_threshold_ua = -1200000,
@@ -505,7 +532,7 @@ pm8921_chg_pdata __devinitdata = {
 	.thermal_levels		= ARRAY_SIZE(m7evm_pm8921_therm_mitigation),
 	.cold_thr = PM_SMBC_BATT_TEMP_COLD_THR__HIGH,
 	.hot_thr = PM_SMBC_BATT_TEMP_HOT_THR__LOW,
-	.rconn_mohm		= 10, 
+	.rconn_mohm		= 10, /* Default:0, set it after consulting with HW */
 };
 
 static struct pm8xxx_ccadc_platform_data
@@ -521,7 +548,7 @@ pm8921_bms_pdata __devinitdata = {
 	.v_failure		= 3000,
 	.max_voltage_uv		= MAX_VOLTAGE_MV * 1000,
 	.rconn_mohm		= 0,
-	.criteria_sw_est_ocv			= 86400000, 
+	.criteria_sw_est_ocv			= 86400000, /*24 hour*/
 	.rconn_mohm_sw_est_ocv		= 10,
 };
 

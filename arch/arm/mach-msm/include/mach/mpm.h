@@ -70,4 +70,4 @@ static inline void msm_mpm_exit_sleep(bool from_idle) {}
 
 
 
-#endif 
+#endif /* __ARCH_ARM_MACH_MSM_MPM_H */

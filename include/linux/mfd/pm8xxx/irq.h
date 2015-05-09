@@ -10,6 +10,10 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
+/*
+ * Qualcomm PMIC irq 8xxx driver header file
+ *
+ */
 
 #ifndef __MFD_PM8XXX_IRQ_H
 #define __MFD_PM8XXX_IRQ_H
@@ -75,5 +79,5 @@ static inline int pm8xxx_get_irq_it_stat(struct pm_irq_chip *chip, int irq)
 {
 	return -ENXIO;
 }
-#endif 
-#endif 
+#endif /* CONFIG_MFD_PM8XXX_IRQ */
+#endif /* __MFD_PM8XXX_IRQ_H */

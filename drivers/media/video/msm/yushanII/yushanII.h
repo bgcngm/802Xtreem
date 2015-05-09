@@ -76,7 +76,7 @@ struct YushanII_sensor_data {
 	uint16_t y_even_inc;
 	uint16_t y_odd_inc;
 	uint8_t binning_rawchip;
-	uint8_t use_rawchip;
+	uint8_t use_rawchip;/* HTC_START_Simon.Ti_Liu_20120702_Enhance_bypass */
 };
 
 struct YushanII_id_info_t {
@@ -96,6 +96,7 @@ void YushanII_probe_deinit(void);
 void YushanII_release(void);
 int YushanII_open_init(void);
 
+/* HTC_START steven wu addd debug mode of Y2 pipe 20121119*/
 int YushanII_set_channel_offset_debug(void __user *argp);
 int YushanII_set_channel_offset(int channel_offset);
 int YushanII_set_defcor_debug(void __user *argp);
@@ -105,5 +106,8 @@ int YushanII_set_tone_mapping(int tone_map);
 int YushanII_set_cls_debug(void __user *argp);
 int YushanII_set_cls(struct yushanii_cls *cls);
 int YushanII_set_hdr_merge(struct yushanii_hdr_merge hdr_merge);
+/* HTC_END steven wu addd debug mode of Y2 pipe 20121119*/
+/* HTC_START Gary_Yang : Video HDR*/
 void YushanII_set_hdr_exp(uint16_t gain, uint16_t dig_gain, uint32_t long_line, uint32_t short_line);
+/* HTC_END*/
 #endif

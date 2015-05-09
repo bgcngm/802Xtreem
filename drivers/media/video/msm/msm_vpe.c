@@ -48,7 +48,7 @@ static long long vpe_do_div(long long num, long long den)
 
 static int vpe_start(void)
 {
-	
+	/*  enable the frame irq, bit 0 = Display list 0 ROI done */
 	msm_io_w_mb(1, vpe_ctrl->vpebase + VPE_INTR_ENABLE_OFFSET);
 	msm_io_dump(vpe_ctrl->vpebase, 0x120);
 	msm_io_dump(vpe_ctrl->vpebase + 0x00400, 0x18);
@@ -56,7 +56,7 @@ static int vpe_start(void)
 	msm_io_dump(vpe_ctrl->vpebase + 0x30000, 0x20);
 	msm_io_dump(vpe_ctrl->vpebase + 0x50000, 0x30);
 	msm_io_dump(vpe_ctrl->vpebase + 0x50400, 0x10);
-	
+	/* this triggers the operation. */
 	msm_io_w(1, vpe_ctrl->vpebase + VPE_DL0_START_OFFSET);
 	wmb();
 	return 0;
@@ -64,7 +64,7 @@ static int vpe_start(void)
 
 void vpe_reset_state_variables(void)
 {
-	
+	/* initialize local variables for state control, etc.*/
 	vpe_ctrl->op_mode = 0;
 	vpe_ctrl->state = VPE_STATE_INIT;
 }
@@ -78,7 +78,7 @@ static void vpe_config_axi_default(void)
 		return;
 	msm_io_w(vpe_ctrl->out_y_addr,
 		vpe_ctrl->vpebase + VPE_OUTP0_ADDR_OFFSET);
-	
+	/* for video  CbCr address */
 	msm_io_w(vpe_ctrl->out_cbcr_addr,
 		vpe_ctrl->vpebase + VPE_OUTP1_ADDR_OFFSET);
 
@@ -102,19 +102,21 @@ static int vpe_reset(void)
 	vpe_reset_state_variables();
 	vpe_version = msm_io_r(vpe_ctrl->vpebase + VPE_HW_VERSION_OFFSET);
 	CDBG("vpe_version = 0x%x\n", vpe_version);
-	
+	/* disable all interrupts.*/
 	msm_io_w(0, vpe_ctrl->vpebase + VPE_INTR_ENABLE_OFFSET);
-	
+	/* clear all pending interrupts*/
 	msm_io_w(0x1fffff, vpe_ctrl->vpebase + VPE_INTR_CLEAR_OFFSET);
-	
+	/* write sw_reset to reset the core. */
 	msm_io_w(0x10, vpe_ctrl->vpebase + VPE_SW_RESET_OFFSET);
-	
+	/* then poll the reset bit, it should be self-cleared. */
 	while (1) {
 		rc =
 		msm_io_r(vpe_ctrl->vpebase + VPE_SW_RESET_OFFSET) & 0x10;
 		if (rc == 0)
 			break;
 	}
+	/*  at this point, hardware is reset. Then pogram to default
+		values. */
 	msm_io_w(VPE_AXI_RD_ARB_CONFIG_VALUE,
 			vpe_ctrl->vpebase + VPE_AXI_RD_ARB_CONFIG_OFFSET);
 
@@ -187,7 +189,7 @@ static int vpe_operation_config(uint32_t *p)
 	w = temp & 0xFFF;
 	h = (temp & 0xFFF0000) >> 16;
 	if (*p++ & 0xE00) {
-		
+		/* rotation enabled. */
 		vpe_ctrl->out_w = h;
 		vpe_ctrl->out_h = w;
 	} else {
@@ -199,11 +201,19 @@ static int vpe_operation_config(uint32_t *p)
 	return 0;
 }
 
+/* Later we can separate the rotation and scaler calc. If
+*  rotation is enabled, simply swap the destination dimension.
+*  And then pass the already swapped output size to this
+*  function. */
 static int vpe_update_scaler(struct msm_pp_crop *pcrop)
 {
 	uint32_t out_ROI_width, out_ROI_height;
 	uint32_t src_ROI_width, src_ROI_height;
 
+	/*
+	* phase_step_x, phase_step_y, phase_init_x and phase_init_y
+	* are represented in fixed-point, unsigned 3.29 format
+	*/
 	uint32_t phase_step_x = 0;
 	uint32_t phase_step_y = 0;
 	uint32_t phase_init_x = 0;
@@ -214,6 +224,8 @@ static int vpe_update_scaler(struct msm_pp_crop *pcrop)
 	uint32_t scale_unit_sel_x, scale_unit_sel_y;
 	uint64_t numerator, denominator;
 
+	/* assumption is both direction need zoom. this can be
+	improved. */
 	temp =
 		msm_io_r(vpe_ctrl->vpebase + VPE_OP_MODE_OFFSET) | 0x3;
 	msm_io_w(temp, vpe_ctrl->vpebase + VPE_OP_MODE_OFFSET);
@@ -240,55 +252,86 @@ static int vpe_update_scaler(struct msm_pp_crop *pcrop)
 			VPE_SRC_XY_OFFSET);
 	CDBG("src_xy = %d, src_roi=%d.\n", src_xy, src_roi);
 
-	
+	/* decide whether to use FIR or M/N for scaling */
 	if ((out_ROI_width == 1 && src_ROI_width < 4) ||
 		(src_ROI_width < 4 * out_ROI_width - 3))
-		scale_unit_sel_x = 0;
+		scale_unit_sel_x = 0;/* use FIR scalar */
 	else
-		scale_unit_sel_x = 1;
+		scale_unit_sel_x = 1;/* use M/N scalar */
 
 	if ((out_ROI_height == 1 && src_ROI_height < 4) ||
 		(src_ROI_height < 4 * out_ROI_height - 3))
-		scale_unit_sel_y = 0;
+		scale_unit_sel_y = 0;/* use FIR scalar */
 	else
-		scale_unit_sel_y = 1;
+		scale_unit_sel_y = 1;/* use M/N scalar */
 
-	
+	/* calculate phase step for the x direction */
 
+	/* if destination is only 1 pixel wide,
+	the value of phase_step_x
+	is unimportant. Assigning phase_step_x to
+	src ROI width as an arbitrary value. */
 	if (out_ROI_width == 1)
 		phase_step_x = (uint32_t) ((src_ROI_width) <<
 						SCALER_PHASE_BITS);
 
-		
+		/* if using FIR scalar */
 	else if (scale_unit_sel_x == 0) {
 
+		/* Calculate the quotient ( src_ROI_width - 1 )
+			( out_ROI_width - 1)
+			with u3.29 precision. Quotient is rounded up to
+			the larger 29th decimal point*/
 		numerator = (uint64_t)(src_ROI_width - 1) <<
 			SCALER_PHASE_BITS;
+		/* never equals to 0 because of the
+			"(out_ROI_width == 1 )"*/
 		denominator = (uint64_t)(out_ROI_width - 1);
+		/* divide and round up to the larger 29th
+			decimal point.*/
 		phase_step_x = (uint32_t) vpe_do_div((numerator +
 					denominator - 1), denominator);
-	} else if (scale_unit_sel_x == 1) { 
+	} else if (scale_unit_sel_x == 1) { /* if M/N scalar */
+		/* Calculate the quotient ( src_ROI_width ) /
+			( out_ROI_width)
+			with u3.29 precision. Quotient is rounded down to the
+			smaller 29th decimal point.*/
 		numerator = (uint64_t)(src_ROI_width) <<
 			SCALER_PHASE_BITS;
 		denominator = (uint64_t)(out_ROI_width);
 		phase_step_x =
 			(uint32_t) vpe_do_div(numerator, denominator);
 	}
-	
+	/* calculate phase step for the y direction */
 
+	/* if destination is only 1 pixel wide, the value of
+		phase_step_x is unimportant. Assigning phase_step_x
+		to src ROI width as an arbitrary value. */
 	if (out_ROI_height == 1)
 		phase_step_y =
 		(uint32_t) ((src_ROI_height) << SCALER_PHASE_BITS);
 
-	
+	/* if FIR scalar */
 	else if (scale_unit_sel_y == 0) {
+		/* Calculate the quotient ( src_ROI_height - 1 ) /
+		( out_ROI_height - 1)
+		with u3.29 precision. Quotient is rounded up to the
+		larger 29th decimal point. */
 		numerator = (uint64_t)(src_ROI_height - 1) <<
 			SCALER_PHASE_BITS;
+		/* never equals to 0 because of the "
+		( out_ROI_height == 1 )" case */
 		denominator = (uint64_t)(out_ROI_height - 1);
+		/* Quotient is rounded up to the larger
+		29th decimal point. */
 		phase_step_y =
 		(uint32_t) vpe_do_div(
 			(numerator + denominator - 1), denominator);
-	} else if (scale_unit_sel_y == 1) { 
+	} else if (scale_unit_sel_y == 1) { /* if M/N scalar */
+		/* Calculate the quotient ( src_ROI_height )
+			( out_ROI_height)
+			with u3.29 precision. Quotient is rounded down
+			to the smaller 29th decimal point. */
 		numerator = (uint64_t)(src_ROI_height) <<
 			SCALER_PHASE_BITS;
 		denominator = (uint64_t)(out_ROI_height);
@@ -296,7 +339,7 @@ static int vpe_update_scaler(struct msm_pp_crop *pcrop)
 			numerator, denominator);
 	}
 
-	
+	/* decide which set of FIR coefficients to use */
 	if (phase_step_x > HAL_MDP_PHASE_STEP_2P50)
 		xscale_filter_sel = 0;
 	else if (phase_step_x > HAL_MDP_PHASE_STEP_1P66)
@@ -315,9 +358,9 @@ static int vpe_update_scaler(struct msm_pp_crop *pcrop)
 	else
 		yscale_filter_sel = 3;
 
-	
+	/* calculate phase init for the x direction */
 
-	
+	/* if using FIR scalar */
 	if (scale_unit_sel_x == 0) {
 		if (out_ROI_width == 1)
 			phase_init_x =
@@ -325,9 +368,11 @@ static int vpe_update_scaler(struct msm_pp_crop *pcrop)
 							SCALER_PHASE_BITS);
 		else
 			phase_init_x = 0;
-	} else if (scale_unit_sel_x == 1) 
+	} else if (scale_unit_sel_x == 1) /* M over N scalar  */
 		phase_init_x = 0;
 
+	/* calculate phase init for the y direction
+	if using FIR scalar */
 	if (scale_unit_sel_y == 0) {
 		if (out_ROI_height == 1)
 			phase_init_y =
@@ -335,7 +380,7 @@ static int vpe_update_scaler(struct msm_pp_crop *pcrop)
 						1) << SCALER_PHASE_BITS);
 		else
 			phase_init_y = 0;
-	} else if (scale_unit_sel_y == 1) 
+	} else if (scale_unit_sel_y == 1) /* M over N scalar   */
 		phase_init_y = 0;
 
 	CDBG("phase step x = %d, step y = %d.\n",
@@ -386,7 +431,9 @@ static int msm_send_frame_to_vpe(void)
 			  vpe_ctrl->pp_frame_info->dest_frame.sp.cbcr_off),
 			vpe_ctrl->vpebase + VPE_OUTP1_ADDR_OFFSET);
 	vpe_ctrl->state = VPE_STATE_ACTIVE;
+//HTC_START chris, 20120310 fix unknown reset which is caused by vpe clk disabled when vpe state is active.
 	vpe_ctrl->vpe_event_done = 0;
+//HTC_END
 	spin_unlock_irqrestore(&vpe_ctrl->lock, flags);
 	vpe_start();
 	return rc;
@@ -406,10 +453,12 @@ static void vpe_send_outmsg(void)
 	rp.type = vpe_ctrl->pp_frame_info->pp_frame_cmd.path;
 	rp.extdata = (void *)vpe_ctrl->pp_frame_info;
 	rp.extlen = sizeof(*vpe_ctrl->pp_frame_info);
-	vpe_ctrl->state = VPE_STATE_INIT;   
+	vpe_ctrl->state = VPE_STATE_INIT;   /* put it back to idle. */
 	vpe_ctrl->pp_frame_info = NULL;
+//HTC_START chris, 20120310 fix unknown reset which is caused by vpe clk disabled when vpe state is active.
 	vpe_ctrl->vpe_event_done = 1;
 	wake_up(&vpe_ctrl->vpe_event_queue);
+//HTC_END
 	spin_unlock_irqrestore(&vpe_ctrl->lock, flags);
 	v4l2_subdev_notify(&vpe_ctrl->subdev,
 		NOTIFY_VPE_MSG_EVT, (void *)&rp);
@@ -451,7 +500,7 @@ int vpe_enable(uint32_t clk_rate)
 	int rc = 0;
 	unsigned long flags = 0;
 	CDBG("%s", __func__);
-	
+	/* don't change the order of clock and irq.*/
 	spin_lock_irqsave(&vpe_ctrl->lock, flags);
 	pr_info("%s, vpe_ctrl->state %d\n", __func__, vpe_ctrl->state);
 	if (vpe_ctrl->state != VPE_STATE_IDLE) {
@@ -460,7 +509,9 @@ int vpe_enable(uint32_t clk_rate)
 		return 0;
 	}
 	vpe_ctrl->state = VPE_STATE_INIT;
+//HTC_START chris, 20120310 fix unknown reset which is caused by vpe clk disabled when vpe state is active.
 	vpe_ctrl->vpe_event_done = 0;
+//HTC_END
 	spin_unlock_irqrestore(&vpe_ctrl->lock, flags);
 	enable_irq(vpe_ctrl->vpeirq->start);
 	vpe_ctrl->fs_vpe = regulator_get(NULL, "fs_vpe");
@@ -509,17 +560,21 @@ int vpe_disable(void)
 	}
 	spin_unlock_irqrestore(&vpe_ctrl->lock, flags);
 
+//HTC_START 20120310 fix unknown reset which is caused by vpe clk disabled when vpe state is active.
+//HTC_START 20130307
 	rc = wait_event_timeout(vpe_ctrl->vpe_event_queue,
+//HTC_END 20130307
 		vpe_ctrl->vpe_event_done, msecs_to_jiffies(500));
 
 	if (rc < 0)
 		pr_err("%s: wait vpe event error: %d\n", __func__, rc);
 	else if (rc == 0) {
-		
+		/* timeout */
 		pr_info("%s: wait vpe event timeout", __func__);
 	} else
 		pr_info("%s: got vpe done event, rc %d\n", __func__, rc);
 	rc = 0;
+//HTC_END
 
 	disable_irq(vpe_ctrl->vpeirq->start);
 	tasklet_kill(&vpe_tasklet);
@@ -531,7 +586,9 @@ int vpe_disable(void)
 	vpe_ctrl->fs_vpe = NULL;
 	spin_lock_irqsave(&vpe_ctrl->lock, flags);
 	vpe_ctrl->state = VPE_STATE_IDLE;
+//HTC_START chris, 20120310 fix unknown reset which is caused by vpe clk disabled when vpe state is active.
 	vpe_ctrl->vpe_event_done = 0;
+//HTC_END
 	spin_unlock_irqrestore(&vpe_ctrl->lock, flags);
 	return rc;
 }
@@ -601,16 +658,17 @@ static int msm_vpe_resource_init(void)
 	}
 
 	return rc;
+/* from this part it is error handling. */
 vpe_unmap_mem_region:
 	iounmap(vpe_ctrl->vpebase);
 	vpe_ctrl->vpebase = NULL;
-	return rc;  
+	return rc;  /* this rc should have error code. */
 }
 
 void msm_vpe_subdev_release(void)
 {
 	if (!atomic_read(&vpe_init_done)) {
-		
+		/* no VPE object created */
 		pr_err("%s: no VPE object to release", __func__);
 		return;
 	}
@@ -749,7 +807,9 @@ static int __devinit vpe_probe(struct platform_device *pdev)
 	vpe_ctrl->pdev = pdev;	
 	msm_cam_register_subdev_node(&vpe_ctrl->subdev, VPE_DEV, pdev->id);
 
+//HTC_START chris, 20120310 fix unknown reset which is caused by vpe clk disabled when vpe state is active.
 	init_waitqueue_head(&vpe_ctrl->vpe_event_queue);
+//HTC_END
 
 	return 0;
 

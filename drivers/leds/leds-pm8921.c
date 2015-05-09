@@ -45,8 +45,8 @@
 #define MAX_LC_LED_CURRENT		40
 #define MAX_KP_BL_LED_CURRENT		300
 
-#define PM8XXX_ID_LED_CURRENT_FACTOR	2  
-#define PM8XXX_ID_FLASH_CURRENT_FACTOR	20 
+#define PM8XXX_ID_LED_CURRENT_FACTOR	2  /* Iout = x * 2mA */
+#define PM8XXX_ID_FLASH_CURRENT_FACTOR	20 /* Iout = x * 20mA */
 
 #define PM8XXX_FLASH_MODE_DBUS1		1
 #define PM8XXX_FLASH_MODE_DBUS2		2
@@ -754,6 +754,9 @@ static int __devinit pm8xxx_led_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
+	/* Let the last member of the list be zero to
+	 * mark the end of the list.
+	 */
 	led = kcalloc(pdata->num_leds + 1, sizeof(*led), GFP_KERNEL);
 	if (led == NULL) {
 		LED_ERR("failed to alloc memory\n");
@@ -871,11 +874,11 @@ static int __devinit pm8xxx_led_probe(struct platform_device *pdev)
 				goto err_register_attr_off_timer;
 			}
 			alarm_init(&led[i].led_alarm, ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP, led_alarm_handler);
-			INIT_WORK(&led[i].led_work, led_work_func); 
+			INIT_WORK(&led[i].led_work, led_work_func); /*Off blink after alarm*/
 		}
 
-		INIT_WORK(&led[i].led_on_work, led_on_work_func); 
-		INIT_WORK(&led[i].led_blink_work, led_blink_work_func); 
+		INIT_WORK(&led[i].led_on_work, led_on_work_func); /*turn on work queue*/
+		INIT_WORK(&led[i].led_blink_work, led_blink_work_func); /*blink work queue*/
 		if (!strcmp(led_dat->cdev.name, "button-backlight")) {
 			for_key_led_data = led_dat;
 		}

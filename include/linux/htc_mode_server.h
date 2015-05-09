@@ -23,6 +23,7 @@
 
 #define HTC_MODE_CONTROL_REQ		0x12
 
+/* HSML version 0.6 */
 #define CLIENT_INFO_SERVER_ROTATE_USED		(1 << 1)
 
 #define CTRL_CONF_TOUCH_EVENT_SUPPORTED		(1 << 0)
@@ -132,6 +133,7 @@ struct key_event {
 } __attribute__ ((__packed__));
 
 
+/* HSML version 0.8 */
 enum {
 	HSML_08_REQ_GET_SERVER_VERSION = 0x40,
 	HSML_08_REQ_NUM_COMPRESSION_SETTINGS,
@@ -214,4 +216,4 @@ struct hsml_protocol {
 	u8 debug_mode;
 };
 
-#endif 
+#endif /* _HTC_MODE_SERVER_H_ */

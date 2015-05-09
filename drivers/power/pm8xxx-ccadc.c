@@ -34,6 +34,7 @@
 			printk(KERN_INFO pr_fmt_debug(fmt), ##__VA_ARGS__); \
 	} while (0)
 
+/* to dump BMS log*/
 static bool flag_enable_bms_chg_log;
 #define BATT_LOG_BUF_LEN (256)
 
@@ -47,6 +48,7 @@ static bool flag_enable_bms_chg_log;
 #define CCADC_FULLSCALE_TRIM1	0x34C
 #define CCADC_FULLSCALE_TRIM0	0x34D
 
+/* note : TRIM1 is the msb and TRIM0 is the lsb */
 #define ADC_ARB_SECP_CNTRL	0x190
 #define ADC_ARB_SECP_AMUX_CNTRL	0x191
 #define ADC_ARB_SECP_ANA_PARAM	0x192
@@ -101,11 +103,15 @@ static s64 microvolt_to_ccadc_reading(struct pm8xxx_ccadc_chip *chip, s64 cc)
 
 static int cc_adjust_for_offset(u16 raw)
 {
-	
+	/* this has the intrinsic offset */
 	return (int)raw - the_chip->ccadc_offset;
 }
 
 #define GAIN_REFERENCE_UV 25000
+/*
+ * gain compensation for ccadc readings - common for vsense based and
+ * couloumb counter based readings
+ */
 s64 pm8xxx_cc_adjust_for_gain(s64 uv)
 {
 	if (the_chip == NULL || the_chip->ccadc_gain_uv == 0)
@@ -164,7 +170,7 @@ static int calib_ccadc_enable_arbiter(struct pm8xxx_ccadc_chip *chip)
 {
 	int rc;
 
-	
+	/* enable Arbiter, must be sent twice */
 	rc = pm_ccadc_masked_write(chip, ADC_ARB_SECP_CNTRL,
 			SEL_CCADC_BIT | EN_ARB_BIT, SEL_CCADC_BIT | EN_ARB_BIT);
 	if (rc < 0) {
@@ -186,7 +192,7 @@ static int calib_start_conv(struct pm8xxx_ccadc_chip *chip,
 	int rc, i;
 	u8 data_msb, data_lsb, reg;
 
-	
+	/* Start conversion */
 	rc = pm_ccadc_masked_write(chip, ADC_ARB_SECP_CNTRL,
 					START_CONV_BIT, START_CONV_BIT);
 	if (rc < 0) {
@@ -194,7 +200,7 @@ static int calib_start_conv(struct pm8xxx_ccadc_chip *chip,
 		return rc;
 	}
 
-	
+	/* Wait for End of conversion */
 	for (i = 0; i < ADC_WAIT_COUNT; i++) {
 		rc = pm8xxx_readb(chip->dev->parent,
 					ADC_ARB_SECP_CNTRL, &reg);
@@ -294,7 +300,7 @@ static int calib_ccadc_program_trim(struct pm8xxx_ccadc_chip *chip,
 			return rc;
 		}
 
-		
+		/* break if a ccadc conversion is not happening */
 		in_progress = (((cntrl >> ADC_ARB_BMS_CNTRL_CCADC_SHIFT)
 			& ADC_ARB_BMS_CNTRL_CONV_MASK) == BMS_CONV_IN_PROGRESS);
 
@@ -346,6 +352,10 @@ void pm8xxx_calib_ccadc(void)
 		goto bail;
 	}
 
+	/*
+	 * Set decimation ratio to 4k, lower ratio may be used in order to speed
+	 * up, pending verification through bench
+	 */
 	rc = pm8xxx_writeb(the_chip->dev->parent, ADC_ARB_SECP_DIG_PARAM,
 							CCADC_CALIB_DIG_PARAM);
 	if (rc < 0) {
@@ -355,7 +365,7 @@ void pm8xxx_calib_ccadc(void)
 
 	result_offset = 0;
 	for (i = 0; i < SAMPLE_COUNT; i++) {
-		
+		/* Short analog inputs to CCADC internally to ground */
 		rc = pm8xxx_writeb(the_chip->dev->parent, ADC_ARB_SECP_RSV,
 							CCADC_CALIB_RSV_GND);
 		if (rc < 0) {
@@ -363,7 +373,7 @@ void pm8xxx_calib_ccadc(void)
 			goto bail;
 		}
 
-		
+		/* Enable CCADC */
 		rc = pm8xxx_writeb(the_chip->dev->parent,
 				ADC_ARB_SECP_ANA_PARAM, CCADC_CALIB_ANA_PARAM);
 		if (rc < 0) {
@@ -397,7 +407,7 @@ void pm8xxx_calib_ccadc(void)
 	if (rc) {
 		pr_debug("error = %d programming offset trim 0x%02x 0x%02x\n",
 					rc, data_msb, data_lsb);
-		
+		/* enable the interrupt and write it when it fires */
 		enable_irq(the_chip->eoc_irq);
 	}
 
@@ -407,6 +417,10 @@ void pm8xxx_calib_ccadc(void)
 		goto bail;
 	}
 
+	/*
+	 * Set decimation ratio to 4k, lower ratio may be used in order to speed
+	 * up, pending verification through bench
+	 */
 	rc = pm8xxx_writeb(the_chip->dev->parent, ADC_ARB_SECP_DIG_PARAM,
 							CCADC_CALIB_DIG_PARAM);
 	if (rc < 0) {
@@ -423,7 +437,7 @@ void pm8xxx_calib_ccadc(void)
 			goto bail;
 		}
 
-		
+		/* Enable CCADC */
 		rc = pm8xxx_writeb(the_chip->dev->parent,
 			ADC_ARB_SECP_ANA_PARAM, CCADC_CALIB_ANA_PARAM);
 		if (rc < 0) {
@@ -441,6 +455,11 @@ void pm8xxx_calib_ccadc(void)
 	}
 	result_gain = result_gain / SAMPLE_COUNT;
 
+	/*
+	 * result_offset includes INTRINSIC OFFSET
+	 * the_chip->ccadc_gain_uv will be the actual voltage
+	 * measured for 25000UV
+	 */
 	the_chip->ccadc_gain_uv = pm8xxx_ccadc_reading_to_microvolt(
 				the_chip->revision,
 				((s64)result_gain - result_offset));
@@ -559,6 +578,10 @@ int pm8xxx_ccadc_get_battery_current(int *bat_current_ua)
 	}
 
 	*bat_current_ua = voltage_uv * 1000/the_chip->r_sense;
+	/*
+	 * ccadc reads +ve current when the battery is charging
+	 * We need to return -ve if the battery is charging
+	 */
 	*bat_current_ua = -1 * (*bat_current_ua);
 	pr_debug("bat current = %d ma\n", *bat_current_ua);
 	return 0;
@@ -634,7 +657,7 @@ void dump_all(void)
 	get_reg((void *)CCADC_FULLSCALE_TRIM0, &val);
 	len += scnprintf(batt_log_buf + len, BATT_LOG_BUF_LEN - len, "FULLSCALE_TRIM0=0x%02llx", val);
 
-	
+	/*Log len is larger than log buffer, please decrease log length*/
 	if(BATT_LOG_BUF_LEN - len <= 1)
 		pr_info("batt log length maybe out of buffer range!!!");
 

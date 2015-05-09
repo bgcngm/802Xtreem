@@ -84,6 +84,9 @@
 #define YUSHANII_SET_DEFCOR_LEVEL \
        _IOR(YUSHANII_IOCTL_MAGIC, 15, uint8_t *)
 
+/*TODO:interrupt define should only in Ilp0100_ST_definition.c*/
+/*yushanII interrupt*/
+/*INT0*/
 #define SPI_COMMS_READY  				0x00000001
 #define IDLE_COMPLETE  					0x00000002
 #define ISP_STREAMING  					0x00000004
@@ -92,13 +95,16 @@
 #define END_OF_FRAME  					0x00000040
 #define LONGEXP_GLACE_STATS_READY 	0x00000100
 #define LONGEXP_HISTOGRAM_STATS_READY  0x00000200
-#define START_OF_SHORTFRAME 			0x00000800	
+#define START_OF_SHORTFRAME 			0x00000800	/* HTC_START Steven 20130528 fix bad frame issue with quick launc on ov4688 sensor */
 #define SHORTEXP_GLACE_STATS_READY  	0x00010000
 #define SHORTEXP_HISTOGRAM_STATS_READY  0x00020000
 #define ITPOINT_LONG  					0x00200000
 #define ITPOINT_SHORT_OR_NORMAL 		0x00400000
 #define ITPOINT_MERGED  				0x00800000
 
+//#define RXPHY_ULPM_ENTER  	N/A
+//#define RXPHY_ULPM_EXIT  	N/A
+/*INT1 error status*/
 #define RXPHY_ERROR  		0x00000001
 #define CSI2RX_ERROR  		0x00000002
 #define SMIA_UNPACK_ERROR  0x00000004
@@ -115,10 +121,10 @@ typedef struct{
   unsigned char Enable;
   uint16_t RoiHStart;
   uint16_t RoiVStart;
-  uint16_t RoiHBlockSize;      
-  uint16_t RoiVBlockSize;      
-  uint8_t RoiHNumberOfBlocks; 
-  uint8_t RoiVNumberOfBlocks; 
+  uint16_t RoiHBlockSize;      //Block horizontal size, even, max 128
+  uint16_t RoiVBlockSize;      //Block vertical size, even, max 128
+  uint8_t RoiHNumberOfBlocks; //Number of blocks, min=2, max=8
+  uint8_t RoiVNumberOfBlocks; //Number of blocks, min=1, max=6
   uint8_t SaturationLevelRed;
   uint8_t SaturationLevelGreen;
   uint8_t SaturationLevelBlue;
@@ -229,5 +235,5 @@ typedef enum{
 	DEFCOR_LEVEL_2 = 2
 } defcor_level_t;
 
-#endif 
+#endif /* __LINUX_YUSHANII_H */
 

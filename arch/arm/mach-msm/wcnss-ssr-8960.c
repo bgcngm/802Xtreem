@@ -58,7 +58,7 @@ static void smsm_state_cb_hdlr(void *data, uint32_t old_state,
 	pr_err("%s: smsm state changed\n", MODULE_NAME);
 
 	if (get_kernel_flag() & KERNEL_FLAG_ENABLE_SSR_WCNSS) {
-		
+		/* Clear APPS SMS_RESET state in order not to panic other subsystem*/
 		smsm_change_state_ssr(SMSM_APPS_STATE, SMSM_RESET, 0, KERNEL_FLAG_ENABLE_SSR_WCNSS);
 	}
 
@@ -142,8 +142,12 @@ void riva_subsystem_restart_by_host(void)
 }
 EXPORT_SYMBOL(riva_subsystem_restart_by_host);
 
+/* SMSM reset Riva */
 static void smsm_riva_reset(void)
 {
+	/* per SS reset request bit is not available now,
+	 * all SS host modules are setting this bit
+	 * This is still under discussion*/
 	smsm_change_state(SMSM_APPS_STATE, SMSM_RESET, SMSM_RESET);
 }
 
@@ -158,6 +162,7 @@ static void riva_post_bootup(struct work_struct *work)
 					WCNSS_WLAN_SWITCH_OFF);
 }
 
+/* Subsystem handlers */
 static int riva_shutdown(const struct subsys_data *subsys)
 {
 	pil_force_shutdown("wcnss");
@@ -179,6 +184,9 @@ static int riva_powerup(const struct subsys_data *subsys)
 	if (pdev && pwlanconfig)
 		ret = wcnss_wlan_power(&pdev->dev, pwlanconfig,
 					WCNSS_WLAN_SWITCH_ON);
+	/* delay PIL operation, this SSR may be happening soon after kernel
+	 * resumes because of a SMSM RESET by Riva when APPS was suspended.
+	 * PIL fails to locate the images without this delay */
 	if (!ret) {
 		msleep(1000);
 		pil_force_boot("wcnss");
@@ -190,6 +198,8 @@ static int riva_powerup(const struct subsys_data *subsys)
 	return ret;
 }
 
+/* RAM segments for Riva SS;
+ * We don't specify the full 5MB allocated for Riva. Only 3MB is specified */
 static struct ramdump_segment riva_segments[] = {{0x8f000000,
 						0x8f700000 - 0x8f000000} };
 
@@ -204,6 +214,7 @@ static int riva_ramdump(int enable, const struct subsys_data *subsys)
 		return 0;
 }
 
+/* Riva crash handler */
 static void riva_crash_shutdown(const struct subsys_data *subsys)
 {
 	pr_err("%s: crash shutdown : %d\n", MODULE_NAME, riva_crash);

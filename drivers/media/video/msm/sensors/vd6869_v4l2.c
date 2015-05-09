@@ -9,16 +9,17 @@
 #define vd6869_obj vd6869_##obj
 
 #define VD6869_REG_READ_MODE 0x0101
-#define VD6869_READ_NORMAL_MODE 0x0000	
-#define VD6869_READ_MIRROR 0x0001			
-#define VD6869_READ_FLIP 0x0002			
-#define VD6869_READ_MIRROR_FLIP 0x0003	
+#define VD6869_READ_NORMAL_MODE 0x0000	/* without mirror/flip */
+#define VD6869_READ_MIRROR 0x0001			/* with mirror */
+#define VD6869_READ_FLIP 0x0002			/* with flip */
+#define VD6869_READ_MIRROR_FLIP 0x0003	/* with mirror/flip */
 
 #define REG_DIGITAL_GAIN_GREEN_R 0x020E
 #define REG_DIGITAL_GAIN_RED 0x0210
 #define REG_DIGITAL_GAIN_BLUE 0x0212
 #define REG_DIGITAL_GAIN_GREEN_B 0x0214
 
+/*cut 0.9*/
 #define STAGGERED_HDR_LONG_REG_DIGITAL_GAIN_GREEN_R 0x32F3
 #define STAGGERED_HDR_LONG_REG_DIGITAL_GAIN_RED 0x32F5
 #define STAGGERED_HDR_LONG_REG_DIGITAL_GAIN_BLUE 0x32F7
@@ -30,6 +31,7 @@
 #define STAGGERED_HDR_SHORT_REG_DIGITAL_GAIN_GREEN_B 0x32EE
 
 
+/*cut 1.0*/
 #define STAGGERED_HDR_SHORT_REG_CUT10_DIGITAL_GAIN_GREEN_R 0x32F3
 #define STAGGERED_HDR_SHORT_REG_CUT10_DIGITAL_GAIN_RED 0x32F5
 #define STAGGERED_HDR_SHORT_REG_CUT10_DIGITAL_GAIN_BLUE 0x32F7
@@ -45,7 +47,7 @@
 #define OTP_WAIT_TIMEOUT 200
 
 DEFINE_MUTEX(vd6869_mut);
-DEFINE_MUTEX(vd6869_sensor_init_mut);
+DEFINE_MUTEX(vd6869_sensor_init_mut);//CC120826,
 
 struct vd6869_hdr_exp_info_t {
 	uint16_t long_coarse_int_time_addr_h;
@@ -54,13 +56,13 @@ struct vd6869_hdr_exp_info_t {
 	uint16_t short_coarse_int_time_addr_l;
 	uint16_t global_gain_addr;
 	uint16_t vert_offset;
-	uint32_t sensor_max_linecount; 
+	uint32_t sensor_max_linecount; /* HTC ben 20120229 */
 };
 
 static struct msm_camera_i2c_reg_conf otp_settings_cut09[] = {
-       {0x44c0, 0x01},
+       {0x44c0, 0x01},//Set nvm0_pdn and nvm1_pdn to high
        {0x4500, 0x01},
-       {0x44ec, 0x01},
+       {0x44ec, 0x01},// Data write timing settings for memory locatin #0-#127
        {0x44ed, 0x80},
        {0x44f0, 0x04},
        {0x44f1, 0xb0},
@@ -68,19 +70,19 @@ static struct msm_camera_i2c_reg_conf otp_settings_cut09[] = {
        {0x452d, 0x80},
        {0x4530, 0x04},
        {0x4531, 0xb0},
-	{0x3305, 0x00},
-       {0x3303, 0x01},
+	{0x3305, 0x00},//read 1k for all OTP
+       {0x3303, 0x01},//specify the number of 32bits data involved in operation.
 	{0x3304, 0x00},
        {0x3301, 0x02},
 };
 
 static struct msm_camera_i2c_reg_conf otp_settings_cut10[] = {
-       {0x44c0, 0x01},
+       {0x44c0, 0x01},//Set nvm0_pdn and nvm1_pdn to high
        {0x4500, 0x01},
-       {0x44e4, 0x00},
-       {0x4524, 0x00},
-       {0x4584, 0x01},
-       {0x44ec, 0x01},
+       {0x44e4, 0x00},//ECC disable:0x1 enable:0x0
+       {0x4524, 0x00},//ECC disable:0x1 enable:0x0
+       {0x4584, 0x01},//enable OTP power
+       {0x44ec, 0x01},// Data write timing settings for memory locatin #0-#127
        {0x44ed, 0x80},
        {0x44f0, 0x04},
        {0x44f1, 0xb0},
@@ -88,19 +90,19 @@ static struct msm_camera_i2c_reg_conf otp_settings_cut10[] = {
        {0x452d, 0x80},
        {0x4530, 0x04},
        {0x4531, 0xb0},
-	{0x3305, 0x00},
-       {0x3303, 0x01},
+	{0x3305, 0x00},//read 1k for all OTP
+       {0x3303, 0x01},//specify the number of 32bits data involved in operation.
 	{0x3304, 0x00},
        {0x3301, 0x02},
 };
 
 static struct msm_camera_i2c_reg_conf otp_settings_cut10_NO_ECC[] = {
-       {0x44c0, 0x01},
+       {0x44c0, 0x01},//Set nvm0_pdn and nvm1_pdn to high
        {0x4500, 0x01},
-       {0x44e4, 0x01},
-       {0x4524, 0x01},
-       {0x4584, 0x01},
-       {0x44ec, 0x01},
+       {0x44e4, 0x01},//ECC disable:0x1 enable:0x0
+       {0x4524, 0x01},//ECC disable:0x1 enable:0x0
+       {0x4584, 0x01},//enable OTP power
+       {0x44ec, 0x01},// Data write timing settings for memory locatin #0-#127
        {0x44ed, 0x80},
        {0x44f0, 0x04},
        {0x44f1, 0xb0},
@@ -108,8 +110,8 @@ static struct msm_camera_i2c_reg_conf otp_settings_cut10_NO_ECC[] = {
        {0x452d, 0x80},
        {0x4530, 0x04},
        {0x4531, 0xb0},
-	{0x3305, 0x00},
-       {0x3303, 0x01},
+	{0x3305, 0x00},//read 1k for all OTP
+       {0x3303, 0x01},//specify the number of 32bits data involved in operation.
 	{0x3304, 0x00},
        {0x3301, 0x02},
 };
@@ -134,418 +136,617 @@ static struct msm_camera_i2c_reg_conf vd6869_groupoff_settings[] = {
 };
 
 
+/*cut 0.9 setting*/
 static struct msm_camera_i2c_reg_conf vd6869_prev_settings[] = {
 
-	{0x900, 0x00}, 
-	{0x344, 0x00}, 
+/*----------------------------------------------- */
+/* Sensor configuration */
+/*----------------------------------------------- */
+	{0x900, 0x00}, /* full res = 0, binning = 1 */
+/*----------------------------------------------- */
+/* Output image size - 1344 x 760 */
+/*----------------------------------------------- */
+	{0x344, 0x00}, /* x_start_addr = 0 */
 	{0x345, 0x00},
-	{0x346, 0x00}, 
+	{0x346, 0x00}, /* y_start_addr = 0 */
 	{0x347, 0x00},
-	{0x348, 0x0a}, 
+	{0x348, 0x0a}, /* x_addr_end = 2687 */
 	{0x349, 0x7f},
-	{0x34a, 0x05}, 
+	{0x34a, 0x05}, /* y_addr_end = 1519 */
 	{0x34b, 0xef},
-	{0x34c, 0x05}, 
+	{0x34c, 0x05}, /* x_output_size = 1344 */
 	{0x34d, 0x40},
-	{0x34e, 0x02}, 
+	{0x34e, 0x02}, /* y_output_size = 760 */
 	{0x34f, 0xf8},
-	{0x382, 0x00}, 
+	{0x382, 0x00}, /* x_odd_inc = 3 */
 	{0x383, 0x03},
-	{0x386, 0x00}, 
+	{0x386, 0x00}, /* y_odd_inc = 3 */
 	{0x387, 0x03},
 
 
-	{0x300, 0x00}, 
+/*----------------------------------------------- */
+/* Video timing */
+/*----------------------------------------------- */
+	{0x300, 0x00}, /* vt_pix_clk_div = 5 */
 	{0x301, 0x05},
-	{0x302, 0x00}, 
+	{0x302, 0x00}, /* vt_sys_clk_div = 1 */
 	{0x303, 0x01},
-	{0x30a, 0x00}, 
+	{0x30a, 0x00}, /* op_sys_clk_div = 1 */
 	{0x30b, 0x01},
 
-	{0x340, 0x02}, 
+	{0x340, 0x02}, /* frame_length_lines = 640 = (1280/2) lines */
 	{0x341, 0x80},
-	{0x342, 0x0b}, 
+	{0x342, 0x0b}, /* line_length_pck = 3000 pcks */
 	{0x343, 0xb8},
 
-	{0x3339, 0x00}, 
+/*----------------------------------------------- */
+/* NonHDR / HDR settings */
+/*----------------------------------------------- */
+	{0x3339, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
 
 
+/*///////////////////////////////////////////////////////// */
+/* - Exposure and gains for Non-HDR mode */
+/* */
+/* - The register Grouped_Parameter_Hold 0x0104 must be */
+/* used in conjuction with exposure & gain settings for  */
+/* precise timings control in Sequential & Staggered modes */
+/* */
 /* - Following should be re-written with WriteAutoIncrement */
+/* */
+/*///////////////////////////////////////////////////////// */
 
-	{0x104, 0x01}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Hold */
+/*----------------------------------------------- */
+	{0x104, 0x01}, /* Smia_Setup__Grouped_Parameter = Hold */
 
-	{0x202, 0x02}, 
+/*----------------------------------------------- */
+/* Exposure and gains (normal mode) */
+/*----------------------------------------------- */
+	{0x202, 0x02}, /* coarse_integration_time = 512 */
 	{0x203, 0x00},
-	{0x204, 0x00}, 
+	{0x204, 0x00}, /* gain 2.0 == 8 << 4 == 128 */
 	{0x205, 0x80},
-	{0x20e, 0x01}, 
+	{0x20e, 0x01}, /* digital_gain_greenR	= 1.0x	(fixed point 4.8) */
 	{0x20f, 0x00},
-	{0x210, 0x01}, 
+	{0x210, 0x01}, /* digital_gain_red		= 1.0x	(fixed point 4.8) */
 	{0x211, 0x00},
-	{0x212, 0x01}, 
+	{0x212, 0x01}, /* digital_gain_blue	= 1.0x	(fixed point 4.8) */
 	{0x213, 0x00},
-	{0x214, 0x01}, 
+	{0x214, 0x01}, /* digital_gain_greenB	= 1.0x	(fixed point 4.8) */
 	{0x215, 0x00},
 
-	{0x104, 0x00}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Released */
+/*----------------------------------------------- */
+	{0x104, 0x00}, /* Smia_Setup__Grouped_Parameter = Releas */
 };
 
 static struct msm_camera_i2c_reg_conf vd6869_video_settings[] = {
-	{0x900, 0x00}, 
+/*----------------------------------------------- */
+/* Sensor configuration */
+/*----------------------------------------------- */
+	{0x900, 0x00}, /* full res = 0, binning = 1 */
 
 
-	{0x344, 0x00}, 
+/*----------------------------------------------- */
+/* Output image size - 2688 x 1520 */
+/*----------------------------------------------- */
+	{0x344, 0x00}, /* x_start_addr = 0 */
 	{0x345, 0x00},
-	{0x346, 0x00}, 
+	{0x346, 0x00}, /* y_start_addr = 0 */
 	{0x347, 0x00},
-	{0x348, 0x0a}, 
+	{0x348, 0x0a}, /* x_addr_end = 2687 */
 	{0x349, 0x7f},
-	{0x34a, 0x05}, 
+	{0x34a, 0x05}, /* y_addr_end = 1519 */
 	{0x34b, 0xef},
-	{0x34c, 0x0a}, 
+	{0x34c, 0x0a}, /* x_output_size = 2688 */
 	{0x34d, 0x80},
-	{0x34e, 0x05}, 
+	{0x34e, 0x05}, /* y_output_size = 1520 */
 	{0x34f, 0xf0},
-	{0x382, 0x00}, 
+	{0x382, 0x00}, /* x_odd_inc = 1 */
 	{0x383, 0x01},
-	{0x386, 0x00}, 
+	{0x386, 0x00}, /* y_odd_inc = 1 */
 	{0x387, 0x01},
 
 
 
 
-	{0x300, 0x00}, 
+/*----------------------------------------------- */
+/* Video timing */
+/*----------------------------------------------- */
+	{0x300, 0x00}, /* vt_pix_clk_div = 5 */
 	{0x301, 0x05},
-	{0x302, 0x00}, 
+	{0x302, 0x00}, /* vt_sys_clk_div = 1 */
 	{0x303, 0x01},
-	{0x30a, 0x00}, 
+	{0x30a, 0x00}, /* op_sys_clk_div = 1 */
 	{0x30b, 0x01},
 
 
-	{0x340, 0x05}, 
+	{0x340, 0x05}, /* frame_length_lines = 1280 = (2560/2) lines */
 	{0x341, 0x00},
-	{0x342, 0x0b}, 
+	{0x342, 0x0b}, /* line_length_pck = 3000 pcks */
 	{0x343, 0xb8},
 
 
-	{0x3339, 0x00}, 
+/*----------------------------------------------- */
+/* NonHDR / HDR settings */
+/*----------------------------------------------- */
+	{0x3339, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
 
 
+/*///////////////////////////////////////////////////////// */
+/* - Exposure and gains for Non-HDR mode */
+/* */
+/* - The register Grouped_Parameter_Hold 0x0104 must be */
+/* used in conjuction with exposure & gain settings for  */
+/* precise timings control in Sequential & Staggered modes */
+/* */
 /* - Following should be re-written with WriteAutoIncrement */
+/* */
+/*///////////////////////////////////////////////////////// */
 
 
-	{0x104, 0x01}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Hold */
+/*----------------------------------------------- */
+	{0x104, 0x01}, /* Smia_Setup__Grouped_Parameter = Hold */
 
 
-	{0x202, 0x02}, 
+/*----------------------------------------------- */
+/* Exposure and gains (normal mode) */
+/*----------------------------------------------- */
+	{0x202, 0x02}, /* coarse_integration_time = 512 */
 	{0x203, 0x00},
-	{0x204, 0x00}, 
+	{0x204, 0x00}, /* gain 2.0 == 8 << 4 == 128 */
 	{0x205, 0x80},
-	{0x20e, 0x01}, 
+	{0x20e, 0x01}, /* digital_gain_greenR	= 1.0x	(fixed point 4.8) */
 	{0x20f, 0x00},
-	{0x210, 0x01}, 
+	{0x210, 0x01}, /* digital_gain_red		= 1.0x	(fixed point 4.8) */
 	{0x211, 0x00},
-	{0x212, 0x01}, 
+	{0x212, 0x01}, /* digital_gain_blue	= 1.0x	(fixed point 4.8) */
 	{0x213, 0x00},
-	{0x214, 0x01}, 
+	{0x214, 0x01}, /* digital_gain_greenB	= 1.0x	(fixed point 4.8) */
 	{0x215, 0x00},
 
 
-	{0x104, 0x00}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Released */
+/*----------------------------------------------- */
+	{0x104, 0x00}, /* Smia_Setup__Grouped_Parameter = Releas */
 
 };
 
 static struct msm_camera_i2c_reg_conf vd6869_zoe_settings[] = {
-	{0x900, 0x00}, 
+/*----------------------------------------------- */
+/* Sensor configuration */
+/*----------------------------------------------- */
+	{0x900, 0x00}, /* full res = 0, binning = 1 */
 
 
-	{0x344, 0x00}, 
+/*----------------------------------------------- */
+/* Output image size - 2688 x 1520 */
+/*----------------------------------------------- */
+	{0x344, 0x00}, /* x_start_addr = 0 */
 	{0x345, 0x00},
-	{0x346, 0x00}, 
+	{0x346, 0x00}, /* y_start_addr = 0 */
 	{0x347, 0x00},
-	{0x348, 0x0a}, 
+	{0x348, 0x0a}, /* x_addr_end = 2687 */
 	{0x349, 0x7f},
-	{0x34a, 0x05}, 
+	{0x34a, 0x05}, /* y_addr_end = 1519 */
 	{0x34b, 0xef},
-	{0x34c, 0x0a}, 
+	{0x34c, 0x0a}, /* x_output_size = 2688 */
 	{0x34d, 0x80},
-	{0x34e, 0x05}, 
+	{0x34e, 0x05}, /* y_output_size = 1520 */
 	{0x34f, 0xf0},
-	{0x382, 0x00}, 
+	{0x382, 0x00}, /* x_odd_inc = 1 */
 	{0x383, 0x01},
-	{0x386, 0x00}, 
+	{0x386, 0x00}, /* y_odd_inc = 1 */
 	{0x387, 0x01},
 
 
 
 
-	{0x300, 0x00}, 
+/*----------------------------------------------- */
+/* Video timing */
+/*----------------------------------------------- */
+	{0x300, 0x00}, /* vt_pix_clk_div = 5 */
 	{0x301, 0x05},
-	{0x302, 0x00}, 
+	{0x302, 0x00}, /* vt_sys_clk_div = 1 */
 	{0x303, 0x01},
-	{0x30a, 0x00}, 
+	{0x30a, 0x00}, /* op_sys_clk_div = 1 */
 	{0x30b, 0x01},
 
 
-	{0x340, 0x03}, 
+	{0x340, 0x03}, /* frame_length_lines = 800 = (1600/2) lines */
 	{0x341, 0x20},
-	{0x342, 0x17}, 
+	{0x342, 0x17}, /* line_length_pck = 6000 pcks */
 	{0x343, 0x70},
 
 
-	{0x3339, 0x00}, 
+/*----------------------------------------------- */
+/* NonHDR / HDR settings */
+/*----------------------------------------------- */
+	{0x3339, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
 
 
+/*///////////////////////////////////////////////////////// */
+/* - Exposure and gains for Non-HDR mode */
+/* */
+/* - The register Grouped_Parameter_Hold 0x0104 must be */
+/* used in conjuction with exposure & gain settings for  */
+/* precise timings control in Sequential & Staggered modes */
+/* */
 /* - Following should be re-written with WriteAutoIncrement */
+/* */
+/*///////////////////////////////////////////////////////// */
 
 
-	{0x104, 0x01}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Hold */
+/*----------------------------------------------- */
+	{0x104, 0x01}, /* Smia_Setup__Grouped_Parameter = Hold */
 
 
-	{0x202, 0x02}, 
+/*----------------------------------------------- */
+/* Exposure and gains (normal mode) */
+/*----------------------------------------------- */
+	{0x202, 0x02}, /* coarse_integration_time = 512 */
 	{0x203, 0x00},
-	{0x204, 0x00}, 
+	{0x204, 0x00}, /* gain 2.0 == 8 << 4 == 128 */
 	{0x205, 0x80},
-	{0x20e, 0x01}, 
+	{0x20e, 0x01}, /* digital_gain_greenR	= 1.0x	(fixed point 4.8) */
 	{0x20f, 0x00},
-	{0x210, 0x01}, 
+	{0x210, 0x01}, /* digital_gain_red		= 1.0x	(fixed point 4.8) */
 	{0x211, 0x00},
-	{0x212, 0x01}, 
+	{0x212, 0x01}, /* digital_gain_blue	= 1.0x	(fixed point 4.8) */
 	{0x213, 0x00},
-	{0x214, 0x01}, 
+	{0x214, 0x01}, /* digital_gain_greenB	= 1.0x	(fixed point 4.8) */
 	{0x215, 0x00},
 
 
-	{0x104, 0x00}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Released */
+/*----------------------------------------------- */
+	{0x104, 0x00}, /* Smia_Setup__Grouped_Parameter = Releas */
 
 };
 
 static struct msm_camera_i2c_reg_conf vd6869_fast_video_settings[] = {
 
-	{0x900, 0x00}, 
+/*----------------------------------------------- */
+/* Sensor configuration */
+/*----------------------------------------------- */
+	{0x900, 0x00}, /* full res = 0, binning = 1 */
 
-	{0x344, 0x00}, 
+/*----------------------------------------------- */
+/*----------------------------------------------- */
+/* Output image size - 1344 x 760 */
+/*----------------------------------------------- */
+	{0x344, 0x00}, /* x_start_addr = 0 */
 	{0x345, 0x00},
-	{0x346, 0x00}, 
+	{0x346, 0x00}, /* y_start_addr = 0 */
 	{0x347, 0x00},
-	{0x348, 0x0a}, 
+	{0x348, 0x0a}, /* x_addr_end = 2687 */
 	{0x349, 0x7f},
-	{0x34a, 0x05}, 
+	{0x34a, 0x05}, /* y_addr_end = 1519 */
 	{0x34b, 0xef},
-	{0x34c, 0x05}, 
+	{0x34c, 0x05}, /* x_output_size = 1344 */
 	{0x34d, 0x40},
-	{0x34e, 0x02}, 
+	{0x34e, 0x02}, /* y_output_size =  760 */
 	{0x34f, 0xf8},
-	{0x382, 0x00}, 
+	{0x382, 0x00}, /* x_odd_inc = 3 */
 	{0x383, 0x03},
-	{0x386, 0x00}, 
+	{0x386, 0x00}, /* y_odd_inc = 3 */
 	{0x387, 0x03},
 
 
-	{0x300, 0x00}, 
+/*----------------------------------------------- */
+/* Video timing */
+/*----------------------------------------------- */
+	{0x300, 0x00}, /* vt_pix_clk_div = 5 */
 	{0x301, 0x05},
-	{0x302, 0x00}, 
+	{0x302, 0x00}, /* vt_sys_clk_div = 1 */
 	{0x303, 0x01},
-	{0x30a, 0x00}, 
+	{0x30a, 0x00}, /* op_sys_clk_div = 1 */
 	{0x30b, 0x01},
 
-	{0x340, 0x01}, 
+	{0x340, 0x01}, /* frame_length_lines = 400 = (800/2) lines */
 	{0x341, 0x90},
-	{0x342, 0x0b}, 
+	{0x342, 0x0b}, /* line_length_pck = 3000 pcks */
 	{0x343, 0xb8},
 
-	{0x3339, 0x00}, 
+/*----------------------------------------------- */
+/* NonHDR / HDR settings */
+/*----------------------------------------------- */
+	{0x3339, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
 
+/*///////////////////////////////////////////////////////// */
+/* - Exposure and gains for Non-HDR mode */
+/* */
+/* - The register Grouped_Parameter_Hold 0x0104 must be */
+/* used in conjuction with exposure & gain settings for  */
+/* precise timings control in Sequential & Staggered modes */
+/* */
 /* - Following should be re-written with WriteAutoIncrement */
+/* */
+/*///////////////////////////////////////////////////////// */
 
-	{0x104, 0x01}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Hold */
+/*----------------------------------------------- */
+	{0x104, 0x01}, /* Smia_Setup__Grouped_Parameter = Hold */
 
-	{0x202, 0x02}, 
+/*----------------------------------------------- */
+/* Exposure and gains (normal mode) */
+/*----------------------------------------------- */
+	{0x202, 0x02}, /* coarse_integration_time = 512 */
 	{0x203, 0x00},
-	{0x204, 0x00}, 
+	{0x204, 0x00}, /* gain 2.0 == 8 << 4 == 128 */
 	{0x205, 0x80},
-	{0x20e, 0x01}, 
+	{0x20e, 0x01}, /* digital_gain_greenR	= 1.0x	(fixed point 4.8) */
 	{0x20f, 0x00},
-	{0x210, 0x01}, 
+	{0x210, 0x01}, /* digital_gain_red		= 1.0x	(fixed point 4.8) */
 	{0x211, 0x00},
-	{0x212, 0x01}, 
+	{0x212, 0x01}, /* digital_gain_blue	= 1.0x	(fixed point 4.8) */
 	{0x213, 0x00},
-	{0x214, 0x01}, 
+	{0x214, 0x01}, /* digital_gain_greenB	= 1.0x	(fixed point 4.8) */
 	{0x215, 0x00},
 
-	{0x104, 0x00}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Released */
+/*----------------------------------------------- */
+	{0x104, 0x00}, /* Smia_Setup__Grouped_Parameter = Releas */
 
 
 };
 
 static struct msm_camera_i2c_reg_conf vd6869_hdr_settings[] = {
-	{0x900, 0x00}, 
+/*----------------------------------------------- */
+/* Sensor configuration */
+/*----------------------------------------------- */
+	{0x900, 0x00}, /* full res = 0, binning = 1 */
 
-	{0x344, 0x01}, 
+/*----------------------------------------------- */
+/* Output image size - 1952 x 1088 */
+/*----------------------------------------------- */
+	{0x344, 0x01}, /* x_start_addr = 368 */
 	{0x345, 0x70},
-	{0x346, 0x00}, 
+	{0x346, 0x00}, /* y_start_addr = 216 */
 	{0x347, 0xd8},
-	{0x348, 0x09}, 
+	{0x348, 0x09}, /* x_addr_end = 2319 */
 	{0x349, 0x0f},
-	{0x34a, 0x05}, 
+	{0x34a, 0x05}, /* y_addr_end = 1303 */
 	{0x34b, 0x17},
-	{0x34c, 0x07}, 
+	{0x34c, 0x07}, /* x_output_size = 1952 */
 	{0x34d, 0xa0},
-	{0x34e, 0x04}, 
+	{0x34e, 0x04}, /* y_output_size = 1088 */
 	{0x34f, 0x40},
-	{0x382, 0x00}, 
+	{0x382, 0x00}, /* x_odd_inc = 1 */
 	{0x383, 0x01},
-	{0x386, 0x00}, 
+	{0x386, 0x00}, /* y_odd_inc = 1 */
 	{0x387, 0x01},
 
 
-	{0x300, 0x00}, 
+/*----------------------------------------------- */
+/* Video timing */
+/*----------------------------------------------- */
+	{0x300, 0x00}, /* vt_pix_clk_div = 5 */
 	{0x301, 0x05},
-	{0x302, 0x00}, 
+	{0x302, 0x00}, /* vt_sys_clk_div = 1 */
 	{0x303, 0x01},
-	{0x30a, 0x00}, 
+	{0x30a, 0x00}, /* op_sys_clk_div = 1 */
 	{0x30b, 0x01},
 
-	{0x340, 0x05}, 
+	{0x340, 0x05}, /* frame_length_lines = 1310 lines */
 	{0x341, 0x1e},
-	{0x342, 0x0b}, 
+	{0x342, 0x0b}, /* line_length_pck = 3000 pcks */
 	{0x343, 0xb8},
 
-	{0x3339, 0xc9}, 
+/*----------------------------------------------- */
+/* NonHDR / HDR settings */
+/*----------------------------------------------- */
+	{0x3339, 0xc9}, /* vtiming long2short offset = 201 (To set only in HDR Staggered) */
 
+/*///////////////////////////////////////////////////////// */
+/* - Exposure and gains for HDR staggered mode */
+/* */
+/* - The register Grouped_Parameter_Hold 0x0104 must be */
+/* used in conjuction with exposure & gain settings for  */
+/* precise timings control in Sequential & Staggered modes */
+/* */
 /* - Following should be re-written with WriteAutoIncrement */
+/* */
+/*///////////////////////////////////////////////////////// */
 
-	{0x104, 0x01}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Hold */
+/*----------------------------------------------- */
+	{0x104, 0x01}, /* Smia_Setup__Grouped_Parameter = Hold */
 
-	{0x32e5, 0x01}, 
+/*----------------------------------------------- */
+/* Exposure and gains (HDR staggered mode) */
+/*----------------------------------------------- */
+/* Expo 0 staggered = Long frame */
+	{0x32e5, 0x01}, /* coarse_integration_time = 200 */
 	{0x32e6, 0x90},
-	{0x32e7, 0x80}, 
-	{0x32f3, 0x01}, 
+	{0x32e7, 0x80}, /* gain 2.0 == 8 << 4 == 128 */
+	{0x32f3, 0x01}, /* digital_gain_greenR	= 1.0x (fixed point 4.8) */
 	{0x32f4, 0x00},
-	{0x32f5, 0x01}, 
+	{0x32f5, 0x01}, /* digital_gain_red = 1.0x (fixed point 4.8) */
 	{0x32f6, 0x00},
-	{0x32f7, 0x01}, 
+	{0x32f7, 0x01}, /* digital_gain_blue	= 1.0x (fixed point 4.8) */
 	{0x32f8, 0x00},
-	{0x32f9, 0x01}, 
+	{0x32f9, 0x01}, /* digital_gain_greenB	= 1.0x (fixed point 4.8) */
 	{0x32fa, 0x00},
 
 
-	{0x32f0, 0x00}, 
+/* Expo 1 staggered = Short Frame */
+	{0x32f0, 0x00}, /* coarse_integration_time = 128 */
 	{0x32f1, 0xc8},
-	{0x32e8, 0x01}, 
+	{0x32e8, 0x01}, /* digital_gain_greenR	= 1.0x (fixed point 4.8) */
 	{0x32e9, 0x00},
-	{0x32ea, 0x01}, 
+	{0x32ea, 0x01}, /* digital_gain_red = 1.0x (fixed point 4.8) */
 	{0x32eb, 0x00},
-	{0x32ec, 0x01}, 
+	{0x32ec, 0x01}, /* digital_gain_blue	= 1.0x (fixed point 4.8) */
 	{0x32ed, 0x00},
-	{0x32ee, 0x01}, 
+	{0x32ee, 0x01}, /* digital_gain_greenB	= 1.0x (fixed point 4.8) */
 	{0x32ef, 0x00},
 
-	{0x104, 0x00}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Released */
+/*----------------------------------------------- */
+	{0x104, 0x00}, /* Smia_Setup__Grouped_Parameter = Releas */
 };
 
 static struct msm_camera_i2c_reg_conf vd6869_4_3_settings[] = {
-	{0x900, 0x00}, 
+/*----------------------------------------------- */
+/* Sensor configuration */
+/*----------------------------------------------- */
+	{0x900, 0x00}, /* full res = 0, binning = 1 */
 
-	{0x300, 0x00}, 
+/*----------------------------------------------- */
+/* Video timing - 576Mbps */
+/*----------------------------------------------- */
+	{0x300, 0x00}, /* vt_pix_clk_div = 5 */
 	{0x301, 0x05},
-	{0x302, 0x00}, 
+	{0x302, 0x00}, /* vt_sys_clk_div = 1 */
 	{0x303, 0x01},
-	{0x30a, 0x00}, 
+	{0x30a, 0x00}, /* op_sys_clk_div = 1 */
 	{0x30b, 0x01},
 
-	{0x340, 0x03}, 
+	{0x340, 0x03}, /* frame_length_lines = 795 = (1590/2) lines */
 	{0x341, 0x1b},
-	{0x342, 0x0b}, 
+	{0x342, 0x0b}, /* line_length_pck = 3000 pcks */
 	{0x343, 0xb8},
 
-	{0x344, 0x01}, 
+/*----------------------------------------------- */
+/* Output image size - 2048 x 1520 */
+/*----------------------------------------------- */
+	{0x344, 0x01}, /* x_start_addr = 320 */
 	{0x345, 0x40},
-	{0x346, 0x00}, 
+	{0x346, 0x00}, /* y_start_addr = 0 */
 	{0x347, 0x00},
-	{0x348, 0x09}, 
+	{0x348, 0x09}, /* x_addr_end = 2367 */
 	{0x349, 0x3f},
-	{0x34a, 0x05}, 
+	{0x34a, 0x05}, /* y_addr_end = 1519 */
 	{0x34b, 0xef},
-	{0x34c, 0x08}, 
+	{0x34c, 0x08}, /* x_output_size = 2048 */
 	{0x34d, 0x00},
-	{0x34e, 0x05}, 
+	{0x34e, 0x05}, /* y_output_size = 1520 */
 	{0x34f, 0xf0},
-	{0x382, 0x00}, 
+	{0x382, 0x00}, /* x_odd_inc = 1 */
 	{0x383, 0x01},
-	{0x386, 0x00}, 
+	{0x386, 0x00}, /* y_odd_inc = 1 */
 	{0x387, 0x01},
 
-	{0x3339, 0x00}, 
+/*----------------------------------------------- */
+/* NonHDR / HDR settings */
+/*----------------------------------------------- */
+	{0x3339, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
 
-	{0x202, 0x01}, 
+/*----------------------------------------------- */
+/* Exposure and gains (normal mode) */
+/*----------------------------------------------- */
+	{0x202, 0x01}, /* coarse_integration_time = 256 */
 	{0x203, 0x00},
-	{0x204, 0x00}, 
+	{0x204, 0x00}, /* gain 2.0 == 8 << 4 == 128 */
 	{0x205, 0x80},
-	{0x20e, 0x01}, 
+	{0x20e, 0x01}, /* digital_gain_greenR	= 1.0x	(fixed point 4.8) */
 	{0x20f, 0x00},
-	{0x210, 0x01}, 
+	{0x210, 0x01}, /* digital_gain_red		= 1.0x	(fixed point 4.8) */
 	{0x211, 0x00},
-	{0x212, 0x01}, 
+	{0x212, 0x01}, /* digital_gain_blue	= 1.0x	(fixed point 4.8) */
 	{0x213, 0x00},
-	{0x214, 0x01}, 
+	{0x214, 0x01}, /* digital_gain_greenB	= 1.0x	(fixed point 4.8) */
 	{0x215, 0x00},
 };
 
 static struct msm_camera_i2c_reg_conf vd6869_16_9_settings_non_hdr[] = {
 
-	{0x900, 0x00}, 
-	{0x344, 0x00}, 
+/*----------------------------------------------- */
+/* Sensor configuration */
+/*----------------------------------------------- */
+	{0x900, 0x00}, /* full res = 0, binning = 1 */
+/*----------------------------------------------- */
+/* Output image size - 2688 x 1520 */
+/*----------------------------------------------- */
+	{0x344, 0x00}, /* x_start_addr = 0 */
 	{0x345, 0x00},
-	{0x346, 0x00}, 
+	{0x346, 0x00}, /* y_start_addr = 0 */
 	{0x347, 0x00},
-	{0x348, 0x0a}, 
+	{0x348, 0x0a}, /* x_addr_end = 2687 */
 	{0x349, 0x7f},
-	{0x34a, 0x05}, 
+	{0x34a, 0x05}, /* y_addr_end = 1519 */
 	{0x34b, 0xef},
-	{0x34c, 0x0a}, 
+	{0x34c, 0x0a}, /* x_output_size = 2688 */
 	{0x34d, 0x80},
-	{0x34e, 0x05}, 
+	{0x34e, 0x05}, /* y_output_size = 1520 */
 	{0x34f, 0xf0},
-	{0x382, 0x00}, 
+	{0x382, 0x00}, /* x_odd_inc = 1 */
 	{0x383, 0x01},
-	{0x386, 0x00}, 
+	{0x386, 0x00}, /* y_odd_inc = 1 */
 	{0x387, 0x01},
 
 
-	{0x300, 0x00}, 
+/*----------------------------------------------- */
+/* Video timing */
+/*----------------------------------------------- */
+	{0x300, 0x00}, /* vt_pix_clk_div = 5 */
 	{0x301, 0x05},
-	{0x302, 0x00}, 
+	{0x302, 0x00}, /* vt_sys_clk_div = 1 */
 	{0x303, 0x01},
-	{0x30a, 0x00}, 
+	{0x30a, 0x00}, /* op_sys_clk_div = 1 */
 	{0x30b, 0x01},
 
-	{0x340, 0x03}, 
+	{0x340, 0x03}, /* frame_length_lines = 795 = (1590/2) lines */
 	{0x341, 0x1b},
-	{0x342, 0x0b}, 
+	{0x342, 0x0b}, /* line_length_pck = 3000 pcks */
 	{0x343, 0xb8},
 
-	{0x3339, 0x00}, 
+/*----------------------------------------------- */
+/* NonHDR / HDR settings */
+/*----------------------------------------------- */
+	{0x3339, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
 
 
+/*///////////////////////////////////////////////////////// */
+/* - Exposure and gains for Non-HDR mode */
+/* */
+/* - The register Grouped_Parameter_Hold 0x0104 must be */
+/* used in conjuction with exposure & gain settings for  */
+/* precise timings control in Sequential & Staggered modes */
+/* */
 /* - Following should be re-written with WriteAutoIncrement */
+/* */
+/*///////////////////////////////////////////////////////// */
 
-	{0x104, 0x01}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Hold */
+/*----------------------------------------------- */
+	{0x104, 0x01}, /* Smia_Setup__Grouped_Parameter = Hold */
 
-	{0x202, 0x02}, 
+/*----------------------------------------------- */
+/* Exposure and gains (normal mode) */
+/*----------------------------------------------- */
+	{0x202, 0x02}, /* coarse_integration_time = 512 */
 	{0x203, 0x00},
-	{0x204, 0x00}, 
+	{0x204, 0x00}, /* gain 2.0 == 8 << 4 == 128 */
 	{0x205, 0x80},
-	{0x20e, 0x01}, 
+	{0x20e, 0x01}, /* digital_gain_greenR	= 1.0x	(fixed point 4.8) */
 	{0x20f, 0x00},
-	{0x210, 0x01}, 
+	{0x210, 0x01}, /* digital_gain_red		= 1.0x	(fixed point 4.8) */
 	{0x211, 0x00},
-	{0x212, 0x01}, 
+	{0x212, 0x01}, /* digital_gain_blue	= 1.0x	(fixed point 4.8) */
 	{0x213, 0x00},
-	{0x214, 0x01}, 
+	{0x214, 0x01}, /* digital_gain_greenB	= 1.0x	(fixed point 4.8) */
 	{0x215, 0x00},
 
-	{0x104, 0x00}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Released */
+/*----------------------------------------------- */
+	{0x104, 0x00}, /* Smia_Setup__Grouped_Parameter = Releas */
 };
 
 static struct msm_camera_i2c_reg_conf vd6869_start_core_1_settings[] = {
@@ -565,12 +766,15 @@ static struct msm_camera_i2c_reg_conf vd6869_stop_core_2_settings[] = {
 };
 
 static struct msm_camera_i2c_reg_conf vd6869_recommend_settings_clearbit[] = {
-	{0x3337, 0x10}, 
+	{0x3337, 0x10}, /* bit 4 */
 };
 
 static struct msm_camera_i2c_reg_conf vd6869_recommend_settings[] = {
 
 
+/*----------------------------------------------- */
+/* Patch v1.28 */
+/*----------------------------------------------- */
 	{0x4440, 0x80},
 	{0x4100, 0x03},
 	{0x6000, 0x90},
@@ -1467,62 +1671,80 @@ static struct msm_camera_i2c_reg_conf vd6869_recommend_2_settings[] = {
 };
 
 static struct msm_camera_i2c_reg_conf vd6869_recommend_3_settings[] = {
-	
-	{0x5800, 0xC0}, 
-	{0x5804, 0x42}, 
-	{0x5808, 0x40}, 
-	{0x580c, 0x00}, 
-	{0x5810, 0x04}, 
-	{0x5814, 0x70}, 
-	{0x5818, 0x07}, 
-	{0x581c, 0x80}, 
-	{0x5820, 0x0C}, 
+	/*cut 09E*/
+	{0x5800, 0xC0}, /* vtminor_0 */
+	{0x5804, 0x42}, /* vtminor_1 */
+	{0x5808, 0x40}, /* vtminor_2 */
+	{0x580c, 0x00}, /* vtminor_3 */
+	{0x5810, 0x04}, /* vtminor_4 */
+	{0x5814, 0x70}, /* vtminor_5 */
+	{0x5818, 0x07}, /* vtminor_6 */
+	{0x581c, 0x80}, /* vtminor_7 */
+	{0x5820, 0x0C}, /* vtminor_8 */
 
-	{0x5872, 0x1f}, 
-	{0x5896, 0xa4}, 
-	{0x5800, 0x00}, 
+	{0x5872, 0x1f}, /* streaming option */
+	{0x5896, 0xa4}, /* streaming option */
+	{0x5800, 0x00}, /* streaming option */
 
-	{0x4a20, 0x0f}, 
-	{0x4a22, 0x00}, 
+/* Darkcal management */
+	{0x4a20, 0x0f}, /* bMode = auto with offset 64 */
+	{0x4a22, 0x00}, /* */
 	{0x4a23, 0x40},
-	{0x4a24, 0x00}, 
+	{0x4a24, 0x00}, /*  */
 	{0x4a25, 0x40},
-	{0x4a26, 0x00}, 
+	{0x4a26, 0x00}, /*  */
 	{0x4a27, 0x40},
-	{0x4a28, 0x00}, 
+	{0x4a28, 0x00}, /*  */
 	{0x4a29, 0x40},
-	{0x33a4, 0x07}, 
+	{0x33a4, 0x07}, /*  */
 	{0x33a5, 0xC0},
-	{0x33a6, 0x00}, 
+	{0x33a6, 0x00}, /*  */
 	{0x33a7, 0x40},
 
-	{0x4d20, 0x0f}, 
-	{0x4d22, 0x00}, 
+	{0x4d20, 0x0f}, /* bMode = auto with offset 64 */
+	{0x4d22, 0x00}, /* */
 	{0x4d23, 0x40},
-	{0x4d24, 0x00}, 
+	{0x4d24, 0x00}, /*  */
 	{0x4d25, 0x40},
-	{0x4d26, 0x00}, 
+	{0x4d26, 0x00}, /*  */
 	{0x4d27, 0x40},
-	{0x4d28, 0x00}, 
+	{0x4d28, 0x00}, /*  */
 	{0x4d29, 0x40},
-	{0x3399, 0x07}, 
+	{0x3399, 0x07}, /*  */
 	{0x339a, 0xC0},
-	{0x339b, 0x00}, 
+	{0x339b, 0x00}, /* */
 	{0x339c, 0x40},
 
-	{0x33be, 0x0b}, 
-	{0x114, 0x03}, 
-	{0x121, 0x18}, 
+/*----------------------------------------------- */
+/* Pre-streaming internal configuration */
+/*----------------------------------------------- */
+	{0x33be, 0x0b}, /* Output formatting - enable ULPS */
+	{0x114, 0x03}, /* csi_lane_mode = quad lane */
+	{0x121, 0x18}, /* extclk_frequency_mhz = 24.0Mhz */
 	{0x122, 0x00},
 
-	{0x304, 0x00}, 
+/*----------------------------------------------- */
+/* Video timing - PLL clock = 576MHz */
+/*----------------------------------------------- */
+	{0x304, 0x00}, /* pre_pll_clk_div = 2 */
 	{0x305, 0x02},
-	{0x306, 0x00}, 
+	{0x306, 0x00}, /* pll_multiplier = 48 */
 	{0x307, 0x30},
 
 
-	{0x101, 0x03}, 
+/*----------------------------------------------- */
+/* Sensor configuration */
+/*----------------------------------------------- */
+	{0x101, 0x03}, /* image_orientation = XY flip */
 
+/*----------------------------------------------- */
+/* HTC module CSI lane mapping */
+/*----------------------------------------------- */
+/* Silicon Lane1(0) -> Module Lane3(2) (0x489c[1:0]=b10) */
+/* Silicon Lane2(1) -> Module Lane1(0) (0x489c[3:2]=b00) */
+/* Silicon Lane3(2) -> Module Lane2(1) (0x489c[5:4]=b01) */
+/* Silicon Lane4(3) -> Module Lane4(3) (0x489c[7:6]=b11) */
+/*----------------------------------------------- */
 	{0x489c, 0xd2},
 };
 
@@ -1568,11 +1790,11 @@ static struct msm_camera_i2c_conf_array vd6869_confs[] = {
 };
 
 static struct msm_sensor_output_info_t vd6869_dimensions[] = {
-	{
-		.x_output = 0xA80, 
-		.y_output = 0x5F0, 
-		.line_length_pclk = 0xBB8, 
-		.frame_length_lines = 0x31b, 
+	{/*non HDR 16:9*/
+		.x_output = 0xA80, /* 2688 */
+		.y_output = 0x5F0, /* 1520 */
+		.line_length_pclk = 0xBB8, /* 3000 */
+		.frame_length_lines = 0x31b, /* 795 */
 		.vt_pixel_clk = 115200000,
 		.op_pixel_clk = 230400000,
 		.binning_factor = 1,
@@ -1581,11 +1803,11 @@ static struct msm_sensor_output_info_t vd6869_dimensions[] = {
  		.yushan_status_line = 2,
 		.yushan_sensor_status_line = 2,
 	},
-	{
-		.x_output = 0x540, 
-		.y_output = 0x2f8, 
-		.line_length_pclk = 0xBB8, 
-		.frame_length_lines = 0x280, 
+	{/*Q size*/
+		.x_output = 0x540, /* 1344 */
+		.y_output = 0x2f8, /* 760 */
+		.line_length_pclk = 0xBB8, /* 3000 */
+		.frame_length_lines = 0x280, /* 640 */
 		.vt_pixel_clk = 115200000,
 		.op_pixel_clk = 230400000,
 		.binning_factor = 2,
@@ -1594,11 +1816,11 @@ static struct msm_sensor_output_info_t vd6869_dimensions[] = {
 		.yushan_status_line = 2,
 		.yushan_sensor_status_line = 2,
 	},
-	{
-		.x_output = 0xA80, 
-		.y_output = 0x5F0, 
-		.line_length_pclk = 0xBB8, 
-		.frame_length_lines = 0x500, 
+	{/*video size*/
+		.x_output = 0xA80, /* 2688 */
+		.y_output = 0x5F0, /* 1520 */
+		.line_length_pclk = 0xBB8, /* 3000 */
+		.frame_length_lines = 0x500, /* 1280 */
 		.vt_pixel_clk = 115200000,
 		.op_pixel_clk = 230400000,
 		.binning_factor = 1,
@@ -1607,11 +1829,11 @@ static struct msm_sensor_output_info_t vd6869_dimensions[] = {
 		.yushan_status_line = 2,
 		.yushan_sensor_status_line = 2,
 	},
-	{
-		.x_output = 0x540, 
-		.y_output = 0x2f8, 
-		.line_length_pclk = 0xBB8, 
-		.frame_length_lines = 0x190, 
+	{/*fast video size*/
+		.x_output = 0x540, /* 1344 */
+		.y_output = 0x2f8, /* 760 */
+		.line_length_pclk = 0xBB8, /* 3000 */
+		.frame_length_lines = 0x190, /* 400 */
 		.vt_pixel_clk = 115200000,
 		.op_pixel_clk = 230400000,
 		.binning_factor = 2,
@@ -1620,11 +1842,11 @@ static struct msm_sensor_output_info_t vd6869_dimensions[] = {
 		.yushan_status_line = 2,
 		.yushan_sensor_status_line = 2,
 	},
-	{
-		.x_output = 0x7a0, 
-		.y_output = 0x440, 
-		.line_length_pclk = 0x12c0, 
-		.frame_length_lines = 0x51e, 
+	{/*HDR 16:9*/
+		.x_output = 0x7a0, /* 1952 */
+		.y_output = 0x440, /* 1088 */
+		.line_length_pclk = 0x12c0, /* 4800 */
+		.frame_length_lines = 0x51e, /* 1310 */
 		.vt_pixel_clk = 115200000,
 		.op_pixel_clk = 230400000,
 		.binning_factor = 1,
@@ -1633,11 +1855,11 @@ static struct msm_sensor_output_info_t vd6869_dimensions[] = {
 		.yushan_status_line = 2,
 		.yushan_sensor_status_line = 2,
 	},
-	{
-		.x_output = 0x800, 
-		.y_output = 0x5F0, 
-		.line_length_pclk = 0xBB8, 
-		.frame_length_lines = 0x31b, 
+	{/*4:3*/
+		.x_output = 0x800, /* 2048 */
+		.y_output = 0x5F0, /* 1520 */
+		.line_length_pclk = 0xBB8, /* 3000 */
+		.frame_length_lines = 0x31b, /* 795 */
 		.vt_pixel_clk = 115200000,
 		.op_pixel_clk = 230400000,
 		.binning_factor = 1,
@@ -1646,11 +1868,11 @@ static struct msm_sensor_output_info_t vd6869_dimensions[] = {
 		.yushan_status_line = 2,
 		.yushan_sensor_status_line = 2,
 	},
-	{ 
-		.x_output = 0x540, 
-		.y_output = 0x2f8, 
-		.line_length_pclk = 0xBB8, 
-		.frame_length_lines = 0x190, 
+	{/*fast video 5:3*/ /* no use (copy from fast video)*/
+		.x_output = 0x540, /* 1344 */
+		.y_output = 0x2f8, /* 760 */
+		.line_length_pclk = 0xBB8, /* 3000 */
+		.frame_length_lines = 0x190, /* 400 */
 		.vt_pixel_clk = 115200000,
 		.op_pixel_clk = 230400000,
 		.binning_factor = 2,
@@ -1659,11 +1881,11 @@ static struct msm_sensor_output_info_t vd6869_dimensions[] = {
 		.yushan_status_line = 2,
 		.yushan_sensor_status_line = 2,
 	},
-	{ 
-		.x_output = 0xA80, 
-		.y_output = 0x5F0, 
-		.line_length_pclk = 0xBB8, 
-		.frame_length_lines = 0x31b, 
+	{/*5:3*/ /* no use (copy from non hdr 16:9)*/
+		.x_output = 0xA80, /* 2688 */
+		.y_output = 0x5F0, /* 1520 */
+		.line_length_pclk = 0xBB8, /* 3000 */
+		.frame_length_lines = 0x31b, /* 795 */
 		.vt_pixel_clk = 115200000,
 		.op_pixel_clk = 230400000,
 		.binning_factor = 1,
@@ -1672,11 +1894,11 @@ static struct msm_sensor_output_info_t vd6869_dimensions[] = {
 		.yushan_status_line = 2,
 		.yushan_sensor_status_line = 2,
 	},
-	{
-		.x_output = 0xA80, 
-		.y_output = 0x5F0, 
-		.line_length_pclk = 0x1770,  
-		.frame_length_lines = 0x320,  
+	{/*zoe size*/
+		.x_output = 0xA80, /* 2688 */
+		.y_output = 0x5F0, /* 1520 */
+		.line_length_pclk = 0x1770, /* 6000 */ //0xBB8, /* 3000 */
+		.frame_length_lines = 0x320, /* 800 */ //0x500, /* 1280 */
 		.vt_pixel_clk = 115200000,
 		.op_pixel_clk = 230400000,
 		.binning_factor = 1,
@@ -1688,500 +1910,745 @@ static struct msm_sensor_output_info_t vd6869_dimensions[] = {
 };
 
 
+/*cut 1.0 setting*/
 static struct msm_camera_i2c_reg_conf vd6869_prev_settings_cut10[] = {
 
-	{0x5800, 0x00},	
-	{0x5840, 0x00},	
-	{0x5844, 0x00},	
-	{0x5860, 0x15},	
-	{0x58a0, 0x3c},	
+//-----------------------------------------------
+// Analogue settings for Bin2x2 - 1p0FW7p2Wk0113
+//-----------------------------------------------
+	{0x5800, 0x00},	// vtminor_0
+	{0x5840, 0x00},	// SPEC_ANALOG_0
+	{0x5844, 0x00},	// SPEC_ANALOG_1
+	{0x5860, 0x15},	// SPEC_ANALOG_5
+	{0x58a0, 0x3c},	// SPEC_ANALOG_15
 
 
-	{0x900, 0x01}, 
+/*----------------------------------------------- */
+/* Sensor configuration */
+/*----------------------------------------------- */
+	{0x900, 0x01}, /* full res = 0, binning = 1 */
 
-       {0x344, 0x00}, 
+/*----------------------------------------------- */
+/* Output image size - 1344 x 760 */
+/*----------------------------------------------- */
+       {0x344, 0x00}, /* x_start_addr = 0 */
        {0x345, 0x00},
-       {0x346, 0x00}, 
+       {0x346, 0x00}, /* y_start_addr = 0 */
        {0x347, 0x00},
-       {0x348, 0x0a}, 
+       {0x348, 0x0a}, /* x_addr_end = 2687 */
        {0x349, 0x7f},
-       {0x34a, 0x05}, 
+       {0x34a, 0x05}, /* y_addr_end = 1519 */
        {0x34b, 0xef},
-       {0x34c, 0x05}, 
+       {0x34c, 0x05}, /* x_output_size = 1344 */
        {0x34d, 0x40},
-       {0x34e, 0x02}, 
+       {0x34e, 0x02}, /* y_output_size = 760 */
        {0x34f, 0xf8},
-       {0x382, 0x00}, 
+       {0x382, 0x00}, /* x_odd_inc = 1 */
        {0x383, 0x01},
-       {0x386, 0x00}, 
+       {0x386, 0x00}, /* y_odd_inc = 1 */
        {0x387, 0x01},
 
 
+//-----------------------------------------------
+// Video timing - PLL clock = 576MHz
+//-----------------------------------------------
 	{0x0304, 0x00},
-	{0x0305, 0x02},     
+	{0x0305, 0x02},     // pre_pll_clk_div = 2
 	{0x0306, 0x00},
-	{0x0307, 0x30},     
+	{0x0307, 0x30},     // pll_multiplier = 48
 
-	{0x300, 0x00}, 
+/*----------------------------------------------- */
+/* Video timing */
+/*----------------------------------------------- */
+	{0x300, 0x00}, /* vt_pix_clk_div = 10 */
 	{0x301, 0x0a},
-	{0x302, 0x00}, 
+	{0x302, 0x00}, /* vt_sys_clk_div = 1 */
 	{0x303, 0x01},
-	{0x30a, 0x00}, 
+	{0x30a, 0x00}, /* op_sys_clk_div = 2 */
 	{0x30b, 0x02},
 
-       {0x340, 0x03}, 
+       {0x340, 0x03}, /* frame_length_lines = 816 lines */
        {0x341, 0x30},
-       {0x342, 0x09}, 
+       {0x342, 0x09}, /* line_length_pck = 2400 pcks */
        {0x343, 0x60},
 
-	{0x3339, 0x00}, 
-	{0x333A, 0x00}, 
+/*----------------------------------------------- */
+/* NonHDR / HDR settings */
+/*----------------------------------------------- */
+	{0x3339, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
+	{0x333A, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
 
 
+/*///////////////////////////////////////////////////////// */
+/* - Exposure and gains for Non-HDR mode */
+/* */
+/* - The register Grouped_Parameter_Hold 0x0104 must be */
+/* used in conjuction with exposure & gain settings for  */
+/* precise timings control in Sequential & Staggered modes */
+/* */
 /* - Following should be re-written with WriteAutoIncrement */
+/* */
+/*///////////////////////////////////////////////////////// */
 
-	{0x104, 0x01}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Hold */
+/*----------------------------------------------- */
+	{0x104, 0x01}, /* Smia_Setup__Grouped_Parameter = Hold */
 
-	{0x202, 0x02}, 
+/*----------------------------------------------- */
+/* Exposure and gains (normal mode) */
+/*----------------------------------------------- */
+	{0x202, 0x02}, /* coarse_integration_time = 512 */
 	{0x203, 0x00},
-	{0x204, 0x00}, 
+	{0x204, 0x00}, /* gain 2.0 == 8 << 4 == 128 */
 	{0x205, 0x80},
-	{0x20e, 0x01}, 
+	{0x20e, 0x01}, /* digital_gain_greenR	= 1.0x	(fixed point 4.8) */
 	{0x20f, 0x00},
-	{0x210, 0x01}, 
+	{0x210, 0x01}, /* digital_gain_red		= 1.0x	(fixed point 4.8) */
 	{0x211, 0x00},
-	{0x212, 0x01}, 
+	{0x212, 0x01}, /* digital_gain_blue	= 1.0x	(fixed point 4.8) */
 	{0x213, 0x00},
-	{0x214, 0x01}, 
+	{0x214, 0x01}, /* digital_gain_greenB	= 1.0x	(fixed point 4.8) */
 	{0x215, 0x00},
 
-	{0x104, 0x00}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Released */
+/*----------------------------------------------- */
+	{0x104, 0x00}, /* Smia_Setup__Grouped_Parameter = Releas */
 };
 
 static struct msm_camera_i2c_reg_conf vd6869_video_settings_cut10[] = {
 
-	{0x5800, 0xe0},	
-	{0x5840, 0xc0},	
-	{0x5844, 0x01},	
-	{0x5860, 0x14},	
-	{0x58a0, 0x00},	
+//-----------------------------------------------
+// Analogue settings - 1p0FW7p2Wk0113
+//-----------------------------------------------
+/*aligment with sharp setting*/
+	{0x5800, 0xe0},	// vtminor_0
+	{0x5840, 0xc0},	// SPEC_ANALOG_0
+	{0x5844, 0x01},	// SPEC_ANALOG_1
+	{0x5860, 0x14},	// SPEC_ANALOG_5
+	{0x58a0, 0x00},	// SPEC_ANALOG_15
 
-	{0x900, 0x00}, 
+/*----------------------------------------------- */
+/* Sensor configuration */
+/*----------------------------------------------- */
+	{0x900, 0x00}, /* full res = 0, binning = 1 */
 
 
-	{0x344, 0x00}, 
+/*----------------------------------------------- */
+/* Output image size - 2688 x 1520 */
+/*----------------------------------------------- */
+	{0x344, 0x00}, /* x_start_addr = 0 */
 	{0x345, 0x00},
-	{0x346, 0x00}, 
+	{0x346, 0x00}, /* y_start_addr = 0 */
 	{0x347, 0x00},
-	{0x348, 0x0a}, 
+	{0x348, 0x0a}, /* x_addr_end = 2687 */
 	{0x349, 0x7f},
-	{0x34a, 0x05}, 
+	{0x34a, 0x05}, /* y_addr_end = 1519 */
 	{0x34b, 0xef},
-	{0x34c, 0x0a}, 
+	{0x34c, 0x0a}, /* x_output_size = 2688 */
 	{0x34d, 0x80},
-	{0x34e, 0x05}, 
+	{0x34e, 0x05}, /* y_output_size = 1520 */
 	{0x34f, 0xf0},
-	{0x382, 0x00}, 
+	{0x382, 0x00}, /* x_odd_inc = 1 */
 	{0x383, 0x01},
-	{0x386, 0x00}, 
+	{0x386, 0x00}, /* y_odd_inc = 1 */
 	{0x387, 0x01},
 
 
 
+//-----------------------------------------------
+// Video timing - PLL clock = 576MHz
+//-----------------------------------------------
 	{0x0304, 0x00},
-	{0x0305, 0x02},     
+	{0x0305, 0x02},     // pre_pll_clk_div = 2
 	{0x0306, 0x00},
-	{0x0307, 0x30},     
+	{0x0307, 0x30},     // pll_multiplier = 48
 
 
-	{0x300, 0x00}, 
+/*----------------------------------------------- */
+/* Video timing */
+/*----------------------------------------------- */
+	{0x300, 0x00}, /* vt_pix_clk_div = 5 */
 	{0x301, 0x05},
-	{0x302, 0x00}, 
+	{0x302, 0x00}, /* vt_sys_clk_div = 1 */
 	{0x303, 0x01},
-	{0x30a, 0x00}, 
+	{0x30a, 0x00}, /* op_sys_clk_div = 1 */
 	{0x30b, 0x01},
 
 
-	{0x340, 0x0A}, 
+	{0x340, 0x0A}, /* frame_length_lines = 2560 lines */
 	{0x341, 0x00},
-	{0x342, 0x0b}, 
+	{0x342, 0x0b}, /* line_length_pck = 3000 pcks */
 	{0x343, 0xb8},
 
 
-	{0x3339, 0x00}, 
-	{0x333A, 0x00}, 
+/*----------------------------------------------- */
+/* NonHDR / HDR settings */
+/*----------------------------------------------- */
+	{0x3339, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
+	{0x333A, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
 
+/*///////////////////////////////////////////////////////// */
+/* - Exposure and gains for Non-HDR mode */
+/* */
+/* - The register Grouped_Parameter_Hold 0x0104 must be */
+/* used in conjuction with exposure & gain settings for  */
+/* precise timings control in Sequential & Staggered modes */
+/* */
 /* - Following should be re-written with WriteAutoIncrement */
+/* */
+/*///////////////////////////////////////////////////////// */
 
 
-	{0x104, 0x01}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Hold */
+/*----------------------------------------------- */
+	{0x104, 0x01}, /* Smia_Setup__Grouped_Parameter = Hold */
 
 
-	{0x202, 0x02}, 
+/*----------------------------------------------- */
+/* Exposure and gains (normal mode) */
+/*----------------------------------------------- */
+	{0x202, 0x02}, /* coarse_integration_time = 512 */
 	{0x203, 0x00},
-	{0x204, 0x00}, 
+	{0x204, 0x00}, /* gain 2.0 == 8 << 4 == 128 */
 	{0x205, 0x80},
-	{0x20e, 0x01}, 
+	{0x20e, 0x01}, /* digital_gain_greenR	= 1.0x	(fixed point 4.8) */
 	{0x20f, 0x00},
-	{0x210, 0x01}, 
+	{0x210, 0x01}, /* digital_gain_red		= 1.0x	(fixed point 4.8) */
 	{0x211, 0x00},
-	{0x212, 0x01}, 
+	{0x212, 0x01}, /* digital_gain_blue	= 1.0x	(fixed point 4.8) */
 	{0x213, 0x00},
-	{0x214, 0x01}, 
+	{0x214, 0x01}, /* digital_gain_greenB	= 1.0x	(fixed point 4.8) */
 	{0x215, 0x00},
 
 
-	{0x104, 0x00}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Released */
+/*----------------------------------------------- */
+	{0x104, 0x00}, /* Smia_Setup__Grouped_Parameter = Releas */
 
 };
 
 static struct msm_camera_i2c_reg_conf vd6869_zoe_settings_cut10[] = {
-	{0x5800, 0xe0},	
-	{0x5840, 0xc0},	
-	{0x5844, 0x01},	
-	{0x5860, 0x14},	
-	{0x58a0, 0x00},	
+//-----------------------------------------------
+// Analogue settings - 1p0FW7p2Wk0113
+//-----------------------------------------------
+/*aligment with sharp setting*/
+	{0x5800, 0xe0},	// vtminor_0
+	{0x5840, 0xc0},	// SPEC_ANALOG_0
+	{0x5844, 0x01},	// SPEC_ANALOG_1
+	{0x5860, 0x14},	// SPEC_ANALOG_5
+	{0x58a0, 0x00},	// SPEC_ANALOG_15
 
-	{0x900, 0x00}, 
+/*----------------------------------------------- */
+/* Sensor configuration */
+/*----------------------------------------------- */
+	{0x900, 0x00}, /* full res = 0, binning = 1 */
 
 
-	{0x344, 0x00}, 
+/*----------------------------------------------- */
+/* Output image size - 2688 x 1520 */
+/*----------------------------------------------- */
+	{0x344, 0x00}, /* x_start_addr = 0 */
 	{0x345, 0x00},
-	{0x346, 0x00}, 
+	{0x346, 0x00}, /* y_start_addr = 0 */
 	{0x347, 0x00},
-	{0x348, 0x0a}, 
+	{0x348, 0x0a}, /* x_addr_end = 2687 */
 	{0x349, 0x7f},
-	{0x34a, 0x05}, 
+	{0x34a, 0x05}, /* y_addr_end = 1519 */
 	{0x34b, 0xef},
-	{0x34c, 0x0a}, 
+	{0x34c, 0x0a}, /* x_output_size = 2688 */
 	{0x34d, 0x80},
-	{0x34e, 0x05}, 
+	{0x34e, 0x05}, /* y_output_size = 1520 */
 	{0x34f, 0xf0},
-	{0x382, 0x00}, 
+	{0x382, 0x00}, /* x_odd_inc = 1 */
 	{0x383, 0x01},
-	{0x386, 0x00}, 
+	{0x386, 0x00}, /* y_odd_inc = 1 */
 	{0x387, 0x01},
 
 
 
+//-----------------------------------------------
+// Video timing - PLL clock = 576MHz
+//-----------------------------------------------
 	{0x0304, 0x00},
-	{0x0305, 0x02},     
+	{0x0305, 0x02},     // pre_pll_clk_div = 2
 	{0x0306, 0x00},
-	{0x0307, 0x30},     
+	{0x0307, 0x30},     // pll_multiplier = 48
 
-	{0x300, 0x00}, 
+/*----------------------------------------------- */
+/* Video timing */
+/*----------------------------------------------- */
+	{0x300, 0x00}, /* vt_pix_clk_div = 5 */
 	{0x301, 0x05},
-	{0x302, 0x00}, 
+	{0x302, 0x00}, /* vt_sys_clk_div = 1 */
 	{0x303, 0x01},
-	{0x30a, 0x00}, 
+	{0x30a, 0x00}, /* op_sys_clk_div = 1 */
 	{0x30b, 0x01},
 
 
-	{0x340, 0x06}, 
+	{0x340, 0x06}, /* frame_length_lines = 1600 lines */
 	{0x341, 0x40},
-	{0x342, 0x17}, 
+	{0x342, 0x17}, /* line_length_pck = 6000 pcks */
 	{0x343, 0x70},
 
 
-	{0x3339, 0x00}, 
-	{0x333A, 0x00}, 
+/*----------------------------------------------- */
+/* NonHDR / HDR settings */
+/*----------------------------------------------- */
+	{0x3339, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
+	{0x333A, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
 
+/*///////////////////////////////////////////////////////// */
+/* - Exposure and gains for Non-HDR mode */
+/* */
+/* - The register Grouped_Parameter_Hold 0x0104 must be */
+/* used in conjuction with exposure & gain settings for  */
+/* precise timings control in Sequential & Staggered modes */
+/* */
 /* - Following should be re-written with WriteAutoIncrement */
+/* */
+/*///////////////////////////////////////////////////////// */
 
 
-	{0x104, 0x01}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Hold */
+/*----------------------------------------------- */
+	{0x104, 0x01}, /* Smia_Setup__Grouped_Parameter = Hold */
 
 
-	{0x202, 0x02}, 
+/*----------------------------------------------- */
+/* Exposure and gains (normal mode) */
+/*----------------------------------------------- */
+	{0x202, 0x02}, /* coarse_integration_time = 512 */
 	{0x203, 0x00},
-	{0x204, 0x00}, 
+	{0x204, 0x00}, /* gain 2.0 == 8 << 4 == 128 */
 	{0x205, 0x80},
-	{0x20e, 0x01}, 
+	{0x20e, 0x01}, /* digital_gain_greenR	= 1.0x	(fixed point 4.8) */
 	{0x20f, 0x00},
-	{0x210, 0x01}, 
+	{0x210, 0x01}, /* digital_gain_red		= 1.0x	(fixed point 4.8) */
 	{0x211, 0x00},
-	{0x212, 0x01}, 
+	{0x212, 0x01}, /* digital_gain_blue	= 1.0x	(fixed point 4.8) */
 	{0x213, 0x00},
-	{0x214, 0x01}, 
+	{0x214, 0x01}, /* digital_gain_greenB	= 1.0x	(fixed point 4.8) */
 	{0x215, 0x00},
 
 
-	{0x104, 0x00}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Released */
+/*----------------------------------------------- */
+	{0x104, 0x00}, /* Smia_Setup__Grouped_Parameter = Releas */
 
 };
 
 static struct msm_camera_i2c_reg_conf vd6869_fast_video_settings_cut10[] = {
 
-	{0x5800, 0x00},	
-	{0x5840, 0x00},	
-	{0x5844, 0x00},	
-	{0x5860, 0x15},	
-	{0x58a0, 0x3c},	
+//-----------------------------------------------
+// Analogue settings for Bin2x2 - 1p0FW7p2Wk0113
+//-----------------------------------------------
+	{0x5800, 0x00},	// vtminor_0
+	{0x5840, 0x00},	// SPEC_ANALOG_0
+	{0x5844, 0x00},	// SPEC_ANALOG_1
+	{0x5860, 0x15},	// SPEC_ANALOG_5
+	{0x58a0, 0x3c},	// SPEC_ANALOG_15
 
 
-	{0x900, 0x01}, 
+/*----------------------------------------------- */
+/* Sensor configuration */
+/*----------------------------------------------- */
+	{0x900, 0x01}, /* full res = 0, binning = 1 */
 
-       {0x344, 0x00}, 
+/*----------------------------------------------- */
+/* Output image size - 1344 x 760 */
+/*----------------------------------------------- */
+       {0x344, 0x00}, /* x_start_addr = 0 */
        {0x345, 0x00},
-       {0x346, 0x00}, 
+       {0x346, 0x00}, /* y_start_addr = 0 */
        {0x347, 0x00},
-       {0x348, 0x0a}, 
+       {0x348, 0x0a}, /* x_addr_end = 2687 */
        {0x349, 0x7f},
-       {0x34a, 0x05}, 
+       {0x34a, 0x05}, /* y_addr_end = 1519 */
        {0x34b, 0xef},
-       {0x34c, 0x05}, 
+       {0x34c, 0x05}, /* x_output_size = 1344 */
        {0x34d, 0x40},
-       {0x34e, 0x02}, 
+       {0x34e, 0x02}, /* y_output_size = 760 */
        {0x34f, 0xf8},
-       {0x382, 0x00}, 
+       {0x382, 0x00}, /* x_odd_inc = 1 */
        {0x383, 0x01},
-       {0x386, 0x00}, 
+       {0x386, 0x00}, /* y_odd_inc = 1 */
        {0x387, 0x01},
 
+//-----------------------------------------------
+// Video timing - PLL clock = 960MHz
+//-----------------------------------------------
 	{0x0304, 0x00},
-	{0x0305, 0x02},     
+	{0x0305, 0x02},     // pre_pll_clk_div = 2
 	{0x0306, 0x00},
-	{0x0307, 0x50},     
+	{0x0307, 0x50},     // pll_multiplier = 80
 
-	{0x300, 0x00}, 
+/*----------------------------------------------- */
+/* Video timing 498MHz*/
+/*----------------------------------------------- */
+	{0x300, 0x00}, /* vt_pix_clk_div = 10 */
 	{0x301, 0x0a},
-	{0x302, 0x00}, 
+	{0x302, 0x00}, /* vt_sys_clk_div = 1 */
 	{0x303, 0x01},
-	{0x30a, 0x00}, 
+	{0x30a, 0x00}, /* op_sys_clk_div = 2 */
 	{0x30b, 0x02},
 
-       {0x340, 0x03}, 
+       {0x340, 0x03}, /* frame_length_lines = 816 lines */
        {0x341, 0x30},
-       {0x342, 0x07}, 
+       {0x342, 0x07}, /* line_length_pck = 2000 pcks */
        {0x343, 0xD0},
 
-	{0x3339, 0x00}, 
-	{0x333A, 0x00}, 
+/*----------------------------------------------- */
+/* NonHDR / HDR settings */
+/*----------------------------------------------- */
+	{0x3339, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
+	{0x333A, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
+/*///////////////////////////////////////////////////////// */
+/* - Exposure and gains for Non-HDR mode */
+/* */
+/* - The register Grouped_Parameter_Hold 0x0104 must be */
+/* used in conjuction with exposure & gain settings for  */
+/* precise timings control in Sequential & Staggered modes */
+/* */
 /* - Following should be re-written with WriteAutoIncrement */
+/* */
+/*///////////////////////////////////////////////////////// */
 
-	{0x104, 0x01}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Hold */
+/*----------------------------------------------- */
+	{0x104, 0x01}, /* Smia_Setup__Grouped_Parameter = Hold */
 
-	{0x202, 0x02}, 
+/*----------------------------------------------- */
+/* Exposure and gains (normal mode) */
+/*----------------------------------------------- */
+	{0x202, 0x02}, /* coarse_integration_time = 512 */
 	{0x203, 0x00},
-	{0x204, 0x00}, 
+	{0x204, 0x00}, /* gain 2.0 == 8 << 4 == 128 */
 	{0x205, 0x80},
-	{0x20e, 0x01}, 
+	{0x20e, 0x01}, /* digital_gain_greenR	= 1.0x	(fixed point 4.8) */
 	{0x20f, 0x00},
-	{0x210, 0x01}, 
+	{0x210, 0x01}, /* digital_gain_red		= 1.0x	(fixed point 4.8) */
 	{0x211, 0x00},
-	{0x212, 0x01}, 
+	{0x212, 0x01}, /* digital_gain_blue	= 1.0x	(fixed point 4.8) */
 	{0x213, 0x00},
-	{0x214, 0x01}, 
+	{0x214, 0x01}, /* digital_gain_greenB	= 1.0x	(fixed point 4.8) */
 	{0x215, 0x00},
 
-	{0x104, 0x00}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Released */
+/*----------------------------------------------- */
+	{0x104, 0x00}, /* Smia_Setup__Grouped_Parameter = Releas */
 
 
 };
 
 static struct msm_camera_i2c_reg_conf vd6869_hdr_settings_cut10[] = {
-	{0x5800, 0xe0},	
-	{0x5840, 0xc0},	
-	{0x5844, 0x01},	
-	{0x5860, 0x14},	
-	{0x58a0, 0x00},	
+//-----------------------------------------------
+// Analogue settings - 1p0FW7p2Wk0113
+//-----------------------------------------------
+/*aligment with sharp setting*/
+	{0x5800, 0xe0},	// vtminor_0
+	{0x5840, 0xc0},	// SPEC_ANALOG_0
+	{0x5844, 0x01},	// SPEC_ANALOG_1
+	{0x5860, 0x14},	// SPEC_ANALOG_5
+	{0x58a0, 0x00},	// SPEC_ANALOG_15
 
-	{0x900, 0x00}, 
+/*----------------------------------------------- */
+/* Sensor configuration */
+/*----------------------------------------------- */
+	{0x900, 0x00}, /* full res = 0, binning = 1 */
 
-	{0x344, 0x01}, 
+/*----------------------------------------------- */
+/* Output image size - 1952 x 1088 */
+/*----------------------------------------------- */
+	{0x344, 0x01}, /* x_start_addr = 368 */
 	{0x345, 0x70},
-	{0x346, 0x00}, 
+	{0x346, 0x00}, /* y_start_addr = 216 */
 	{0x347, 0xd8},
-	{0x348, 0x09}, 
+	{0x348, 0x09}, /* x_addr_end = 2319 */
 	{0x349, 0x0f},
-	{0x34a, 0x05}, 
+	{0x34a, 0x05}, /* y_addr_end = 1303 */
 	{0x34b, 0x17},
-	{0x34c, 0x07}, 
+	{0x34c, 0x07}, /* x_output_size = 1952 */
 	{0x34d, 0xa0},
-	{0x34e, 0x04}, 
+	{0x34e, 0x04}, /* y_output_size = 1088 */
 	{0x34f, 0x40},
-	{0x382, 0x00}, 
+	{0x382, 0x00}, /* x_odd_inc = 1 */
 	{0x383, 0x01},
-	{0x386, 0x00}, 
+	{0x386, 0x00}, /* y_odd_inc = 1 */
 	{0x387, 0x01},
 
 
+//-----------------------------------------------
+// Video timing - PLL clock = 576MHz
+//-----------------------------------------------
 	{0x0304, 0x00},
-	{0x0305, 0x02},     
+	{0x0305, 0x02},     // pre_pll_clk_div = 2
 	{0x0306, 0x00},
-	{0x0307, 0x30},     
+	{0x0307, 0x30},     // pll_multiplier = 48
 
-	{0x300, 0x00}, 
+/*----------------------------------------------- */
+/* Video timing */
+/*----------------------------------------------- */
+	{0x300, 0x00}, /* vt_pix_clk_div = 5 */
 	{0x301, 0x05},
-	{0x302, 0x00}, 
+	{0x302, 0x00}, /* vt_sys_clk_div = 1 */
 	{0x303, 0x01},
-	{0x30a, 0x00}, 
+	{0x30a, 0x00}, /* op_sys_clk_div = 1 */
 	{0x30b, 0x01},
 
-	{0x340, 0x05}, 
+	{0x340, 0x05}, /* frame_length_lines = 1310 lines */
 	{0x341, 0x36},
-	{0x342, 0x17}, 
+	{0x342, 0x17}, /* line_length_pck = 6000 pcks */
 	{0x343, 0x70},
 
-	{0x3339, 0x00}, 
-	{0x333a, 0xc9}, 
+/*----------------------------------------------- */
+/* NonHDR / HDR settings */
+/*----------------------------------------------- */
+	{0x3339, 0x00}, /* vtiming long2short offset = 201 (To set only in HDR Staggered) */
+	{0x333a, 0xc9}, /* vtiming long2short offset = 201 (To set only in HDR Staggered) */
 
+/*///////////////////////////////////////////////////////// */
+/* - Exposure and gains for HDR staggered mode */
+/* */
+/* - The register Grouped_Parameter_Hold 0x0104 must be */
+/* used in conjuction with exposure & gain settings for  */
+/* precise timings control in Sequential & Staggered modes */
+/* */
 /* - Following should be re-written with WriteAutoIncrement */
+/* */
+/*///////////////////////////////////////////////////////// */
 
-	{0x104, 0x01}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Hold */
+/*----------------------------------------------- */
+	{0x104, 0x01}, /* Smia_Setup__Grouped_Parameter = Hold */
 
-	{0x32e5, 0x01}, 
+/*----------------------------------------------- */
+/* Exposure and gains (HDR staggered mode) */
+/*----------------------------------------------- */
+/* Expo 0 staggered = Long frame */
+	{0x32e5, 0x01}, /* coarse_integration_time = 400 */
 	{0x32e6, 0x90},
-	{0x32e7, 0x80}, 
-	{0x32e8, 0x01}, 
+	{0x32e7, 0x80}, /* gain 2.0 == 8 << 4 == 128 */
+	{0x32e8, 0x01}, /* digital_gain_greenR	= 1.0x (fixed point 4.8) */
 	{0x32e9, 0x00},
-	{0x32ea, 0x01}, 
+	{0x32ea, 0x01}, /* digital_gain_red = 1.0x (fixed point 4.8) */
 	{0x32eb, 0x00},
-	{0x32ec, 0x01}, 
+	{0x32ec, 0x01}, /* digital_gain_blue	= 1.0x (fixed point 4.8) */
 	{0x32ed, 0x00},
-	{0x32ee, 0x01}, 
+	{0x32ee, 0x01}, /* digital_gain_greenB	= 1.0x (fixed point 4.8) */
 	{0x32ef, 0x00},
 
-	{0x32f0, 0x00}, 
+/* Expo 1 staggered = Short Frame */
+	{0x32f0, 0x00}, /* coarse_integration_time = 180 */
 	{0x32f1, 0xb4},
-	{0x32f3, 0x01}, 
+	{0x32f3, 0x01}, /* digital_gain_greenR	= 1.0x (fixed point 4.8) */
 	{0x32f4, 0x00},
-	{0x32f5, 0x01}, 
+	{0x32f5, 0x01}, /* digital_gain_red = 1.0x (fixed point 4.8) */
 	{0x32f6, 0x00},
-	{0x32f7, 0x01}, 
+	{0x32f7, 0x01}, /* digital_gain_blue	= 1.0x (fixed point 4.8) */
 	{0x32f8, 0x00},
-	{0x32f9, 0x01}, 
+	{0x32f9, 0x01}, /* digital_gain_greenB	= 1.0x (fixed point 4.8) */
 	{0x32fa, 0x00},
 
-	{0x104, 0x00}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Released */
+/*----------------------------------------------- */
+	{0x104, 0x00}, /* Smia_Setup__Grouped_Parameter = Releas */
 };
 
 static struct msm_camera_i2c_reg_conf vd6869_4_3_settings_cut10[] = {
 
-	{0x5800, 0xe0},	
-	{0x5840, 0xc0},	
-	{0x5844, 0x01},	
-	{0x5860, 0x14},	
-	{0x58a0, 0x00},	
+//-----------------------------------------------
+// Analogue settings - 1p0FW7p2Wk0113
+//-----------------------------------------------
+/*aligment with sharp setting*/
+	{0x5800, 0xe0},	// vtminor_0
+	{0x5840, 0xc0},	// SPEC_ANALOG_0
+	{0x5844, 0x01},	// SPEC_ANALOG_1
+	{0x5860, 0x14},	// SPEC_ANALOG_5
+	{0x58a0, 0x00},	// SPEC_ANALOG_15
 
-	{0x900, 0x00}, 
+/*----------------------------------------------- */
+/* Sensor configuration */
+/*----------------------------------------------- */
+	{0x900, 0x00}, /* full res = 0, binning = 1 */
 
+//-----------------------------------------------
+// Video timing - PLL clock = 576MHz
+//-----------------------------------------------
 	{0x0304, 0x00},
-	{0x0305, 0x02},     
+	{0x0305, 0x02},     // pre_pll_clk_div = 2
 	{0x0306, 0x00},
-	{0x0307, 0x30},     
+	{0x0307, 0x30},     // pll_multiplier = 48
 
-	{0x300, 0x00}, 
+/*----------------------------------------------- */
+/* Video timing - 576Mbps */
+/*----------------------------------------------- */
+	{0x300, 0x00}, /* vt_pix_clk_div = 5 */
 	{0x301, 0x05},
-	{0x302, 0x00}, 
+	{0x302, 0x00}, /* vt_sys_clk_div = 1 */
 	{0x303, 0x01},
-	{0x30a, 0x00}, 
+	{0x30a, 0x00}, /* op_sys_clk_div = 1 */
 	{0x30b, 0x01},
 
-	{0x340, 0x06}, 
+	{0x340, 0x06}, /* frame_length_lines = 1590 lines */
 	{0x341, 0x36},
-	{0x342, 0x0b}, 
+	{0x342, 0x0b}, /* line_length_pck = 3000 pcks */
 	{0x343, 0xb8},
 
-	{0x344, 0x01}, 
+/*----------------------------------------------- */
+/* Output image size - 2048 x 1520 */
+/*----------------------------------------------- */
+	{0x344, 0x01}, /* x_start_addr = 320 */
 	{0x345, 0x40},
-	{0x346, 0x00}, 
+	{0x346, 0x00}, /* y_start_addr = 0 */
 	{0x347, 0x00},
-	{0x348, 0x09}, 
+	{0x348, 0x09}, /* x_addr_end = 2367 */
 	{0x349, 0x3f},
-	{0x34a, 0x05}, 
+	{0x34a, 0x05}, /* y_addr_end = 1519 */
 	{0x34b, 0xef},
-	{0x34c, 0x08}, 
+	{0x34c, 0x08}, /* x_output_size = 2048 */
 	{0x34d, 0x00},
-	{0x34e, 0x05}, 
+	{0x34e, 0x05}, /* y_output_size = 1520 */
 	{0x34f, 0xf0},
-	{0x382, 0x00}, 
+	{0x382, 0x00}, /* x_odd_inc = 1 */
 	{0x383, 0x01},
-	{0x386, 0x00}, 
+	{0x386, 0x00}, /* y_odd_inc = 1 */
 	{0x387, 0x01},
 
-	{0x3339, 0x00}, 
-	{0x333A, 0x00}, 
+/*----------------------------------------------- */
+/* NonHDR / HDR settings */
+/*----------------------------------------------- */
+	{0x3339, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
+	{0x333A, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
 
-	{0x202, 0x01}, 
+/*----------------------------------------------- */
+/* Exposure and gains (normal mode) */
+/*----------------------------------------------- */
+	{0x202, 0x01}, /* coarse_integration_time = 256 */
 	{0x203, 0x00},
-	{0x204, 0x00}, 
+	{0x204, 0x00}, /* gain 2.0 == 8 << 4 == 128 */
 	{0x205, 0x80},
-	{0x20e, 0x01}, 
+	{0x20e, 0x01}, /* digital_gain_greenR	= 1.0x	(fixed point 4.8) */
 	{0x20f, 0x00},
-	{0x210, 0x01}, 
+	{0x210, 0x01}, /* digital_gain_red		= 1.0x	(fixed point 4.8) */
 	{0x211, 0x00},
-	{0x212, 0x01}, 
+	{0x212, 0x01}, /* digital_gain_blue	= 1.0x	(fixed point 4.8) */
 	{0x213, 0x00},
-	{0x214, 0x01}, 
+	{0x214, 0x01}, /* digital_gain_greenB	= 1.0x	(fixed point 4.8) */
 	{0x215, 0x00},
 };
 
 static struct msm_camera_i2c_reg_conf vd6869_16_9_settings_non_hdr_cut10[] = {
 
-	{0x5800, 0xe0},	
-	{0x5840, 0xc0},	
-	{0x5844, 0x01},	
-	{0x5860, 0x14},	
-	{0x58a0, 0x00},	
+//-----------------------------------------------
+// Analogue settings - 1p0FW7p2Wk0113
+//-----------------------------------------------
+/*aligment with sharp setting*/
+	{0x5800, 0xe0},	// vtminor_0
+	{0x5840, 0xc0},	// SPEC_ANALOG_0
+	{0x5844, 0x01},	// SPEC_ANALOG_1
+	{0x5860, 0x14},	// SPEC_ANALOG_5
+	{0x58a0, 0x00},	// SPEC_ANALOG_15
 
-	{0x900, 0x00}, 
-	{0x344, 0x00}, 
+/*----------------------------------------------- */
+/* Sensor configuration */
+/*----------------------------------------------- */
+	{0x900, 0x00}, /* full res = 0, binning = 1 */
+/*----------------------------------------------- */
+/* Output image size - 2688 x 1520 */
+/*----------------------------------------------- */
+	{0x344, 0x00}, /* x_start_addr = 0 */
 	{0x345, 0x00},
-	{0x346, 0x00}, 
+	{0x346, 0x00}, /* y_start_addr = 0 */
 	{0x347, 0x00},
-	{0x348, 0x0a}, 
+	{0x348, 0x0a}, /* x_addr_end = 2687 */
 	{0x349, 0x7f},
-	{0x34a, 0x05}, 
+	{0x34a, 0x05}, /* y_addr_end = 1519 */
 	{0x34b, 0xef},
-	{0x34c, 0x0a}, 
+	{0x34c, 0x0a}, /* x_output_size = 2688 */
 	{0x34d, 0x80},
-	{0x34e, 0x05}, 
+	{0x34e, 0x05}, /* y_output_size = 1520 */
 	{0x34f, 0xf0},
-	{0x382, 0x00}, 
+	{0x382, 0x00}, /* x_odd_inc = 1 */
 	{0x383, 0x01},
-	{0x386, 0x00}, 
+	{0x386, 0x00}, /* y_odd_inc = 1 */
 	{0x387, 0x01},
 
+//-----------------------------------------------
+// Video timing - PLL clock = 576MHz
+//-----------------------------------------------
 	{0x0304, 0x00},
-	{0x0305, 0x02},     
+	{0x0305, 0x02},     // pre_pll_clk_div = 2
 	{0x0306, 0x00},
-	{0x0307, 0x30},     
+	{0x0307, 0x30},     // pll_multiplier = 48
 
 
-	{0x300, 0x00}, 
+/*----------------------------------------------- */
+/* Video timing */
+/*----------------------------------------------- */
+	{0x300, 0x00}, /* vt_pix_clk_div = 5 */
 	{0x301, 0x05},
-	{0x302, 0x00}, 
+	{0x302, 0x00}, /* vt_sys_clk_div = 1 */
 	{0x303, 0x01},
-	{0x30a, 0x00}, 
+	{0x30a, 0x00}, /* op_sys_clk_div = 1 */
 	{0x30b, 0x01},
 
-	{0x340, 0x06}, 
+	{0x340, 0x06}, /* frame_length_lines = 795 x2  lines */
 	{0x341, 0x36},
-	{0x342, 0x0b}, 
+	{0x342, 0x0b}, /* line_length_pck = 3000 pcks */
 	{0x343, 0xb8},
 
-	{0x3339, 0x00}, 
-	{0x333A, 0x00}, 
+/*----------------------------------------------- */
+/* NonHDR / HDR settings */
+/*----------------------------------------------- */
+	{0x3339, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
+	{0x333A, 0x00}, /* vtiming long2short offset = 0 (To set only in HDR Staggered) */
 
+/*///////////////////////////////////////////////////////// */
+/* - Exposure and gains for Non-HDR mode */
+/* */
+/* - The register Grouped_Parameter_Hold 0x0104 must be */
+/* used in conjuction with exposure & gain settings for  */
+/* precise timings control in Sequential & Staggered modes */
+/* */
 /* - Following should be re-written with WriteAutoIncrement */
+/* */
+/*///////////////////////////////////////////////////////// */
 
-	{0x104, 0x01}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Hold */
+/*----------------------------------------------- */
+	{0x104, 0x01}, /* Smia_Setup__Grouped_Parameter = Hold */
 
-	{0x202, 0x02}, 
+/*----------------------------------------------- */
+/* Exposure and gains (normal mode) */
+/*----------------------------------------------- */
+	{0x202, 0x02}, /* coarse_integration_time = 512 */
 	{0x203, 0x00},
-	{0x204, 0x00}, 
+	{0x204, 0x00}, /* gain 2.0 == 8 << 4 == 128 */
 	{0x205, 0x80},
-	{0x20e, 0x01}, 
+	{0x20e, 0x01}, /* digital_gain_greenR	= 1.0x	(fixed point 4.8) */
 	{0x20f, 0x00},
-	{0x210, 0x01}, 
+	{0x210, 0x01}, /* digital_gain_red		= 1.0x	(fixed point 4.8) */
 	{0x211, 0x00},
-	{0x212, 0x01}, 
+	{0x212, 0x01}, /* digital_gain_blue	= 1.0x	(fixed point 4.8) */
 	{0x213, 0x00},
-	{0x214, 0x01}, 
+	{0x214, 0x01}, /* digital_gain_greenB	= 1.0x	(fixed point 4.8) */
 	{0x215, 0x00},
 
-	{0x104, 0x00}, 
+/*----------------------------------------------- */
+/* Smia_Setup__Grouped_Parameter = Released */
+/*----------------------------------------------- */
+	{0x104, 0x00}, /* Smia_Setup__Grouped_Parameter = Releas */
 };
 
 
@@ -4364,32 +4831,42 @@ static struct msm_camera_i2c_reg_conf vd6869_recommand_cut10_1[]={
 {0x3395, 0x01},
 
 
-{0x0114, 0x03},                   
+//-----------------------------------------------
+// Pre-streaming internal configuration
+//-----------------------------------------------
+{0x0114, 0x03},                   // csi_lane_mode = quad lane
 {0x0121, 0x18},
-{0x0122, 0x00},     
+{0x0122, 0x00},     // extclk_frequency_mhz = 24.0Mhz
 
+//-----------------------------------------------
+// Video timing - PLL clock = 576MHz
+//-----------------------------------------------
 {0x0304, 0x00},
-{0x0305, 0x02},     
+{0x0305, 0x02},     // pre_pll_clk_div = 2
 {0x0306, 0x00},
-{0x0307, 0x30},     
+{0x0307, 0x30},     // pll_multiplier = 48
 
 
-{0x0101, 0x03},     
-{0x5848, 0x00},	
-{0x5810, 0x44},	
-{0x5818, 0xc7},	
+//-----------------------------------------------
+// Sensor configuration
+//-----------------------------------------------
+{0x0101, 0x03},     // image_orientation = XY flip
+{0x5848, 0x00},	// SPEC_ANALOG_2
+{0x5810, 0x44},	// vtminor_4
+{0x5818, 0xc7},	// vtminor_6: if(HDRStag + Binning + Yflip)=0xc6, else=0xc7
 
 };
 
 
 static struct msm_camera_i2c_reg_conf vd6869_recommand_cut10_2[]={
-{0x4E01, 0x01},	
-{0x4B01, 0x01},	
+/*aligment with sharp setting*/
+{0x4E01, 0x01},	//tiny flash
+{0x4B01, 0x01},	//tiny flash
 };
 
 
 static struct msm_camera_i2c_conf_array vd6869_init_conf_cut10[] = {
-	
+	/*cut 1.0*/
 	{&vd6869_recommand_cut10[0],
 	ARRAY_SIZE(vd6869_recommand_cut10), 50, MSM_CAMERA_I2C_BYTE_DATA},
 	{&vd6869_recommand_cut10_1[0],
@@ -4420,13 +4897,15 @@ static struct msm_camera_i2c_conf_array vd6869_confs_cut10[] = {
 };
 
 static struct msm_sensor_output_info_t vd6869_dimensions_cut10[] = {
-	{
+	{/*non HDR 16:9*/
 		.x_addr_start = 0,
 		.y_addr_start = 0,
-		.x_output = 0xA80, 
-		.y_output = 0x5F0, 
-		.line_length_pclk = 0xBB8, 
-		.frame_length_lines = 0x636, 
+		.x_output = 0xA80, /* 2688 */
+		.y_output = 0x5F0, /* 1520 */
+		.line_length_pclk = 0xBB8, /* 3000 */
+		.frame_length_lines = 0x636, /* 795x2 */
+		/*this is use for calculate framerate in aec, since frame length line is different with cut0.9
+		   so times 2 in vt clock for correct fomula in calculate fps*/
 		.vt_pixel_clk = 230400000,
 		.op_pixel_clk = 230400000,
 		.binning_factor = 1,
@@ -4435,13 +4914,15 @@ static struct msm_sensor_output_info_t vd6869_dimensions_cut10[] = {
 		.yushan_status_line = 2,
 		.yushan_sensor_status_line = 2,
 	},
-	{
+	{/*Q size*/
 		.x_addr_start = 0,
 		.y_addr_start = 0,
-		.x_output = 0x540, 
-		.y_output = 0x2f8, 
-		.line_length_pclk = 0x960, 
-		.frame_length_lines = 0x330, 
+		.x_output = 0x540, /* 1344 */
+		.y_output = 0x2f8, /* 760 */
+		.line_length_pclk = 0x960, /* 2400 */
+		.frame_length_lines = 0x330, /* 816 */
+		/*this is use for calculate framerate in aec, since frame length line is different with cut0.9
+		   so times 2 in vt clock for correct fomula in calculate fps*/
 		.vt_pixel_clk = 115200000,
 		.op_pixel_clk = 115200000,
 		.binning_factor = 2,
@@ -4450,13 +4931,15 @@ static struct msm_sensor_output_info_t vd6869_dimensions_cut10[] = {
 		.yushan_status_line = 2,
 		.yushan_sensor_status_line = 2,
 	},
-	{
+	{/*video size*/
 		.x_addr_start = 0,
 		.y_addr_start = 0,
-		.x_output = 0xA80, 
-		.y_output = 0x5F0, 
-		.line_length_pclk = 0xBB8, 
-		.frame_length_lines = 0xA00, 
+		.x_output = 0xA80, /* 2688 */
+		.y_output = 0x5F0, /* 1520 */
+		.line_length_pclk = 0xBB8, /* 3000 */
+		.frame_length_lines = 0xA00, /* 2560 */
+		/*this is use for calculate framerate in aec, since frame length line is different with cut0.9
+		   so times 2 in vt clock for correct fomula in calculate fps*/
 		.vt_pixel_clk = 230400000,
 		.op_pixel_clk = 230400000,
 		.binning_factor = 1,
@@ -4465,13 +4948,15 @@ static struct msm_sensor_output_info_t vd6869_dimensions_cut10[] = {
 		.yushan_status_line = 2,
 		.yushan_sensor_status_line = 2,
 	},
-	{
+	{/*fast video size*/
 		.x_addr_start = 0,
 		.y_addr_start = 0,
-		.x_output = 0x540, 
-		.y_output = 0x2f8, 
-		.line_length_pclk = 0x7D0, 
-		.frame_length_lines = 0x330, 
+		.x_output = 0x540, /* 1344 */
+		.y_output = 0x2f8, /* 760 */
+		.line_length_pclk = 0x7D0, /* 2000 */
+		.frame_length_lines = 0x330, /* 816 */
+		/*this is use for calculate framerate in aec, since frame length line is different with cut0.9
+		   so times 2 in vt clock for correct fomula in calculate fps*/
 		.vt_pixel_clk = 199200000,
 		.op_pixel_clk = 199200000,
 		.binning_factor = 2,
@@ -4480,13 +4965,13 @@ static struct msm_sensor_output_info_t vd6869_dimensions_cut10[] = {
 		.yushan_status_line = 2,
 		.yushan_sensor_status_line = 2,
 	},
-	{
-		.x_addr_start = 0x170,
-		.y_addr_start = 0xd8,  
-		.x_output = 0x7a0, 
-		.y_output = 0x440, 
-		.line_length_pclk = 0x2580, 
-		.frame_length_lines = 0x536, 
+	{/*HDR 16:9*/
+		.x_addr_start = 0x170,/* x_start_addr = 368 */
+		.y_addr_start = 0xd8,  /* y_start_addr = 216 */
+		.x_output = 0x7a0, /* 1952 */
+		.y_output = 0x440, /* 1088 */
+		.line_length_pclk = 0x2580, /* 4800*2 */
+		.frame_length_lines = 0x536, /* 1334 */
 		.vt_pixel_clk = 230400000,
 		.op_pixel_clk = 230400000,
 		.binning_factor = 1,
@@ -4495,13 +4980,15 @@ static struct msm_sensor_output_info_t vd6869_dimensions_cut10[] = {
 		.yushan_status_line = 2,
 		.yushan_sensor_status_line = 2,
 	},
-	{
-		.x_addr_start = 0x140,
+	{/*4:3*/
+		.x_addr_start = 0x140,/* x_start_addr = 320 */
 		.y_addr_start = 0,
-		.x_output = 0x800, 
-		.y_output = 0x5F0, 
-		.line_length_pclk = 0xBB8, 
-		.frame_length_lines = 0x636, 
+		.x_output = 0x800, /* 2048 */
+		.y_output = 0x5F0, /* 1520 */
+		.line_length_pclk = 0xBB8, /* 3000 */
+		.frame_length_lines = 0x636, /* 1590 */
+		/*this is use for calculate framerate in aec, since frame length line is different with cut0.9
+		   so times 2 in vt clock for correct fomula in calculate fps*/
 		.vt_pixel_clk = 230400000,
 		.op_pixel_clk = 230400000,
 		.binning_factor = 1,
@@ -4510,13 +4997,15 @@ static struct msm_sensor_output_info_t vd6869_dimensions_cut10[] = {
 		.yushan_status_line = 2,
 		.yushan_sensor_status_line = 2,
 	},
-	{ 
+	{/*fast video 5:3*/ /* no use (copy from fast video)*/
 		.x_addr_start = 0,
 		.y_addr_start = 0,
-		.x_output = 0x540, 
-		.y_output = 0x2f8, 
-		.line_length_pclk = 0xBB8, 
-		.frame_length_lines = 0x190, 
+		.x_output = 0x540, /* 1344 */
+		.y_output = 0x2f8, /* 760 */
+		.line_length_pclk = 0xBB8, /* 3000 */
+		.frame_length_lines = 0x190, /* 400 */
+		/*this is use for calculate framerate in aec, since frame length line is different with cut0.9
+		   so times 2 in vt clock for correct fomula in calculate fps*/
 		.vt_pixel_clk = 230400000,
 		.op_pixel_clk = 230400000,
 		.binning_factor = 1,
@@ -4525,13 +5014,15 @@ static struct msm_sensor_output_info_t vd6869_dimensions_cut10[] = {
 		.yushan_status_line = 2,
 		.yushan_sensor_status_line = 2,
 	},
-	{ 
+	{/*5:3*/ /* no use (copy from non hdr 16:9)*/
 		.x_addr_start = 0,
 		.y_addr_start = 0,
-		.x_output = 0xA80, 
-		.y_output = 0x5F0, 
-		.line_length_pclk = 0xBB8, 
-		.frame_length_lines = 0x31b, 
+		.x_output = 0xA80, /* 2688 */
+		.y_output = 0x5F0, /* 1520 */
+		.line_length_pclk = 0xBB8, /* 3000 */
+		.frame_length_lines = 0x31b, /* 795 */
+		/*this is use for calculate framerate in aec, since frame length line is different with cut0.9
+		   so times 2 in vt clock for correct fomula in calculate fps*/
 		.vt_pixel_clk = 230400000,
 		.op_pixel_clk = 230400000,
 		.binning_factor = 1,
@@ -4540,13 +5031,15 @@ static struct msm_sensor_output_info_t vd6869_dimensions_cut10[] = {
 		.yushan_status_line = 2,
 		.yushan_sensor_status_line = 2,
 	},
-	{
+	{/*zoe size*/
 		.x_addr_start = 0,
 		.y_addr_start = 0,
-		.x_output = 0xA80, 
-		.y_output = 0x5F0, 
-		.line_length_pclk = 0x1770, 
-		.frame_length_lines = 0x640, 
+		.x_output = 0xA80, /* 2688 */
+		.y_output = 0x5F0, /* 1520 */
+		.line_length_pclk = 0x1770, /* 6000 */
+		.frame_length_lines = 0x640, /* 1600 */
+		/*this is use for calculate framerate in aec, since frame length line is different with cut0.9
+		   so times 2 in vt clock for correct fomula in calculate fps*/
 		.vt_pixel_clk = 230400000,
 		.op_pixel_clk = 230400000,
 		.binning_factor = 1,
@@ -4565,7 +5058,7 @@ static struct v4l2_subdev_info vd6869_subdev_info[] = {
 	.fmt    = 1,
 	.order    = 0,
 	},
-	
+	/* more can be supported, to be added later */
 };
 
 static struct msm_camera_csid_vc_cfg vd6869_cid_cfg[] = {
@@ -4617,9 +5110,9 @@ static struct msm_sensor_id_info_t vd6869_id_info = {
 static struct msm_sensor_exp_gain_info_t vd6869_exp_gain_info = {
 	.coarse_int_time_addr = 0x202,
 	.global_gain_addr = 0x204,
-	.vert_offset = SENSOR_VERT_OFFSET, 
-	.min_vert = 4,  
-	.sensor_max_linecount = SENSOR_REGISTER_MAX_LINECOUNT-SENSOR_VERT_OFFSET,  
+	.vert_offset = SENSOR_VERT_OFFSET, /* vert_offset would be used to limit sensor_max_linecount, need to re-calculate sensor_max_linecount if changed */
+	.min_vert = 4, /* min coarse integration time */ /* HTC Angie 20111019 - Fix FPS */
+	.sensor_max_linecount = SENSOR_REGISTER_MAX_LINECOUNT-SENSOR_VERT_OFFSET, /* sensor max linecount = max unsigned value of linecount register size - vert_offset */ /* HTC ben 20120229 */
 };
 
 #define SENSOR_VERT_OFFSET_HDR 4
@@ -4631,7 +5124,7 @@ static struct vd6869_hdr_exp_info_t vd6869_hdr_gain_info = {
 	.short_coarse_int_time_addr_l = 0x32f1,
 	.global_gain_addr = 0x32e7,
 	.vert_offset = SENSOR_VERT_OFFSET_HDR,
-	.sensor_max_linecount = SENSOR_REGISTER_MAX_LINECOUNT-SENSOR_VERT_OFFSET_HDR,  
+	.sensor_max_linecount = SENSOR_REGISTER_MAX_LINECOUNT-SENSOR_VERT_OFFSET_HDR, /* sensor max linecount = max unsigned value of linecount register size - vert_offset */ /* HTC ben 20120229 */
 };
 
 
@@ -4674,7 +5167,7 @@ int32_t vd6869_set_hdr_dig_gain_cut09
 	(struct msm_sensor_ctrl_t *s_ctrl, uint16_t long_dig_gain, uint16_t short_dig_gain)
 {
 	int rc = 0;
-	
+	/*HDR long exposure frame*/
 	rc = msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		STAGGERED_HDR_LONG_REG_DIGITAL_GAIN_GREEN_R, long_dig_gain,
 		MSM_CAMERA_I2C_WORD_DATA);
@@ -4696,7 +5189,7 @@ int32_t vd6869_set_hdr_dig_gain_cut09
 	if(rc < 0)
 		return rc;
 
-	
+	/*HDR short exposure frame*/
 	rc = msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		STAGGERED_HDR_SHORT_REG_DIGITAL_GAIN_GREEN_R, short_dig_gain,
 		MSM_CAMERA_I2C_WORD_DATA);
@@ -4726,7 +5219,7 @@ int32_t vd6869_set_hdr_dig_gain_cut10
 	(struct msm_sensor_ctrl_t *s_ctrl, uint16_t long_dig_gain, uint16_t short_dig_gain)
 {
 	int rc;
-	
+	/*HDR long exposure frame*/
 	rc = msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		STAGGERED_HDR_LONG_REG_CUT10_DIGITAL_GAIN_GREEN_R, long_dig_gain,
 		MSM_CAMERA_I2C_WORD_DATA);
@@ -4748,7 +5241,7 @@ int32_t vd6869_set_hdr_dig_gain_cut10
 	if(rc < 0)
 		return rc;
 
-	
+	/*HDR short exposure frame*/
 	rc = msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		STAGGERED_HDR_SHORT_REG_CUT10_DIGITAL_GAIN_GREEN_R, short_dig_gain,
 		MSM_CAMERA_I2C_WORD_DATA);
@@ -4777,9 +5270,9 @@ int32_t vd6869_set_hdr_dig_gain_cut10
 int32_t vd6869_set_hdr_dig_gain(struct msm_sensor_ctrl_t *s_ctrl, uint16_t long_dig_gain, uint16_t short_dig_gain)
 {
 	int rc = 0;
-	if(s_ctrl->sensordata->sensor_cut == 0)
+	if(s_ctrl->sensordata->sensor_cut == 0)/*cut0.9*/
 		rc = vd6869_set_hdr_dig_gain_cut09(s_ctrl, long_dig_gain, short_dig_gain);
-	else if(s_ctrl->sensordata->sensor_cut == 1)
+	else if(s_ctrl->sensordata->sensor_cut == 1)/*cut1.0*/
 		rc = vd6869_set_hdr_dig_gain_cut10(s_ctrl, long_dig_gain, short_dig_gain);
 	else{
 		pr_err("vd6869 unknow version");
@@ -4796,15 +5289,15 @@ static int vd6869_sensor_open_init(const struct msm_camera_sensor_info *data)
 	if (data->sensor_platform_info){
 		vd6869_s_ctrl.mirror_flip = data->sensor_platform_info->mirror_flip;
 
-		if(vd6869_s_ctrl.driver_ic == 0x11){
+		if(vd6869_s_ctrl.driver_ic == 0x11){/*Closed Loop-LC898212*/
 			if(data->sensor_platform_info->sensor_mount_angle == ANGLE_90){
 				vd6869_s_ctrl.mirror_flip = CAMERA_SENSOR_NONE;
 			}
 			else if(data->sensor_platform_info->sensor_mount_angle == ANGLE_270){
 				vd6869_s_ctrl.mirror_flip = CAMERA_SENSOR_MIRROR_FLIP;
 			}
-		}else if(vd6869_s_ctrl.driver_ic == 0x1){
-			if(data->sensor_platform_info->sensor_mount_angle == ANGLE_270){
+		}else if(vd6869_s_ctrl.driver_ic == 0x1){//Default is the rumbas_act
+			if(data->sensor_platform_info->sensor_mount_angle == ANGLE_270){/*The mount angle is different in dlxp projects*/
 				vd6869_s_ctrl.mirror_flip = CAMERA_SENSOR_NONE;
 			}
 		}else
@@ -4813,7 +5306,7 @@ static int vd6869_sensor_open_init(const struct msm_camera_sensor_info *data)
 		pr_info("vd6869_sensor_open_init,vd6869_s_ctrl.mirror_flip=%d,data->sensor_platform_info->mirror_flip=%d", vd6869_s_ctrl.mirror_flip, data->sensor_platform_info->mirror_flip);
 		pr_info("vd6869_sensor_open_init,sensor_mount_angle=%d", data->sensor_platform_info->sensor_mount_angle);
 		pr_info("vd6869_sensor_open_init,vd6869_s_ctrl.driver_ic=%d", vd6869_s_ctrl.driver_ic);
-		
+		/*Chuck add ews enable flag*/
 		vd6869_s_ctrl.ews_enable = data->sensor_platform_info->ews_enable;
 		pr_info("vd6869_s_ctrl.ews_enable=%d", vd6869_s_ctrl.ews_enable);
 	}
@@ -4827,11 +5320,11 @@ struct vd6869_ver_map {
 	char *str;
 };
 
-static struct vd6869_ver_map vd6869_ver_tab[] = {  
-	{ 0x09, "(0.9)"},	
-	{ 0x0A, "(0.9e)"},	
-	{ 0x10, "(1.0)"},	
-	{ VD6869_VER_UNKNOWN, "(unknown)"}  
+static struct vd6869_ver_map vd6869_ver_tab[] = {  /* vd6869_ver_map.str max length: 32 - strlen(vd6869NAME) -1 */
+	{ 0x09, "(0.9)"},	/* ver 0.9 */
+	{ 0x0A, "(0.9e)"},	/* ver 0.9 enhancement */
+	{ 0x10, "(1.0)"},	/* ver 1.0 */
+	{ VD6869_VER_UNKNOWN, "(unknown)"}  /* VD6869_VER_UNKNOWN item must be the last one of this table */
 };
 
 static uint8_t vd6869_ver = VD6869_VER_UNKNOWN;
@@ -4859,10 +5352,10 @@ static ssize_t sensor_vendor_show(struct device *dev,
 		if (vd6869_ver == vd6869_ver_tab[i].val)
 			break;
 	}
-	if (i < len)  
+	if (i < len)  /* mapped, show its string */
 		snprintf(vd6869NAME_ver, sizeof(vd6869NAME_ver), "%s%s",
 			vd6869NAME, vd6869_ver_tab[i].str);
-	else  
+	else  /* unmapped, show unknown and its value */
 		snprintf(vd6869NAME_ver, sizeof(vd6869NAME_ver), "%s%s-%02X",
 			vd6869NAME, vd6869_ver_tab[len - 1].str, vd6869_ver);
 	CDBG("%s: version(%d) : %s\n", __func__, vd6869_ver, vd6869NAME_ver);
@@ -4871,13 +5364,13 @@ static ssize_t sensor_vendor_show(struct device *dev,
 	month = (vd6869_year_mon & 0x0f);
 	date  = ((vd6869_date & 0xf8) >> 3);
 
-	if((year == 0)&&(month == 0)&&(date == 0))
+	if((year == 0)&&(month == 0)&&(date == 0))/* not support OTP date */
 		pr_err("%s: Invalid OTP date\n", __func__);
 	else
-		year += 2000; 
+		year += 2000; /* year:13, align format to 2013 */
 
 	snprintf(buf, PAGE_SIZE, "%s %s %s %04d-%02d-%02d \n", vd6869Vendor, vd6869NAME_ver, vd6869Size, year, month, date);
-	  
+	/*snprintf(buf, PAGE_SIZE, "%s %s %s\n", vd6869Vendor, vd6869NAME, vd6869Size);*/  /* without version */
 	ret = strlen(buf) + 1;
 
 	return ret;
@@ -4943,7 +5436,7 @@ static struct msm_camera_i2c_client vd6869_sensor_i2c_client = {
 static int vd6869_shut_down_otp(struct msm_sensor_ctrl_t *s_ctrl,uint16_t addr, uint16_t data){
 	int rc=0,i;
 	for(i = 0; i < OTP_WAIT_TIMEOUT;i++){
-		
+		/*shut down power*/
 		rc = msm_camera_i2c_write(
 			s_ctrl->sensor_i2c_client,
 			addr,data,MSM_CAMERA_I2C_BYTE_DATA);
@@ -4964,7 +5457,7 @@ static int vd6869_cut09_init_otp(struct msm_sensor_ctrl_t *s_ctrl){
 	int i,rc = 0;
 	uint16_t read_data = 0;
 
-	
+	/*cut 0.9 manual read OTP*/
 	for(i = 0 ;i < OTP_WAIT_TIMEOUT; i++) {
 		rc = msm_camera_i2c_write_tbl(
 			s_ctrl->sensor_i2c_client
@@ -4981,9 +5474,9 @@ static int vd6869_cut09_init_otp(struct msm_sensor_ctrl_t *s_ctrl){
 		mdelay(1);
 	}
 
-	
+	/*wait OTP ready*/
 	for(i = 0 ;i < OTP_WAIT_TIMEOUT; i++){
-		
+		/*0x3302 is read OTP status 0x00 READY 0x01 PROGRAM 0x02 READ*/
 		rc = msm_camera_i2c_read(
 			s_ctrl->sensor_i2c_client,
 			(0x3302),&read_data,
@@ -5026,7 +5519,7 @@ static int vd6869_cut10_init_otp(struct msm_sensor_ctrl_t *s_ctrl){
 		mdelay(1);
     }
 
-	
+	/*cut 1.0 manual read OTP*/
 	for(i = 0 ;i < OTP_WAIT_TIMEOUT; i++) {
 		rc = msm_camera_i2c_write_tbl(
 			s_ctrl->sensor_i2c_client
@@ -5043,9 +5536,9 @@ static int vd6869_cut10_init_otp(struct msm_sensor_ctrl_t *s_ctrl){
 		mdelay(1);
 	}
 
-	
+	/*wait OTP ready*/
 	for(i = 0 ;i < OTP_WAIT_TIMEOUT; i++){
-		
+		/*0x3302 is read OTP status 0x00 READY 0x01 PROGRAM 0x02 READ*/
 		rc = msm_camera_i2c_read(
 			s_ctrl->sensor_i2c_client,
 			(0x3302),&read_data,
@@ -5065,7 +5558,7 @@ static int vd6869_cut10_init_otp_NO_ECC(struct msm_sensor_ctrl_t *s_ctrl){
 	int i,rc = 0;
 	uint16_t read_data = 0;
 
-	
+	/*cut 1.0 manual read OTP*/
 	for(i = 0 ;i < OTP_WAIT_TIMEOUT; i++) {
 		rc = msm_camera_i2c_write_tbl(
 			s_ctrl->sensor_i2c_client
@@ -5082,9 +5575,9 @@ static int vd6869_cut10_init_otp_NO_ECC(struct msm_sensor_ctrl_t *s_ctrl){
 		mdelay(1);
 	}
 
-	
+	/*wait OTP ready*/
 	for(i = 0 ;i < OTP_WAIT_TIMEOUT; i++){
-		
+		/*0x3302 is read OTP status 0x00 READY 0x01 PROGRAM 0x02 READ*/
 		rc = msm_camera_i2c_read(
 			s_ctrl->sensor_i2c_client,
 			(0x3302),&read_data,
@@ -5117,20 +5610,49 @@ static int vd6869_cut10_deinit_otp(struct msm_sensor_ctrl_t *s_ctrl)
 }
 
 
+// HTC_START pg 20130220 lc898212 act enable
 
+/*
+OTP Location
+
+Burn in times                       1st(Layer 0)    2nd(Layer 1)    3rd(Layer 2)
+
+0 Module vendor                     0x3C8           0x3D8           0x3B8
+1 LENS                              0x3C9           0x3D9           0x3B9
+2 Sensor Version                    0x3CA           0x3DA           0x3BA
+3 Driver IC Vendor & Version        0x3CB           0x3DB           0x3BB
+4 Actuator vender ID & Version      0x3CC           0x3DC           0x3BC
+
+5 Module ID                         0x3A0           0x380           0x388
+6 Module ID                         0x3A1           0x381           0x389
+7 Module ID                         0x3A2           0x382           0x38A
+
+8 BAIS Calibration data             0x3CD           0x3DD           0x3BD
+9 OFFSET Calibration data           0x3CE           0x3DE           0x3BE
+a VCM bottom mech. Limit (MSByte)   0x3C0           0x3D0           0x3B0
+b VCM bottom mech. Limit (LSByte)   0x3C1           0x3D1           0x3B1
+c Infinity position code (MSByte)   0x3C2           0x3D2           0x3B2
+d Infinity position code (LSByte)   0x3C3           0x3D3           0x3B3
+e Macro position code (MSByte)      0x3C4           0x3D4           0x3B4
+f Macro position code (LSByte)      0x3C5           0x3D5           0x3B5
+10 VCM top mech. Limit (MSByte      0x3C6           0x3D6           0x3B6
+11 VCM top mech. Limit (LSByte)     0x3C7           0x3D7           0x3B7
+*/
 
 #define VD6869_LITEON_OTP_SIZE 0x12
+/*M7 projects*/
 const static short new_otp_addr[3][VD6869_LITEON_OTP_SIZE] = {
-    
-    {0x3C8,0x3C9,0x3CA,0x3CB,0x3CC,0x3A0,0x3A1,0x3A2,0x3CD,0x3CE,0x3C0,0x3C1,0x3C2,0x3C3,0x3C4,0x3C5,0x3C6,0x3C7}, 
-    {0x3D8,0x3D9,0x3DA,0x3DB,0x3DC,0x380,0x381,0x382,0x3DD,0x3DE,0x3D0,0x3D1,0x3D2,0x3D3,0x3D4,0x3D5,0x3D6,0x3D7}, 
-    {0x3B8,0x3B9,0x3BA,0x3BB,0x3BC,0x388,0x389,0x38A,0x3BD,0x3BE,0x3B0,0x3B1,0x3B2,0x3B3,0x3B4,0x3B5,0x3B6,0x3B7}, 
+    //0,    1,    2,    3,    4,    5,    6,    7,    8,    9,    a,    b,    c,    d,    e,    f,   10,   11
+    {0x3C8,0x3C9,0x3CA,0x3CB,0x3CC,0x3A0,0x3A1,0x3A2,0x3CD,0x3CE,0x3C0,0x3C1,0x3C2,0x3C3,0x3C4,0x3C5,0x3C6,0x3C7}, // layer 1
+    {0x3D8,0x3D9,0x3DA,0x3DB,0x3DC,0x380,0x381,0x382,0x3DD,0x3DE,0x3D0,0x3D1,0x3D2,0x3D3,0x3D4,0x3D5,0x3D6,0x3D7}, // layer 2
+    {0x3B8,0x3B9,0x3BA,0x3BB,0x3BC,0x388,0x389,0x38A,0x3BD,0x3BE,0x3B0,0x3B1,0x3B2,0x3B3,0x3B4,0x3B5,0x3B6,0x3B7}, // layer 3
 };
+/*dlxp_ul, dlpchina, m4_ul for the issue component*/
 const static short old_otp_addr[3][VD6869_LITEON_OTP_SIZE] = {
-    
-    {0x3C8,0x3C9,0x3CA,0x3CB,0x3CC,0x3A0,0x3A1,0x3A2,0x3CD,0x3CE,0x3C0,0x3C1,0x3C2,0x3C3,0x3C4,0x3C5,0x3C6,0x3C7}, 
-    {0x3D8,0x3D9,0x3DA,0x3DB,0x3DC,0x380,0x381,0x382,0x3DD,0x3DE,0x3D0,0x3D1,0x3D2,0x3D3,0x3D4,0x3D5,0x3D6,0x3D7}, 
-    {0x3B8,0x3B9,0x3BA,0x3BB,0x3BC,0x388,0x389,0x3AA,0x3BD,0x3BE,0x3B0,0x3B1,0x3B2,0x3B3,0x3B4,0x3B5,0x3B6,0x3B7}, 
+    //0,    1,    2,    3,    4,    5,    6,    7,    8,    9,    a,    b,    c,    d,    e,    f,   10,   11
+    {0x3C8,0x3C9,0x3CA,0x3CB,0x3CC,0x3A0,0x3A1,0x3A2,0x3CD,0x3CE,0x3C0,0x3C1,0x3C2,0x3C3,0x3C4,0x3C5,0x3C6,0x3C7}, // layer 1
+    {0x3D8,0x3D9,0x3DA,0x3DB,0x3DC,0x380,0x381,0x382,0x3DD,0x3DE,0x3D0,0x3D1,0x3D2,0x3D3,0x3D4,0x3D5,0x3D6,0x3D7}, // layer 2
+    {0x3B8,0x3B9,0x3BA,0x3BB,0x3BC,0x388,0x389,0x3AA,0x3BD,0x3BE,0x3B0,0x3B1,0x3B2,0x3B3,0x3B4,0x3B5,0x3B6,0x3B7}, // layer 3
 };
 
 #if defined(CONFIG_ACT_OIS_BINDER)
@@ -5138,10 +5660,10 @@ extern void HtcActOisBinder_set_OIS_OTP(uint8_t *otp_data, uint8_t otp_size);
 
 #define VD6869_LITEON_OIS_OTP_SIZE 34
 const static short ois_addr[3][VD6869_LITEON_OIS_OTP_SIZE] = {
-    
-    {0x090,0x091,0x092,0x093,0x094,0x095,0x096,0x097,0x098,0x099,0x09A,0x09B,0x09C,0x09D,0x09E,0x09F,0x0A0,0x0A1,0x0A2,0x0A3,0x0A4,0x0A5,0x0A6,0x0A7,0x0A8,0x0A9,0x0AA,0x0AB,0x0AC,0x0AD,0x0AE,0x0AF,0x0F0,0x0F4}, 
-    {0x0B0,0x0B1,0x0B2,0x0B3,0x0B4,0x0B5,0x0B6,0x0B7,0x0B8,0x0B9,0x0BA,0x0BB,0x0BC,0x0BD,0x0BE,0x0BF,0x0C0,0x0C1,0x0C2,0x0C3,0x0C4,0x0C5,0x0C6,0x0C7,0x0C8,0x0C9,0x0CA,0x0CB,0x0CC,0x0CD,0x0CE,0x0CF,0x0F8,0x0F9}, 
-    {0x0D0,0x0D1,0x0D2,0x0D3,0x0D4,0x0D5,0x0D6,0x0D7,0x0D8,0x0D9,0x0DA,0x0DB,0x0DC,0x0DD,0x0DE,0x0DF,0x0E0,0x0E1,0x0E2,0x0E3,0x0E4,0x0E5,0x0E6,0x0E7,0x0E8,0x0E9,0x0EA,0x0EB,0x0EC,0x0ED,0x0EE,0x0EF,0x0FC,0x0FD}, 
+    //0,    1,    2,    3,    4,    5,    6,    7,    8,    9,    a,    b,    c,    d,    e,    f,   10,   11
+    {0x090,0x091,0x092,0x093,0x094,0x095,0x096,0x097,0x098,0x099,0x09A,0x09B,0x09C,0x09D,0x09E,0x09F,0x0A0,0x0A1,0x0A2,0x0A3,0x0A4,0x0A5,0x0A6,0x0A7,0x0A8,0x0A9,0x0AA,0x0AB,0x0AC,0x0AD,0x0AE,0x0AF,0x0F0,0x0F4}, // layer 1
+    {0x0B0,0x0B1,0x0B2,0x0B3,0x0B4,0x0B5,0x0B6,0x0B7,0x0B8,0x0B9,0x0BA,0x0BB,0x0BC,0x0BD,0x0BE,0x0BF,0x0C0,0x0C1,0x0C2,0x0C3,0x0C4,0x0C5,0x0C6,0x0C7,0x0C8,0x0C9,0x0CA,0x0CB,0x0CC,0x0CD,0x0CE,0x0CF,0x0F8,0x0F9}, // layer 2
+    {0x0D0,0x0D1,0x0D2,0x0D3,0x0D4,0x0D5,0x0D6,0x0D7,0x0D8,0x0D9,0x0DA,0x0DB,0x0DC,0x0DD,0x0DE,0x0DF,0x0E0,0x0E1,0x0E2,0x0E3,0x0E4,0x0E5,0x0E6,0x0E7,0x0E8,0x0E9,0x0EA,0x0EB,0x0EC,0x0ED,0x0EE,0x0EF,0x0FC,0x0FD}, // layer 3
 };
 #endif
 
@@ -5168,40 +5690,40 @@ int vd6869_read_fuseid_liteon(struct sensor_cfg_data *cdata,
 
 	if (first) {
 		if (s_ctrl->sensordata->sensor_cut == 1) {
-			
+			//check for LiteOn module only
 			for (i=0; i<4; i++) {
-				rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, (offset + 0x3F4 + i), &ews_data[i], MSM_CAMERA_I2C_BYTE_DATA);
+				rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, (offset + 0x3F4 + i), &ews_data[i], MSM_CAMERA_I2C_BYTE_DATA);//0x37c2
 				if (rc < 0){
 					pr_err("%s: msm_camera_i2c_read 0x%x failed\n", __func__, (offset + 0x3F4 + i));
 					return rc;
 				}
 				pr_info("%s: read OTP 0x%x = 0x%x\n", __func__, (0x3F4 + i), ews_data[i]);
 			}
-			if(vd6869_s_ctrl.ews_enable){
+			if(vd6869_s_ctrl.ews_enable){/*sys_rev < PVT*/
 				if (ews_data[0]==0 && ews_data[1]==0 && ews_data[2]==0 && ews_data[3]==1) {
 					pr_info("%s: Apply OTP ECC enable", __func__);
 				} else {
-					
+					//disable sensor OTP ECC for all LiteOn module(None ECC)
 					vd6869_cut10_init_otp_NO_ECC(s_ctrl);
 					pr_info("%s: Apply OTP ECC disable", __func__);
 				}
-			}else
+			}else/*sys_rev > PVT*/
 				pr_info("%s: Apply OTP ECC enable, vd6869_s_ctrl.ews_enable=%d", __func__, vd6869_s_ctrl.ews_enable);
 		}
 
-        
+        // start from layer 2
 
         for (j=2; j>=0; --j) {
             for (i=0; i<VD6869_LITEON_OTP_SIZE; ++i) {
                 if(vd6869_s_ctrl.ews_enable){
-                    rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, old_otp_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
+                    rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, old_otp_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);//0x37c2
 	                if (rc < 0){
 	                    pr_err("%s: msm_camera_i2c_read 0x%x failed\n", __func__, old_otp_addr[j][i]);
 	                    return rc;
 	                }
 	                pr_info("%s: OTP addr 0x%x = 0x%x\n", __func__,  old_otp_addr[j][i], read_data);
                 }else{
-	                rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, new_otp_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
+	                rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, new_otp_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);//0x37c2
 	                if (rc < 0){
 	                    pr_err("%s: msm_camera_i2c_read 0x%x failed\n", __func__, new_otp_addr[j][i]);
 	                    return rc;
@@ -5219,10 +5741,10 @@ int vd6869_read_fuseid_liteon(struct sensor_cfg_data *cdata,
         pr_info("%s: OTP valid layer = %d\n", __func__,  valid_layer);
 
 #if defined(CONFIG_ACT_OIS_BINDER)
-        
+        // start from layer 2
         for (j=2; j>=0; --j) {
             for (i=0; i<VD6869_LITEON_OIS_OTP_SIZE; ++i) {
-                rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, ois_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
+                rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, ois_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);//0x37c2
                 if (rc < 0){
                     pr_err("%s: msm_camera_i2c_read 0x%x failed\n", __func__, ois_addr[j][i]);
                     return rc;
@@ -5252,20 +5774,20 @@ int vd6869_read_fuseid_liteon(struct sensor_cfg_data *cdata,
 
 
     }
-    
-    vd6869_ver = otp[2]; 
+    // vendor
+    vd6869_ver = otp[2]; // HTC pg 20130329 add sensor cut info
     cdata->sensor_ver = otp[2];
 
     if (board_mfg_mode()) {
         msm_dump_otp_to_file (PLATFORM_DRIVER_NAME, valid_layer, VD6869_OTP_ADDRESS_START, all_otp_data, VD6869_OTP_SIZE);
     }
-    
+    // fuseid
     cdata->cfg.fuse.fuse_id_word1 = 0;
     cdata->cfg.fuse.fuse_id_word2 = otp[5];
     cdata->cfg.fuse.fuse_id_word3 = otp[6];
     cdata->cfg.fuse.fuse_id_word4 = otp[7];
 
-    
+    // vcm
     cdata->af_value.VCM_BIAS = otp[8];
     cdata->af_value.VCM_OFFSET = otp[9];
     cdata->af_value.VCM_BOTTOM_MECH_MSB = otp[0xa];
@@ -5301,12 +5823,49 @@ int vd6869_read_fuseid_liteon(struct sensor_cfg_data *cdata,
 
     return 0;
 }
+// HTC_END pg 20130220 lc898212 act enable
 int vd6869_read_fuseid_sharp(struct sensor_cfg_data *cdata,
 	struct msm_sensor_ctrl_t *s_ctrl,bool first)
 {
+/*
+                                    1st Layer	2nd Layer	3rd Layer
+
+0   Year[7:4], Month[3:0]	        0x3A0	    0x380	    0x388
+1   Date[7:3],000	                0x3A1	    0x381	    0x389
+2   Start VCM code (MSByte)	        0x3C0	    0x3D0	    0x3B0
+3   Start VCM code (LSByte)	        0x3C1	    0x3D1	    0x3B1
+4   Infinity position code (MSByte)	0x3C2	    0x3D2	    0x3B2
+5   Infinity position code (LSByte)	0x3C3	    0x3D3	    0x3B3
+6   Macro position code (MSByte)	0x3C4	    0x3D4	    0x3B4
+7   Macro position code (LSByte)	0x3C5	    0x3D5	    0x3B5
+8   0x00	                        0x3C6	    0x3D6	    0x3B6
+9   0x00	                        0x3C7	    0x3D7	    0x3B7
+a   Module Vendor ID	            0x3C8	    0x3D8	    0x3B8
+b   Lens ID	                        0x3C9	    0x3D9	    0x3B9
+c   Sensor Version	                0x3CA	    0x3DA	    0x3BA
+d   Driver ID	                    0x3CB	    0x3DB	    0x3BB
+e   Actuator ID	                    0x3CC	    0x3DC	    0x3BC
+f   0x00	                        0x3CD	    0x3DD	    0x3BD
+10  0x00	                        0x3CE	    0x3DE	    0x3BE
+11  CheckSum	                    0x3CF	    0x3DF	    0x3BF
+
+12  fuse id 0                       0x3f4       0x3f4       0x3f4
+13  fuse id 1                       0x3f5       0x3f5       0x3f5
+14  fuse id 2                       0x3f6       0x3f6       0x3f6
+15  fuse id 3                       0x3f7       0x3f7       0x3f7
+16  fuse id 4                       0x3f8       0x3f8       0x3f8
+17  fuse id 5                       0x3f9       0x3f9       0x3f9
+18  fuse id 6                       0x3fa       0x3fa       0x3fa
+19  fuse id 7                       0x3fb       0x3fb       0x3fb
+1a  fuse id 8                       0x3fc       0x3fc       0x3fc
+1b  fuse id 9                       0x3fd       0x3fd       0x3fd
+1c  fuse id 10                      0x3fe       0x3fe       0x3fe
+1d  fuse id 11                      0x3ff       0x3ff       0x3ff
+
+*/
     #define SHARP_OTP_SIZE 0x12
     const static short sharp_otp_addr[3][SHARP_OTP_SIZE] = {
-        
+        //0,   1,    2,    3,    4,    5,    6,    7,    8,    9,    a,    b,    c,    d,    e,    f,   10,    11,
         {0x3A0,0x3A1,0x3C0,0x3C1,0x3C2,0x3C3,0x3C4,0x3C5,0x3C6,0x3C7,0x3C8,0x3C9,0x3CA,0x3CB,0x3CC,0x3CD,0x3CE,0x3CF},
         {0x380,0x381,0x3D0,0x3D1,0x3D2,0x3D3,0x3D4,0x3D5,0x3D6,0x3D7,0x3D8,0x3D9,0x3DA,0x3DB,0x3DC,0x3DD,0x3DE,0x3DF},
         {0x388,0x389,0x3B0,0x3B1,0x3B2,0x3B3,0x3B4,0x3B5,0x3B6,0x3B7,0x3B8,0x3B9,0x3BA,0x3BB,0x3BC,0x3BD,0x3BE,0x3BF}
@@ -5326,7 +5885,7 @@ int vd6869_read_fuseid_sharp(struct sensor_cfg_data *cdata,
 #endif
 
     if (first) {
-        
+        // otp data
         for (j=2; j>=0; --j) {
            for (i=0; i<SHARP_OTP_SIZE; ++i) {
                rc = vd6869_i2c_read(s_ctrl->sensor_i2c_client, sharp_otp_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
@@ -5345,7 +5904,7 @@ int vd6869_read_fuseid_sharp(struct sensor_cfg_data *cdata,
                break;
         }
         pr_info("%s: OTP valid layer = %d\n", __func__,  valid_layer);
-        
+        // fuse id
         for (i=0;i<SHARP_FUSEID_SIZE;++i) {
             rc = vd6869_i2c_read(s_ctrl->sensor_i2c_client, sharp_fuseid_addr[i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
             if (rc < 0){
@@ -5358,10 +5917,10 @@ int vd6869_read_fuseid_sharp(struct sensor_cfg_data *cdata,
         }
 
     #if defined(CONFIG_ACT_OIS_BINDER)
-        
+        // start from layer 2
         for (j=2; j>=0; --j) {
             for (i=0; i<VD6869_LITEON_OIS_OTP_SIZE; ++i) {
-                rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, ois_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
+                rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, ois_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);//0x37c2
                 if (rc < 0){
                     pr_err("%s: msm_camera_i2c_read 0x%x failed\n", __func__, ois_addr[j][i]);
                     return rc;
@@ -5411,7 +5970,7 @@ int vd6869_read_fuseid_sharp(struct sensor_cfg_data *cdata,
         (otp[0x1b]<<16) |
         (otp[0x1c]<<8) |
         (otp[0x1d]);
-    
+    /*PASS DATA to RUMBAS_ACT*/
     cdata->af_value.VCM_START_MSB = otp[2];
     cdata->af_value.VCM_START_LSB = otp[3];
     cdata->af_value.AF_INF_MSB = otp[4];
@@ -5446,6 +6005,7 @@ int vd6869_read_fuseid_sharp(struct sensor_cfg_data *cdata,
 
     return 0;
 }
+// HTC_START pg 20130220 lc898212 act enable
 
 int vd6869_read_fuseid_liteon_mfg_core(struct sensor_cfg_data *cdata,
 	struct msm_sensor_ctrl_t *s_ctrl, bool first,uint8_t* otp )
@@ -5463,18 +6023,18 @@ int vd6869_read_fuseid_liteon_mfg_core(struct sensor_cfg_data *cdata,
     uint16_t read_data = 0;
 
     if (first) {
-        
+        // start from layer 2
         for (j=2; j>=0; --j) {
             for (i=0; i<VD6869_LITEON_OTP_SIZE; ++i) {
-                if(vd6869_s_ctrl.ews_enable){
-	                rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, old_otp_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
+                if(vd6869_s_ctrl.ews_enable){/*sys_rev < PVT*/
+	                rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, old_otp_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);//0x37c2
 	                if (rc < 0){
 	                    pr_err("%s: msm_camera_i2c_read 0x%x failed\n", __func__,old_otp_addr[j][i]);
 	                    return rc;
 	                }
 	                pr_info("%s: OTP addr 0x%x = 0x%x\n", __func__,  old_otp_addr[j][i], read_data);
-                }else{
-	                rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, new_otp_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
+                }else{/*sys_rev > PVT*/
+	                rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, new_otp_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);//0x37c2
 	                if (rc < 0){
 	                    pr_err("%s: msm_camera_i2c_read 0x%x failed\n", __func__,new_otp_addr[j][i]);
 	                    return rc;
@@ -5492,10 +6052,10 @@ int vd6869_read_fuseid_liteon_mfg_core(struct sensor_cfg_data *cdata,
         pr_info("%s: OTP valid layer = %d\n", __func__,  valid_layer);
 
 #if defined(CONFIG_ACT_OIS_BINDER)
-        
+        // start from layer 2
         for (j=2; j>=0; --j) {
             for (i=0; i<VD6869_LITEON_OIS_OTP_SIZE; ++i) {
-                rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, ois_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
+                rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, ois_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);//0x37c2
                 if (rc < 0){
                     pr_err("%s: msm_camera_i2c_read 0x%x failed\n", __func__, ois_addr[j][i]);
                     return rc;
@@ -5523,17 +6083,17 @@ int vd6869_read_fuseid_liteon_mfg_core(struct sensor_cfg_data *cdata,
 
 
     }
-    
-    vd6869_ver = otp[2]; 
+    // vendor
+    vd6869_ver = otp[2]; // HTC pg 20130329 add sensor cut info
     cdata->sensor_ver = otp[2];
 
-    
+    // fuseid
     cdata->cfg.fuse.fuse_id_word1 = 0;
     cdata->cfg.fuse.fuse_id_word2 = otp[5];
     cdata->cfg.fuse.fuse_id_word3 = otp[6];
     cdata->cfg.fuse.fuse_id_word4 = otp[7];
 
-    
+    // vcm
     cdata->af_value.VCM_BIAS = otp[8];
     cdata->af_value.VCM_OFFSET = otp[9];
     cdata->af_value.VCM_BOTTOM_MECH_MSB = otp[0xa];
@@ -5610,7 +6170,7 @@ int32_t vd6869_read_otp_valid_layer(struct msm_sensor_ctrl_t *s_ctrl, int8_t *va
 	if (first) {
 		for (j=2; j>=0; --j) {
 			for (i=0; i<VD6869_LITEON_OTP_SIZE; ++i) {
-				rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, new_otp_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
+				rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, new_otp_addr[j][i]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);//0x37c2
 				if (rc < 0){
 					pr_err("%s: msm_camera_i2c_read 0x%x failed\n", __func__, new_otp_addr[j][i]);
 					return rc;
@@ -5647,20 +6207,20 @@ int vd6869_read_module_vendor(struct msm_sensor_ctrl_t *s_ctrl, uint8_t valid_la
 				rc = vd6869_cut10_init_otp(s_ctrl);
 				if (rc<0)
 					return rc;
-			}else if(s_ctrl->sensordata->sensor_cut == 0){
+			}else if(s_ctrl->sensordata->sensor_cut == 0){/* HTC_start chuck add cut0.9 OTP init seq*/
 				rc = vd6869_cut09_init_otp(s_ctrl);
 				if (rc<0)
 					return rc;
 			}
 
-			rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, new_otp_addr[valid_layer][0]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
+			rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, new_otp_addr[valid_layer][0]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);//0x37c2, the first element is the same , use new_otp_addr to be the dafault
 			if (rc < 0) {
 				pr_err("%s: msm_camera_i2c_read 0x%x failed\n", __func__, new_otp_addr[valid_layer][0]+offset);
 				return rc;
 			}
 			moduler = (uint8_t)(read_data&0x00FF);
 
-			rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, new_otp_addr[valid_layer][3]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);
+			rc = msm_camera_i2c_read(s_ctrl->sensor_i2c_client, new_otp_addr[valid_layer][3]+offset, &read_data, MSM_CAMERA_I2C_BYTE_DATA);//0x37c5
 			if (rc < 0) {
 				pr_err("%s: msm_camera_i2c_read 0x%x failed\n", __func__, new_otp_addr[valid_layer][3]+offset);
 				return rc;
@@ -5731,9 +6291,9 @@ int vd6869_read_fuseid(struct sensor_cfg_data *cdata,
 		}
 
 		if(vd6869_s_ctrl.ews_enable)
-			pr_info("%s, vd6869_s_ctrl.ews_enable=%d", __func__, vd6869_s_ctrl.ews_enable);
+			pr_info("%s, vd6869_s_ctrl.ews_enable=%d", __func__, vd6869_s_ctrl.ews_enable);/*Dlxp_ul,Dlp_china, M4*/
 		else{
-			rc = vd6869_read_otp_valid_layer (s_ctrl,&valid_layer,first);
+			rc = vd6869_read_otp_valid_layer (s_ctrl,&valid_layer,first);/*M7 projects*/
 			if (rc<0) {
 				pr_err("%s: failed %d\n", __func__, rc);
 				first = false;
@@ -5753,15 +6313,16 @@ int vd6869_read_fuseid(struct sensor_cfg_data *cdata,
 	}
 	cdata->af_value.VCM_VENDOR = module_vendor;
 
+/* HTC_START 20130329 */
 	if (sdata->num_actuator_info_table > 1)
 	{
 		pr_info("%s: driver_ic=%d\n", __func__, driver_ic);
 
-		if (driver_ic == 0x21) { 
+		if (driver_ic == 0x21) { //ONSEMI(TI201)
 			actuator_index = vd6869_lookup_actuator(s_ctrl, "ti201_act");
-		} else if (driver_ic == 0x11) { 
+		} else if (driver_ic == 0x11) { //Closed-Loop VCM (LC898212)
 			actuator_index = vd6869_lookup_actuator(s_ctrl, "lc898212_act");
-		} else if (driver_ic == 0x1)  { 
+		} else if (driver_ic == 0x1)  { //RUMBA_S
 			actuator_index = vd6869_lookup_actuator(s_ctrl, "rumbas_act");
 		}
 
@@ -5774,6 +6335,7 @@ int vd6869_read_fuseid(struct sensor_cfg_data *cdata,
 		pr_info("%s: sdata->actuator_info->board_info->type=%s", __func__, sdata->actuator_info->board_info->type);
 		pr_info("%s: sdata->actuator_info->board_info->addr=0x%x", __func__, sdata->actuator_info->board_info->addr);
 	}
+/* HTC_END */
 
 	switch (module_vendor) {
 		case 0x1:
@@ -5797,9 +6359,15 @@ int vd6869_read_fuseid(struct sensor_cfg_data *cdata,
 	}
 	first = false;
 	return rc;
+//#ifdef CONFIG_LC898212_ACT
+//    return vd6869_read_fuseid_liteon (cdata,s_ctrl);
+//#else
+//    return vd6869_read_fuseid_sharp (cdata,s_ctrl);
+//#endif
 }
+// HTC_END pg 20130220 lc898212 act enable
 
-int32_t vd6869_power_up(struct msm_sensor_ctrl_t *s_ctrl)
+int32_t vd6869_power_up(struct msm_sensor_ctrl_t *s_ctrl)//(const struct msm_camera_sensor_info *sdata)
 {
 	int rc;
 	struct msm_camera_sensor_info *sdata = NULL;
@@ -5835,26 +6403,26 @@ int32_t vd6869_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 		goto enable_power_on_failed;
 	}
 
-	rc = msm_sensor_set_power_up(s_ctrl);
+	rc = msm_sensor_set_power_up(s_ctrl);//(sdata);
 	if (rc < 0) {
 		pr_info("%s msm_sensor_power_up failed\n", __func__);
 		goto enable_sensor_power_up_failed;
 	}
-	
+	/*check sensor version*/
 	msm_camera_i2c_read(s_ctrl->sensor_i2c_client, 0x45B0, &sensor_version, MSM_CAMERA_I2C_BYTE_DATA);
 
-	if(sensor_version == 0x00){
+	if(sensor_version == 0x00){/*cut 0.9*/
 		s_ctrl->sensordata->sensor_cut = 0;
-	} else {
+	} else {/*cut 1.0*/
 		s_ctrl->sensordata->sensor_cut = 1;
 	}
 	vd6869_sensor_open_init(sdata);
 
-	if(sensor_version == 0x00){
+	if(sensor_version == 0x00){/*cut 0.9*/
 		pr_info("vd6869 apply cut 09 setting");
 		s_ctrl->sensordata->sensor_cut = 0;
-		vd6869_read_fuseid(&cdata,s_ctrl);
-	} else {
+		vd6869_read_fuseid(&cdata,s_ctrl);/*HTC_Chuck*/
+	} else {/*cut 1.0*/
 		if(vd6869_s_ctrl.msm_sensor_reg != NULL){
 			pr_info("vd6869 apply cut 10 setting");
 			vd6869_s_ctrl.msm_sensor_reg->init_settings = &vd6869_init_conf_cut10[0];
@@ -5909,7 +6477,7 @@ int32_t vd6869_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 			pr_info("%s: msm_camio_sensor_clk_off failed:%d\n",
 				 __func__, rc);
 	}
-	rc = sdata->camera_power_off();
+	rc = sdata->camera_power_off();//HTC_CAM chuck fine tune power seqence
 	if (rc < 0)
 		pr_info("%s: failed to disable power\n", __func__);
 
@@ -5960,12 +6528,12 @@ static int vd6869_read_VCM_driver_IC_info(	struct msm_sensor_ctrl_t *s_ctrl)
 	if (rc < 0)
 		pr_info("%s: failed to disable power\n", __func__);
 
-	
+	//Set Sensor to SW-Standby
 	rc = msm_camera_i2c_write_b(msm_camera_i2c_client, 0x0100, 0x00);
 	if (rc < 0)
 		pr_info("%s: i2c_write_b 0x0100 fail\n", __func__);
 
-	
+	//Set Input clock freq.(24MHz)
 	rc = msm_camera_i2c_write_b(msm_camera_i2c_client, 0x3368, 0x18);
 	if (rc < 0)
 		pr_info("%s: i2c_write_b 0x3368 fail\n", __func__);
@@ -5974,38 +6542,38 @@ static int vd6869_read_VCM_driver_IC_info(	struct msm_sensor_ctrl_t *s_ctrl)
 	if (rc < 0)
 		pr_info("%s: i2c_write_b 0x3369 fail\n", __func__);
 
-	
+	//set read mode
 	rc = msm_camera_i2c_write_b(msm_camera_i2c_client, 0x3400, 0x01);
 	if (rc < 0)
 		pr_info("%s: i2c_write_b 0x3400 fail\n", __func__);
 
 	mdelay(4);
 
-	
+	//select information index, Driver ID at 10th index
 	info_index = 10;
-	
+	/*Read page 3 to Page 0*/
 	for (page = 3; page >= 0; page--) {
-		
+		//Select page
 		rc = msm_camera_i2c_write_b(msm_camera_i2c_client, 0x3402, page);
 		if (rc < 0)
 			pr_info("%s: i2c_write_b 0x3402 (select page %d) fail\n", __func__, page);
 
-		
-		
+		//Select information index. Driver ID at 10th index
+		//for formal sample
 		rc = msm_camera_i2c_read_b(msm_camera_i2c_client, (0x3410 + info_index), &info_value);
 		if (rc < 0)
 			pr_info("%s: i2c_read_b 0x%x fail\n", __func__, (0x3410 + info_index));
 
-		
+		/* some values of fuseid are maybe zero */
 		if (((info_value & 0x0F) != 0) || page < 0)
 			break;
 
-		
+		//for first sample
 		rc = msm_camera_i2c_read_b(msm_camera_i2c_client, (0x3404 + info_index), &info_value);
 		if (rc < 0)
 			pr_info("%s: i2c_read_b 0x%x fail\n", __func__, (0x3404 + info_index));
 
-		
+		/* some values of fuseid are maybe zero */
 		if (((info_value & 0x0F) != 0) || page < 0)
 			break;
 
@@ -6016,35 +6584,39 @@ static int vd6869_read_VCM_driver_IC_info(	struct msm_sensor_ctrl_t *s_ctrl)
 
 	if (sdata->num_actuator_info_table > 1)
 	{
-		if (OTP == 1) 
+		if (OTP == 1) //AD5816
 			sdata->actuator_info = &sdata->actuator_info_table[2][0];
-		else if (OTP == 2) 
+		else if (OTP == 2) //TI201
 			sdata->actuator_info = &sdata->actuator_info_table[1][0];
 
 		pr_info("%s: sdata->actuator_info->board_info->type=%s", __func__, sdata->actuator_info->board_info->type);
 		pr_info("%s: sdata->actuator_info->board_info->addr=0x%x", __func__, sdata->actuator_info->board_info->addr);
 	}
 
-	
+	/* interface disable */
 #endif
 	return 0;
 }
 
+/* HTC_START 20121105 - video hdr */
 int vd6869_write_hdr_exp_gain1_ex(struct msm_sensor_ctrl_t *s_ctrl,
 		int mode, uint16_t gain, uint16_t long_dig_gain, uint16_t short_dig_gain, uint32_t long_line, uint32_t short_line)
 {
 	uint32_t fl_lines;
 	uint8_t offset;
 
+/* HTC_START Angie 20111019 - Fix FPS */
 	uint32_t fps_divider = Q10;
 
 	if (mode == SENSOR_PREVIEW_MODE)
 		fps_divider = s_ctrl->fps_divider;
 
+/* HTC_START ben 20120229 */
 	if(long_line > s_ctrl->sensor_exp_gain_info->sensor_max_linecount)
 		long_line = s_ctrl->sensor_exp_gain_info->sensor_max_linecount;
 	if(short_line > s_ctrl->sensor_exp_gain_info->sensor_max_linecount)
 		short_line = s_ctrl->sensor_exp_gain_info->sensor_max_linecount;
+/* HTC_END */
 
 	fl_lines = s_ctrl->curr_frame_length_lines;
 	offset = s_ctrl->sensor_exp_gain_info->vert_offset;
@@ -6056,6 +6628,7 @@ int vd6869_write_hdr_exp_gain1_ex(struct msm_sensor_ctrl_t *s_ctrl,
 		fl_lines = short_line + offset;
 	else
 		fl_lines = (fl_lines * fps_divider) / Q10;
+/* HTC_END */
 	if(short_line > 254)
 		short_line = 254;
 	if(short_line < 1)
@@ -6078,37 +6651,37 @@ int vd6869_write_hdr_exp_gain1_ex(struct msm_sensor_ctrl_t *s_ctrl,
 		short_line);
 
 	s_ctrl->func_tbl->sensor_group_hold_on(s_ctrl);
-	
+	//mdelay(250);
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		s_ctrl->sensor_output_reg_addr->frame_length_lines, fl_lines,
 		MSM_CAMERA_I2C_WORD_DATA);
-	
+	/*long exposure*/
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
-		vd6869_hdr_gain_info.long_coarse_int_time_addr_h, long_line>>8,
+		vd6869_hdr_gain_info.long_coarse_int_time_addr_h, long_line>>8,//,0x06,//(long_line&0xff00)>>8,
 		MSM_CAMERA_I2C_BYTE_DATA);
 
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
-		vd6869_hdr_gain_info.long_coarse_int_time_addr_l, (long_line&0x00ff),
+		vd6869_hdr_gain_info.long_coarse_int_time_addr_l, (long_line&0x00ff),//0x38,//(long_line&0x00ff),
 		MSM_CAMERA_I2C_BYTE_DATA);
 
-	
+	/*short exposure*/
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
-		vd6869_hdr_gain_info.short_coarse_int_time_addr_h, (short_line)>>8,
+		vd6869_hdr_gain_info.short_coarse_int_time_addr_h, (short_line)>>8,//0x00,// (short_line & 0xff00)>>8,
 		MSM_CAMERA_I2C_BYTE_DATA);
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
-		vd6869_hdr_gain_info.short_coarse_int_time_addr_l, (short_line & 0x00ff),
+		vd6869_hdr_gain_info.short_coarse_int_time_addr_l, (short_line & 0x00ff),//0xc7,// (short_line & 0x00ff),
 		MSM_CAMERA_I2C_BYTE_DATA);
-	
+	/*gain*/
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		vd6869_hdr_gain_info.global_gain_addr, gain,
 		MSM_CAMERA_I2C_BYTE_DATA);
 
-	
+	/* HTC_START Gary_Yang : Video HDR*/
 	if (s_ctrl->func_tbl->sensor_set_hdr_dig_gain)
 		s_ctrl->func_tbl->sensor_set_hdr_dig_gain(s_ctrl, long_dig_gain, short_dig_gain);
-	
+	/* HTC_END*/
 
-	
+	//YushanII_set_hdr_exp(gain,dig_gain,long_line,short_line);
 
 	s_ctrl->func_tbl->sensor_group_hold_off(s_ctrl);
 	return 0;
@@ -6119,7 +6692,7 @@ int vd6869_write_hdr_outdoor_flag(struct msm_sensor_ctrl_t *s_ctrl, uint8_t is_o
     int indoor_line_length, outdoor_line_length;
     indoor_line_length = 9600;
     outdoor_line_length = 6000;
-    if(s_ctrl->sensordata->sensor_cut == 0){
+    if(s_ctrl->sensordata->sensor_cut == 0){/*sensor cut 0.9*/
 	indoor_line_length = indoor_line_length /2;
 	outdoor_line_length = outdoor_line_length /2;
     }
@@ -6136,6 +6709,7 @@ int vd6869_write_hdr_outdoor_flag(struct msm_sensor_ctrl_t *s_ctrl, uint8_t is_o
     return 0;
 }
 
+/* HTC_END */
 
 int vd6869_write_non_hdr_exp_gain1_ex(struct msm_sensor_ctrl_t *s_ctrl,
 		int mode, uint16_t gain, uint16_t dig_gain, uint32_t line)
@@ -6143,14 +6717,20 @@ int vd6869_write_non_hdr_exp_gain1_ex(struct msm_sensor_ctrl_t *s_ctrl,
 	uint32_t fl_lines;
 	uint8_t offset;
 
+/* HTC_START Angie 20111019 - Fix FPS */
 	uint32_t fps_divider = Q10;
 
+/* HTC_START robert 20121126 set lin count for OIS*/
+/*TODO: Redesign new path, get line cnt from sensor*/
 	ois_line = line;
+/* HTC_END */
 	if (mode == SENSOR_PREVIEW_MODE)
 		fps_divider = s_ctrl->fps_divider;
 
+/* HTC_START ben 20120229 */
 	if(line > s_ctrl->sensor_exp_gain_info->sensor_max_linecount)
 		line = s_ctrl->sensor_exp_gain_info->sensor_max_linecount;
+/* HTC_END */
 
 	fl_lines = s_ctrl->curr_frame_length_lines;
 	offset = s_ctrl->sensor_exp_gain_info->vert_offset;
@@ -6158,6 +6738,7 @@ int vd6869_write_non_hdr_exp_gain1_ex(struct msm_sensor_ctrl_t *s_ctrl,
 		fl_lines = line + offset;
 	else
 		fl_lines = (fl_lines * fps_divider) / Q10;
+/* HTC_END */
 
 	s_ctrl->func_tbl->sensor_group_hold_on(s_ctrl);
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
@@ -6171,16 +6752,17 @@ int vd6869_write_non_hdr_exp_gain1_ex(struct msm_sensor_ctrl_t *s_ctrl,
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		s_ctrl->sensor_exp_gain_info->global_gain_addr, gain,
 		MSM_CAMERA_I2C_WORD_DATA);
-	
+	/* HTC_START pg digi gain 20100710 */
 	if (s_ctrl->func_tbl->sensor_set_dig_gain)
 		s_ctrl->func_tbl->sensor_set_dig_gain(s_ctrl, dig_gain);
-	
+	/* HTC_END pg digi gain 20100710 */
 	s_ctrl->func_tbl->sensor_group_hold_off(s_ctrl);
 	return 0;
 }
 
 void vd6869_start_stream_hdr(struct msm_sensor_ctrl_t *s_ctrl){
 
+//	uint16_t read_data;
 	pr_info("1031,vd6869_start_stream,HDR");
 
 	msm_camera_i2c_write_tbl(
@@ -6189,17 +6771,17 @@ void vd6869_start_stream_hdr(struct msm_sensor_ctrl_t *s_ctrl){
 		s_ctrl->msm_sensor_reg->start_stream_conf_size,
 		s_ctrl->msm_sensor_reg->default_data_type);
 
-	
-	if(vd6869_ver == 0x09){
-		
+	/*TODO: after phase in cut 10, this code can be remove*/
+	if(vd6869_ver == 0x09){/*cut 09*/
+		/*analog setting*/
 		msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		0x5800, 0x00,
 		MSM_CAMERA_I2C_BYTE_DATA);
 		msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		0x5896, 0xb4,
 		MSM_CAMERA_I2C_BYTE_DATA);
-	}else if(vd6869_ver == 0x0A){
-		
+	}else if(vd6869_ver == 0x0A){/*cut 09E*/
+		/*analog setting*/
 		msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		0x5896, 0xbd,
 		MSM_CAMERA_I2C_BYTE_DATA);
@@ -6211,7 +6793,7 @@ void vd6869_start_stream_hdr(struct msm_sensor_ctrl_t *s_ctrl){
 		MSM_CAMERA_I2C_BYTE_DATA);
 	mdelay(50);
 
-	
+	/* clear 0x3300 bit 4 */
 	msm_camera_i2c_read(s_ctrl->sensor_i2c_client,
 		0x3300, &read_data,
 		MSM_CAMERA_I2C_BYTE_DATA);
@@ -6231,19 +6813,19 @@ void vd6869_start_stream_hdr(struct msm_sensor_ctrl_t *s_ctrl){
 }
 
 void vd6869_start_stream_non_hdr(struct msm_sensor_ctrl_t *s_ctrl){
-	
+	//uint16_t read_data;
 	pr_info("vd6869_start_stream,non-HDR");
 
 	msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		0x100, 0x01,
 		MSM_CAMERA_I2C_BYTE_DATA);
-	
-	if(vd6869_ver == 0x09){
+	/*TODO: after phase in cut 10, this code can be remove*/
+	if(vd6869_ver == 0x09){/*cut 09*/
 		msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		0x5896, 0xa4,
 		MSM_CAMERA_I2C_BYTE_DATA);
-	}else if(vd6869_ver == 0x0A){
-		
+	}else if(vd6869_ver == 0x0A){/*cut 09E*/
+		/*analog setting*/
 		msm_camera_i2c_write(s_ctrl->sensor_i2c_client,
 		0x5896, 0xbd,
 		MSM_CAMERA_I2C_BYTE_DATA);
@@ -6255,7 +6837,7 @@ void vd6869_start_stream_non_hdr(struct msm_sensor_ctrl_t *s_ctrl){
 		0x30CC, 0x0,
 		MSM_CAMERA_I2C_BYTE_DATA);
 
-	
+	/* clear 0x3300 bit 4 */
 	msm_camera_i2c_read(s_ctrl->sensor_i2c_client,
 		0x3300, &read_data,
 		MSM_CAMERA_I2C_BYTE_DATA);
@@ -6285,6 +6867,7 @@ void vd6869_start_stream(struct msm_sensor_ctrl_t *s_ctrl)
 	}
 }
 
+/* HTC_START 20121221 - VD6869 need wait maximum of one frame duration to prevent start stream command issue sensor during this phase*/
 void vd6869_stop_stream(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	uint16_t read_data = 0;
@@ -6314,11 +6897,12 @@ void vd6869_stop_stream(struct msm_sensor_ctrl_t *s_ctrl)
 
 		msleep(5);
 		read_count++;
-	}	while((read_data != 0x1) && (read_count < 400));	
+	}	while((read_data != 0x1) && (read_count < 400));	//note: 0x1 means steam idle, we had to wait sensor enter idle mode then start issue i2c command to sensor, in order to prevent worst case, the timeout will be 2sec.
 
 	pr_info("[CAM]%s,read_data=%d,try_count=%d", __func__, read_data,read_count);
 
 }
+/* HTC_END 20121221*/
 
 int vd6869_write_output_settings_specific(struct msm_sensor_ctrl_t *s_ctrl,
 	uint16_t res)
@@ -6326,7 +6910,7 @@ int vd6869_write_output_settings_specific(struct msm_sensor_ctrl_t *s_ctrl,
 	int rc = 0;
 	uint16_t value = 0;
 
-	
+	/* Apply sensor mirror/flip */
 	if (vd6869_s_ctrl.mirror_flip == CAMERA_SENSOR_MIRROR_FLIP)
 		value = VD6869_READ_MIRROR_FLIP;
 	else if (vd6869_s_ctrl.mirror_flip == CAMERA_SENSOR_MIRROR)
@@ -6355,28 +6939,28 @@ void vd6869_yushanII_set_output_format(struct msm_sensor_ctrl_t *sensor,int res,
 		sensor->msm_sensor_reg->output_settings[res].y_output;
 	output_format->LineLengthPixels =
 		sensor->msm_sensor_reg->output_settings[res].line_length_pclk;
-	
+	/*cut0.9 non hdr needs to times 2 in frame length line*/
 	if(sensor->sensordata->sensor_cut == 0 &&
 		sensor->sensordata->hdr_mode == 0)
 		output_format->FrameLengthLines = 
 			sensor->msm_sensor_reg->output_settings[res].frame_length_lines*2;
-	else
+	else/*cut 1.0 or cut 0.9 with non HDR*/
 		output_format->FrameLengthLines =
 		sensor->msm_sensor_reg->output_settings[res].frame_length_lines;
 
-	
-	
+	/* HTC_START steven bring sensor parms 20121119 */
+	/*status line configuration*/
 	output_format->StatusLinesOutputted = sensor->msm_sensor_reg->output_settings[res].yushan_status_line_enable;
 	output_format->StatusNbLines = sensor->msm_sensor_reg->output_settings[res].yushan_status_line;
 	output_format->ImageOrientation = sensor->sensordata->sensor_platform_info->mirror_flip;
 	output_format->StatusLineLengthPixels =
 		sensor->msm_sensor_reg->output_settings[res].x_output;
-	
+	/* HTC_END steven bring sensor parms 20121119 */
 
 	output_format->MinInterframe =
 		(output_format->FrameLengthLines -
 		output_format->ActiveFrameLengthLines -
-		output_format->StatusNbLines);
+		output_format->StatusNbLines);//206;//HDR mode
 	output_format->AutomaticFrameParamsUpdate = TRUE;
 
 	if(sensor->sensordata->hdr_mode)
@@ -6389,44 +6973,46 @@ void vd6869_yushanII_set_output_format(struct msm_sensor_ctrl_t *sensor,int res,
 	output_format->Voffset =
 			sensor->msm_sensor_reg->output_settings[res].y_addr_start;
 
-	
+	/*TOOD:vd6869 should provide this value*/
 	output_format->HScaling = 1;
 	output_format->VScaling = 1;
 
-	if(sensor->msm_sensor_reg->output_settings[res].binning_factor == 2){
+	if(sensor->msm_sensor_reg->output_settings[res].binning_factor == 2){/*binning mode*/
 		output_format->Binning = 0x22;
-	}else{
+	}else{/*non binning*/
 		output_format->Binning = 0x11;
 	}
 }
 
 void vd6869_yushanII_set_parm(struct msm_sensor_ctrl_t *sensor, int res,Ilp0100_structSensorParams *YushanII_sensor)
 {
-	
+	/* HTC_END steven bring sensor parms 20121119 */
 	YushanII_sensor->StatusNbLines = sensor->msm_sensor_reg->output_settings[res].yushan_sensor_status_line;
-    
+    /*this should be sensor maximum y size, not sensor resolution*/
 	YushanII_sensor->FullActiveLines =
 		sensor->msm_sensor_reg->output_settings[MSM_SENSOR_RES_FULL].y_output;
-	
+	/*this should be sensor maximum x size, not sensor resolution*/
 	YushanII_sensor->FullActivePixels =
 		sensor->msm_sensor_reg->output_settings[MSM_SENSOR_RES_FULL].x_output;
-	
+	/*this should be minimum LineLength of the sensor*/
 	YushanII_sensor->MinLineLength =
 		sensor->msm_sensor_reg->output_settings[MSM_SENSOR_RES_FULL].line_length_pclk;
 }
 
 static struct msm_sensor_fn_t vd6869_func_tbl = {
 	.sensor_start_stream = vd6869_start_stream,
-	.sensor_stop_stream = vd6869_stop_stream,	
+	.sensor_stop_stream = vd6869_stop_stream,	/* HTC_START - 20121221 VD6869 need wait maximum of one frame duration to prevent start stream command issue sensor during this phase*/
 	.sensor_group_hold_on = msm_sensor_group_hold_on,
 	.sensor_group_hold_off = msm_sensor_group_hold_off,
 	.sensor_set_fps = msm_sensor_set_fps,
-	.sensor_write_exp_gain_ex = vd6869_write_non_hdr_exp_gain1_ex,
-	.sensor_write_hdr_exp_gain_ex = vd6869_write_hdr_exp_gain1_ex,
-	.sensor_write_hdr_outdoor_flag = vd6869_write_hdr_outdoor_flag,
+/* HTC_START 20121105 - video hdr*/
+	.sensor_write_exp_gain_ex = vd6869_write_non_hdr_exp_gain1_ex,//vd6869_write_non_hdr_exp_gain1_ex,
+	.sensor_write_hdr_exp_gain_ex = vd6869_write_hdr_exp_gain1_ex,//vd6869_write_hdr_exp_gain1_ex,
+	.sensor_write_hdr_outdoor_flag = vd6869_write_hdr_outdoor_flag,//vd6869_write_hdr_exp_gain1_ex,
+/* HTC_END*/
 	.sensor_write_snapshot_exp_gain_ex = msm_sensor_write_exp_gain1_ex,
 	.sensor_set_dig_gain = vd6869_set_dig_gain,
-	.sensor_set_hdr_dig_gain = vd6869_set_hdr_dig_gain,
+	.sensor_set_hdr_dig_gain = vd6869_set_hdr_dig_gain,/* HTC_START Gary_Yang : Video HDR*/
 	.sensor_write_snapshot_exp_gain = msm_sensor_write_exp_gain1,
 	.sensor_setting = msm_sensor_setting_parallel,
 	.sensor_set_sensor_mode = msm_sensor_set_sensor_mode,
@@ -6475,7 +7061,7 @@ static struct msm_sensor_ctrl_t vd6869_s_ctrl = {
 	.sensor_v4l2_subdev_info_size = ARRAY_SIZE(vd6869_subdev_info),
 	.sensor_v4l2_subdev_ops = &vd6869_subdev_ops,
 	.func_tbl = &vd6869_func_tbl,
-	.sensor_first_mutex = &vd6869_sensor_init_mut, 
+	.sensor_first_mutex = &vd6869_sensor_init_mut, //CC120826,
 };
 
 module_init(msm_sensor_init_module);

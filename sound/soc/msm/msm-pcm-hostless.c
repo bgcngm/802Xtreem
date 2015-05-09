@@ -18,10 +18,12 @@
 #include <sound/soc.h>
 #include <sound/pcm.h>
 
+//htc audio ++
 #undef pr_info
 #undef pr_err
 #define pr_info(fmt, ...) pr_aud_info(fmt, ##__VA_ARGS__)
 #define pr_err(fmt, ...) pr_aud_err(fmt, ##__VA_ARGS__)
+//htc audio --
 
 static struct snd_pcm_ops msm_pcm_hostless_ops = {};
 

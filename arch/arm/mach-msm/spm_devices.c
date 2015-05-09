@@ -98,6 +98,9 @@ static int __devinit msm_spm_dev_init(struct msm_spm_device *dev,
 
 	for (i = 0; i < dev->num_modes; i++) {
 
+		/* Default offset is 0 and gets updated as we write more
+		 * sequences into SPM
+		 */
 		dev->modes[i].start_addr = offset;
 		ret = msm_spm_drv_write_seq_data(&dev->reg_data,
 						data->modes[i].cmd, &offset);
@@ -165,6 +168,7 @@ int msm_spm_set_low_power_mode(unsigned int mode, bool notify_rpm)
 }
 EXPORT_SYMBOL(msm_spm_set_low_power_mode);
 
+/* Board file init function */
 int __init msm_spm_init(struct msm_spm_platform_data *data, int nr_devs)
 {
 	unsigned int cpu;
@@ -212,6 +216,7 @@ int msm_spm_apcs_set_phase(unsigned int phase_cnt)
 }
 EXPORT_SYMBOL(msm_spm_apcs_set_phase);
 
+/* Board file init function */
 int __init msm_spm_l2_init(struct msm_spm_platform_data *data)
 {
 	return msm_spm_dev_init(&msm_spm_l2_device, data);
@@ -308,13 +313,13 @@ static int __devinit msm_spm_dev_probe(struct platform_device *pdev)
 	if (!ret)
 		spm_data.vctl_timeout_us = val;
 
-	
+	/* optional */
 	key = "qcom,vctl-port";
 	ret = of_property_read_u32(node, key, &val);
 	if (!ret)
 		spm_data.vctl_port = val;
 
-	
+	/* optional */
 	key = "qcom,phase-port";
 	ret = of_property_read_u32(node, key, &val);
 	if (!ret)
@@ -327,6 +332,10 @@ static int __devinit msm_spm_dev_probe(struct platform_device *pdev)
 		spm_data.reg_init_values[spm_of_data[i].id] = val;
 	}
 
+	/*
+	 * Device with id 0..NR_CPUS are SPM for apps cores
+	 * Device with id 0xFFFF is for L2 SPM.
+	 */
 	if (cpu >= 0 && cpu < num_possible_cpus()) {
 		mode_of_data = of_cpu_modes;
 		num_modes = ARRAY_SIZE(of_cpu_modes);

@@ -24,6 +24,9 @@
 #define DISABLE_LOG_MASK	0
 #define MAX_EVENT_SIZE		100
 
+/* 16 log code categories, each has:
+ * 1 bytes equip id + 1 dirty byte + 512 byte max log mask
+ */
 #define DCI_LOG_MASK_SIZE		(16*514)
 #define DCI_EVENT_MASK_SIZE		512
 #define DCI_MASK_STREAM			2
@@ -41,7 +44,7 @@ struct dci_pkt_req_tracking_tbl {
 
 struct diag_dci_client_tbl {
 	struct task_struct *client;
-	uint16_t list; 
+	uint16_t list; /* bit mask */
 	int signal_type;
 	unsigned char dci_log_mask[DCI_LOG_MASK_SIZE];
 	unsigned char dci_event_mask[DCI_EVENT_MASK_SIZE];
@@ -54,6 +57,7 @@ struct diag_dci_client_tbl {
 	int received_events;
 };
 
+/* This is used for DCI health stats */
 struct diag_dci_health_stats {
 	int dropped_logs;
 	int dropped_events;
@@ -63,13 +67,13 @@ struct diag_dci_health_stats {
 };
 
 enum {
-	DIAG_DCI_NO_ERROR = 1001,	
-	DIAG_DCI_NO_REG,		
-	DIAG_DCI_NO_MEM,		
-	DIAG_DCI_NOT_SUPPORTED,	
-	DIAG_DCI_HUGE_PACKET,	
-	DIAG_DCI_SEND_DATA_FAIL,
-	DIAG_DCI_TABLE_ERR	
+	DIAG_DCI_NO_ERROR = 1001,	/* No error */
+	DIAG_DCI_NO_REG,		/* Could not register */
+	DIAG_DCI_NO_MEM,		/* Failed memory allocation */
+	DIAG_DCI_NOT_SUPPORTED,	/* This particular client is not supported */
+	DIAG_DCI_HUGE_PACKET,	/* Request/Response Packet too huge */
+	DIAG_DCI_SEND_DATA_FAIL,/* writing to kernel or peripheral fails */
+	DIAG_DCI_TABLE_ERR	/* Error dealing with registration tables */
 };
 
 int diag_dci_init(void);
@@ -80,11 +84,13 @@ int diag_process_dci_transaction(unsigned char *buf, int len);
 int diag_send_dci_pkt(struct diag_master_table entry, unsigned char *buf,
 							 int len, int index);
 void extract_dci_pkt_rsp(unsigned char *buf);
+/* DCI Log streaming functions */
 void create_dci_log_mask_tbl(unsigned char *tbl_buf);
 void update_dci_cumulative_log_mask(int offset, int byte_index,
 						uint8_t byte_mask);
 int diag_send_dci_log_mask(smd_channel_t *ch);
 void extract_dci_log(unsigned char *buf);
+/* DCI event streaming functions */
 void update_dci_cumulative_event_mask(int offset, uint8_t byte_mask);
 int diag_send_dci_event_mask(smd_channel_t *ch);
 void extract_dci_events(unsigned char *buf);

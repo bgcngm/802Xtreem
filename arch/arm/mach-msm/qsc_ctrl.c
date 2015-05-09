@@ -89,6 +89,7 @@ struct mdm_ops {
 	void (*image_upgrade_cb)(struct qsc_modem_drv *mdm_drv, int type);
 };
 
+/* Private mdm2 data structure */
 struct qsc_modem_drv {
 	unsigned mdm2ap_errfatal_gpio;
 	unsigned ap2mdm_errfatal_gpio;
@@ -100,12 +101,12 @@ struct qsc_modem_drv {
 	unsigned ap2mdm_soft_reset_gpio;
 	unsigned ap2mdm_pmic_pwr_en_gpio;
 	unsigned mdm2ap_pblrdy;
-	
+	/* + SSD_RIL */
 	unsigned ap2mdm_vddmin_gpio;
 	unsigned mdm2ap_vddmin_gpio;
 	unsigned ap2mdm_ipc1_gpio;
 	unsigned qsc2ap_wakeup_ack_gpio;
-	
+	/* - SSD_RIL */
 	unsigned usb_switch_gpio;
 
 	int mdm_errfatal_irq;
@@ -143,6 +144,7 @@ static struct workqueue_struct *qsc_queue;
 static struct workqueue_struct *qsc_sfr_queue;
 static unsigned int dump_timeout_ms;
 #if 0
+/* SSD_RIL: Remove un-necessary QCT code. */
 static int vddmin_gpios_sent;
 #endif
 
@@ -178,7 +180,7 @@ static int first_boot = 1;
 #define QSC_KPDPWR_DELAY_MS 	1000
 #define QSC_POWON_TOLERANCE_MS	500
 #define QSC_POWON_TOTAL_MS 		(QSC_SOFT_RESET_DELAY_MS+QSC_KPDPWR_DELAY_MS+QSC_POWON_TOLERANCE_MS)
-#define QSC_POWON_MDM_HELPER_DELAY_INTERVAL_MS 	(1<<7)  
+#define QSC_POWON_MDM_HELPER_DELAY_INTERVAL_MS 	(1<<7)  /*128 ms*/
 #define QSC_POWON_MDM_HELPER_DELAY_TIMES ((QSC_POWON_TOTAL_MS+QSC_POWON_MDM_HELPER_DELAY_INTERVAL_MS-1)/QSC_POWON_MDM_HELPER_DELAY_INTERVAL_MS)
 
 enum gpio_update_config {
@@ -187,6 +189,7 @@ enum gpio_update_config {
 };
 
 #if 0
+/* SSD_RIL: Remove un-necessary QCT code. */
 static int mdm2ap_status_valid_old_config;
 static struct gpiomux_setting mdm2ap_status_old_config;
 #endif
@@ -194,6 +197,7 @@ static struct gpiomux_setting mdm2ap_status_old_config;
 void register_ap2qsc_pmic_pwr_en_gpio(unsigned gpio, unsigned enable_value);
 void register_ap2qsc_pmic_soft_reset_gpio(unsigned gpio);
 
+/* SSD_RIL: Lock CPU in low freq for QSC boot up. QSC will fail to boot up if high freq in low battery. */
 static int cpu_locked = 1;
 void mdm_lock(bool value) ;
 
@@ -243,6 +247,7 @@ void set_qsc_drv_is_ready(int is_ready)
 EXPORT_SYMBOL(set_qsc_drv_is_ready);
 
 #if 0
+/* SSD_RIL: Remove un-necessary QCT code. */
 static irqreturn_t qsc_vddmin_change(int irq, void *dev_id)
 {
 	int value = gpio_get_value(
@@ -262,7 +267,7 @@ static void qsc_setup_vddmin_gpios(void)
 	struct mdm_vddmin_resource *vddmin_res;
 	int irq, ret;
 
-	
+	/* This resource may not be supported by some platforms. */
 	vddmin_res = mdm_drv->pdata->vddmin_resource;
 	if (!vddmin_res)
 		return;
@@ -276,7 +281,7 @@ static void qsc_setup_vddmin_gpios(void)
 
 	msm_rpm_set(MSM_RPM_CTX_SET_0, &req, 1);
 
-	
+	/* Start monitoring low power gpio from mdm */
 	irq = MSM_GPIO_TO_INT(vddmin_res->mdm2ap_vddmin_gpio);
 	if (irq < 0) {
 		pr_err("%s: could not get LPM POWER IRQ resource.\n",
@@ -305,6 +310,10 @@ static void qsc_restart_reason_fn(struct work_struct *work)
 		ret = sysmon_get_reason(SYSMON_SS_EXT_MODEM,
 					sfr_buf, sizeof(sfr_buf));
 		if (ret) {
+			/*
+			 * The sysmon device may not have been probed as yet
+			 * after the restart.
+			 */
 			pr_err("%s: Error retrieving qsc restart reason, ret = %d\n",
 					__func__, ret);
 		} else {
@@ -319,6 +328,10 @@ static DECLARE_WORK(sfr_reason_work, qsc_restart_reason_fn);
 
 static void qsc2ap_status_check(struct work_struct *work)
 {
+	/*
+	 * If the mdm modem did not pull the MDM2AP_STATUS gpio
+	 * high then call subsystem_restart.
+	 */
 	int value = gpio_get_value(mdm_drv->mdm2ap_status_gpio);
 
 	if (!mdm_drv->disable_status_check) {
@@ -327,12 +340,12 @@ static void qsc2ap_status_check(struct work_struct *work)
 					__func__);
 			pr_info("%s: QSC2AP_STATUS <%d>\n", __func__, value);
 			mdm_drv->mdm_ready = 0;
-			if (!machine_is_m7_evm()) 
+			if (!machine_is_m7_evm()) /* SSR is not supported on EVM board */
 				subsystem_restart(EXTERNAL_MODEM);
 		}
 		else
 		{
-			
+			/* SSD_RIL: To control QSC enter DLOAD mode if QSC HW reset happens. */
 			gpio_direction_output(mdm_drv->ap2mdm_vddmin_gpio, 1);
 		}
 	}
@@ -342,7 +355,7 @@ static DECLARE_DELAYED_WORK(qsc2ap_status_check_work, qsc2ap_status_check);
 
 static void delayed_subsystem_restart_work_fn(struct work_struct *work)
 {
-	if (!machine_is_m7_evm()) 
+	if (!machine_is_m7_evm()) /* SSR is not supported on EVM board */
 		subsystem_restart(EXTERNAL_MODEM);
 	else
 		pr_err("SSR is not supported on EVM board. Skip it.\n");
@@ -393,7 +406,8 @@ static DEVICE_ATTR(trigger_fatal, 0600, NULL, trigger_qsc_fatal);
 static void qsc_update_gpio_configs(enum gpio_update_config gpio_config)
 {
 #if 0
-	
+/* SSD_RIL: Remove un-necessary QCT code. */
+	/* Some gpio configuration may need updating after modem bootup.*/
 	switch (gpio_config) {
 	case GPIO_UPDATE_RUNNING_CONFIG:
 		if (mdm_drv->pdata->mdm2ap_status_gpio_run_cfg) {
@@ -442,7 +456,7 @@ long qsc_modem_ioctl(struct file *filp, unsigned int cmd,
 			do {
 				retry++;
 				ret = wait_for_completion_interruptible_timeout(&qsc_boot_after_mdm_booloader_irq, msecs_to_jiffies(10000));
-			} while ( ret == -ERESTARTSYS && retry <= 3); 
+			} while ( ret == -ERESTARTSYS && retry <= 3); /* interrupted, need retry */
 		}
 
 		if( qsc_bootup_state == QSC_BOOT_MDM_BOOTLOAER_IRQ_RECEIVED || qsc_bootup_state == QSC_BOOT_MDM_BOOTLOAER_IRQ_BOOTED )
@@ -498,6 +512,9 @@ long qsc_modem_ioctl(struct file *filp, unsigned int cmd,
 		else
 			first_boot = 0;
 
+		/* If successful, start a timer to check that the mdm2ap_status
+		 * gpio goes high.
+		 */
 		if (!status && gpio_get_value(mdm_drv->mdm2ap_status_gpio) == 0)
 			schedule_delayed_work(&qsc2ap_status_check_work,
 				msecs_to_jiffies(MDM2AP_STATUS_TIMEOUT_MS));
@@ -582,7 +599,7 @@ static void qsc_status_fn(struct work_struct *work)
 	if (mdm_drv->mdm_ready && mdm_drv->ops->status_cb)
 		mdm_drv->ops->status_cb(mdm_drv, value);
 
-	
+	/* Update gpio configuration to "running" config. */
 	qsc_update_gpio_configs(GPIO_UPDATE_RUNNING_CONFIG);
 }
 
@@ -607,7 +624,7 @@ static irqreturn_t qsc_errfatal(int irq, void *dev_id)
 		pr_err("%s: QSC2AP_ERRFATAL <%d>, reseting the qsc.\n", __func__, value);
 
 		mdm_drv->mdm_ready = 0;
-		if (!machine_is_m7_evm()) 
+		if (!machine_is_m7_evm()) /* SSR is not supported on EVM board */
 			subsystem_restart(EXTERNAL_MODEM);
 	}
 	return IRQ_HANDLED;
@@ -615,13 +632,13 @@ static irqreturn_t qsc_errfatal(int irq, void *dev_id)
 
 static irqreturn_t qsc2ap_vddmin_handler(int irq, void *dev_id)
 {
-	
+	/* QSC boot into bootloader and checked AP2QSC_VDDMIN GPIO */
 	pr_info("%s: QSC2AP_VDDMIN rising.\n", __func__);
 
-	
-	
+	/* SSD_RIL: To control QSC enter DLOAD mode if QSC HW reset happens. */
+	/* 2013-04-09 temporary remove for T6 project*/
 	pr_info("%s: Do not pull AP2QSC_VDDMIN HIGH temporary.\n", __func__);
-	
+	//gpio_direction_output(mdm_drv->ap2mdm_vddmin_gpio, 1);
 
 	return IRQ_HANDLED;
 }
@@ -645,6 +662,7 @@ static struct miscdevice qsc_modem_misc = {
 };
 
 #if 0
+/* SSD_RIL: Don't use panic callback function for offline ramdump. */
 static int qsc_panic_prep(struct notifier_block *this,
 				unsigned long event, void *ptr)
 {
@@ -663,7 +681,7 @@ static int qsc_panic_prep(struct notifier_block *this,
 	}
 	if (i <= 0) {
 		pr_err("%s: QSC2AP_STATUS never went low\n", __func__);
-		
+		/* Reset the modem so that it will go into download mode. */
 		if (mdm_drv && mdm_drv->ops->atomic_reset_mdm_cb)
 			mdm_drv->ops->atomic_reset_mdm_cb(mdm_drv);
 	}
@@ -689,19 +707,19 @@ static irqreturn_t qsc_status_change(int irq, void *dev_id)
 		pr_info("%s: unexpected reset external modem\n", __func__);
 		pr_info("%s: QSC2AP_STATUS <%d>\n", __func__, value);
 #if 0
-		
+		/* Skip using unexpected reset flag since modem will still enter OS mode in this case temperary until we lock down the final behavior. */
 		mdm_drv->mdm_unexpected_reset_occurred = 1;
 #endif
 		mdm_drv->mdm_ready = 0;
 
-		
+		/* SSD_RIL: delay 3s for QSC entering Dload itself and pull high QSC2AP_VDDMIN in HW reset case. */
 		queue_delayed_work(qsc_queue, &delayed_subsystem_restart_work, msecs_to_jiffies(500));
 	} else if (value == 1) {
 		cancel_delayed_work(&qsc2ap_status_check_work);
 
 		if(cpu_locked)
 		{
-			
+			/* SSD_RIL: Lock CPU in low freq for QSC boot up. QSC will fail to boot up if high freq in low battery. */
 			pr_info("%s: status = 1: qsc is now ready, unlock CPU freq.\n", __func__);
 			cpu_locked = 0;
 			mdm_lock(0);
@@ -711,7 +729,7 @@ static irqreturn_t qsc_status_change(int irq, void *dev_id)
 			pr_info("%s: status = 1: qsc is now ready\n", __func__);
 		}
 
-		
+		/* SSD_RIL: To control QSC enter DLOAD mode if QSC HW reset happens. */
 		gpio_direction_output(mdm_drv->ap2mdm_vddmin_gpio, 1);
 
 		queue_work(qsc_queue, &qsc_status_work);
@@ -720,6 +738,7 @@ static irqreturn_t qsc_status_change(int irq, void *dev_id)
 }
 
 #if 0
+/* SSD_RIL: Remove un-necessary QCT code. */
 static irqreturn_t qsc_pblrdy_change(int irq, void *dev_id)
 {
 	pr_info("%s: pbl ready:%d\n", __func__,
@@ -736,7 +755,7 @@ static int qsc_subsys_shutdown(const struct subsys_data *crashed_subsys)
 
 	if(cpu_locked)
 	{
-		
+		/* SSD_RIL: Lock CPU in low freq for QSC boot up. QSC will fail to boot up if high freq in low battery. */
 		pr_info("%s: SSR happened while low CPU freq locked. Unlock it.\n", __func__);
 		cpu_locked = 0;
 		mdm_lock(0);
@@ -745,10 +764,13 @@ static int qsc_subsys_shutdown(const struct subsys_data *crashed_subsys)
 	gpio_direction_output(mdm_drv->ap2mdm_errfatal_gpio, 1);
 	qsc_bootup_state = QSC_BOOT_SSR_TRIGGERED;
 	if (mdm_drv->pdata->ramdump_delay_ms > 0) {
+		/* Wait for the external modem to complete
+		 * its preparation for ramdumps.
+		 */
 		msleep(mdm_drv->pdata->ramdump_delay_ms);
 	}
 	if (!mdm_drv->mdm_unexpected_reset_occurred) {
-		
+		/* SSD_RIL: To control QSC enter Dload mode. */
 		if( gpio_get_value(mdm_drv->mdm2ap_vddmin_gpio) )
 		{
 			pr_info("%s: HW Reset case, MDM2AP_VDDMIN is high..\n", __func__);
@@ -760,7 +782,7 @@ static int qsc_subsys_shutdown(const struct subsys_data *crashed_subsys)
 			mdm_drv->ops->reset_mdm_cb(mdm_drv);
 		}
 
-		
+		/* Update gpio configuration to "booting" config. */
 		qsc_update_gpio_configs(GPIO_UPDATE_BOOTING_CONFIG);
 	} else {
 		pr_info("%s: HW Reset case, unexpected_reset detected.\n", __func__);
@@ -777,7 +799,7 @@ static int qsc_subsys_powerup(const struct subsys_data *crashed_subsys)
 	if (mdm_drv->pdata->ps_hold_delay_ms > 0)
 		msleep(mdm_drv->pdata->ps_hold_delay_ms);
 
-	
+	/* SSD_RIL: To control QSC enter OS mode. */
 	gpio_direction_output(mdm_drv->ap2mdm_vddmin_gpio, 0);
 
 	mdm_drv->ops->power_on_mdm_cb(mdm_drv);
@@ -791,7 +813,8 @@ static int qsc_subsys_powerup(const struct subsys_data *crashed_subsys)
 		pr_info("%s: qsc modem has been restarted\n", __func__);
 
 #if 0
-		
+/* SSD_RIL: Remove un-necessary QCT code. */
+		/* Log the reason for the restart */
 		if (mdm_drv->pdata->sfr_query)
 			queue_work(qsc_sfr_queue, &sfr_reason_work);
 #endif
@@ -819,7 +842,7 @@ static int qsc_subsys_ramdumps(int want_dumps,
 		INIT_COMPLETION(qsc_ram_dumps);
 		if (!mdm_drv->pdata->no_powerdown_after_ramdumps) {
 			mdm_drv->ops->power_down_mdm_cb(mdm_drv);
-			
+			/* Update gpio configuration to "booting" config. */
 			qsc_update_gpio_configs(GPIO_UPDATE_BOOTING_CONFIG);
 		}
 	}
@@ -834,7 +857,12 @@ static struct subsys_data qsc_subsystem = {
 };
 
 #if 0
+/* SSD_RIL: Remove un-necessary QCT code. */
 
+/* Once the gpios are sent to RPM and debugging
+ * starts, there is no way to stop it without
+ * rebooting the device.
+ */
 static int qsc_debug_mask_set(void *data, u64 val)
 {
 	if (!vddmin_gpios_sent &&
@@ -878,79 +906,79 @@ static void qsc_modem_initialize_data(struct platform_device  *pdev,
 {
 	struct resource *pres;
 
-	
+	/* MDM2AP_ERRFATAL */
 	pres = platform_get_resource_byname(pdev, IORESOURCE_IO,
 							"MDM2AP_ERRFATAL");
 	mdm_drv->mdm2ap_errfatal_gpio = pres ? pres->start : -1;
 
-	
+	/* AP2MDM_ERRFATAL */
 	pres = platform_get_resource_byname(pdev, IORESOURCE_IO,
 							"AP2MDM_ERRFATAL");
 	mdm_drv->ap2mdm_errfatal_gpio = pres ? pres->start : -1;
 
-	
+	/* MDM2AP_STATUS */
 	pres = platform_get_resource_byname(pdev, IORESOURCE_IO,
 							"MDM2AP_STATUS");
 	mdm_drv->mdm2ap_status_gpio = pres ? pres->start : -1;
 
-	
+	/* AP2MDM_STATUS */
 	pres = platform_get_resource_byname(pdev, IORESOURCE_IO,
 							"AP2MDM_STATUS");
 	mdm_drv->ap2mdm_status_gpio = pres ? pres->start : -1;
 
-	
+	/* MDM2AP_WAKEUP */
 	pres = platform_get_resource_byname(pdev, IORESOURCE_IO,
 							"MDM2AP_WAKEUP");
 	mdm_drv->mdm2ap_wakeup_gpio = pres ? pres->start : -1;
 
-	
+	/* AP2MDM_WAKEUP */
 	pres = platform_get_resource_byname(pdev, IORESOURCE_IO,
 							"AP2MDM_WAKEUP");
 	mdm_drv->ap2mdm_wakeup_gpio = pres ? pres->start : -1;
 
-	
+	/* QSC2AP_WAKEUP_ACK */
 	pres = platform_get_resource_byname(pdev, IORESOURCE_IO,
 							"QSC2AP_WAKEUP_ACK");
 	mdm_drv->qsc2ap_wakeup_ack_gpio = pres ? pres->start : -1;
 
-	
+	/* AP2MDM_SOFT_RESET */
 	pres = platform_get_resource_byname(pdev, IORESOURCE_IO,
 							"AP2MDM_SOFT_RESET");
 	mdm_drv->ap2mdm_soft_reset_gpio = pres ? pres->start : -1;
 
-	
+	/* AP2MDM_KPDPWR_N */
 	pres = platform_get_resource_byname(pdev, IORESOURCE_IO,
 							"AP2MDM_KPDPWR_N");
 	mdm_drv->ap2mdm_kpdpwr_n_gpio = pres ? pres->start : -1;
 
-	
+	/* AP2MDM_PMIC_PWR_EN */
 	pres = platform_get_resource_byname(pdev, IORESOURCE_IO,
 							"AP2MDM_PMIC_PWR_EN");
 	mdm_drv->ap2mdm_pmic_pwr_en_gpio = pres ? pres->start : -1;
 
-	
+	/* MDM2AP_PBLRDY */
 	pres = platform_get_resource_byname(pdev, IORESOURCE_IO,
 							"MDM2AP_PBLRDY");
 	mdm_drv->mdm2ap_pblrdy = pres ? pres->start : -1;
 
-	
-	
+	/* + SSD_RIL */
+	/* AP2MDM_VDDMIN */
 	pres = platform_get_resource_byname(pdev, IORESOURCE_IO,
 							"AP2MDM_VDDMIN");
 	mdm_drv->ap2mdm_vddmin_gpio = pres ? pres->start : -1;
 
-	
+	/* MDM2AP_VDDMIN */
 	pres = platform_get_resource_byname(pdev, IORESOURCE_IO,
 							"MDM2AP_VDDMIN");
 	mdm_drv->mdm2ap_vddmin_gpio = pres ? pres->start : -1;
 
-	
+	/* AP2MDM_IPC1 */
 	pres = platform_get_resource_byname(pdev, IORESOURCE_IO,
 							"AP2MDMIPC1");
 	mdm_drv->ap2mdm_ipc1_gpio = pres ? pres->start : -1;
-	
+	/* - SSD_RIL */
 
-	
+	/*USB_SW*/
 	pres = platform_get_resource_byname(pdev, IORESOURCE_IO,
 							"USB_SW");
 	mdm_drv->usb_switch_gpio = pres ? pres->start : -1;
@@ -986,6 +1014,7 @@ int qsc_common_create(struct platform_device  *pdev,
 	gpio_request(mdm_drv->mdm2ap_status_gpio, "MDM2AP_STATUS");
 	gpio_request(mdm_drv->mdm2ap_errfatal_gpio, "MDM2AP_ERRFATAL");
 #if 0
+/* SSD_RIL: Remove un-necessary QCT code. */
 	if (GPIO_IS_VALID(mdm_drv->mdm2ap_pblrdy))
 		gpio_request(mdm_drv->mdm2ap_pblrdy, "MDM2AP_PBLRDY");
 #endif
@@ -1001,7 +1030,7 @@ int qsc_common_create(struct platform_device  *pdev,
 	if (GPIO_IS_VALID(mdm_drv->ap2mdm_wakeup_gpio))
 		gpio_request(mdm_drv->ap2mdm_wakeup_gpio, "AP2MDM_WAKEUP");
 
-	
+	/* + SSD_RIL */
 	if (GPIO_IS_VALID(mdm_drv->mdm2ap_wakeup_gpio))
 		gpio_request(mdm_drv->mdm2ap_wakeup_gpio, "MDM2AP_WAKEUP");
 
@@ -1016,7 +1045,7 @@ int qsc_common_create(struct platform_device  *pdev,
 
 	if (GPIO_IS_VALID(mdm_drv->qsc2ap_wakeup_ack_gpio))
 		gpio_request(mdm_drv->qsc2ap_wakeup_ack_gpio, "QSC2AP_WAKEUP_ACK");
-	
+	/* - SSD_RIL */
 
 	if (GPIO_IS_VALID(mdm_drv->usb_switch_gpio)) {
 		if (gpio_request(mdm_drv->usb_switch_gpio, "USB_SW")) {
@@ -1026,7 +1055,7 @@ int qsc_common_create(struct platform_device  *pdev,
 	}
 
 #if 0
-	
+	/* SSD_RIL: Remove it due to power leakage. */
 	gpio_direction_output(mdm_drv->ap2mdm_status_gpio, 1);
 #endif
 
@@ -1035,31 +1064,31 @@ int qsc_common_create(struct platform_device  *pdev,
 	if (GPIO_IS_VALID(mdm_drv->ap2mdm_wakeup_gpio))
 		gpio_direction_output(mdm_drv->ap2mdm_wakeup_gpio, 0);
 
-	
+	/* + SSD_RIL */
 	if (GPIO_IS_VALID(mdm_drv->ap2mdm_vddmin_gpio))
 		gpio_direction_output(mdm_drv->ap2mdm_vddmin_gpio, 0);
 
 	if (GPIO_IS_VALID(mdm_drv->ap2mdm_ipc1_gpio))
 		gpio_direction_output(mdm_drv->ap2mdm_ipc1_gpio, 0);
 
-	
+	/* SSD_RIL: Workaround for not able to receive QSC WAKEUP ACK packet via UART. */
 	if (GPIO_IS_VALID(mdm_drv->qsc2ap_wakeup_ack_gpio))
 	{
 		gpio_tlmm_config(GPIO_CFG((mdm_drv->qsc2ap_wakeup_ack_gpio),  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
 		gpio_direction_input(mdm_drv->qsc2ap_wakeup_ack_gpio);
 	}
-	
+	/* - SSD_RIL */
 
 	gpio_direction_input(mdm_drv->mdm2ap_status_gpio);
 	gpio_direction_input(mdm_drv->mdm2ap_errfatal_gpio);
 
-	
+	/* + SSD_RIL */
 	if (GPIO_IS_VALID(mdm_drv->mdm2ap_wakeup_gpio))
 		gpio_direction_input(mdm_drv->mdm2ap_wakeup_gpio);
 
 	if (GPIO_IS_VALID(mdm_drv->mdm2ap_vddmin_gpio))
 		gpio_direction_input(mdm_drv->mdm2ap_vddmin_gpio);
-	
+	/* - SSD_RIL */
 
 	qsc_queue = create_singlethread_workqueue("qsc_queue");
 	if (!qsc_queue) {
@@ -1078,6 +1107,7 @@ int qsc_common_create(struct platform_device  *pdev,
 	}
 
 #if 0
+/* SSD_RIL: Remove un-necessary QCT code. */
 	atomic_notifier_chain_register(&panic_notifier_list, &qsc_panic_blk);
 
 	qsc_debugfs_init();
@@ -1085,10 +1115,10 @@ int qsc_common_create(struct platform_device  *pdev,
 
 	device_create_file(&pdev->dev, &dev_attr_trigger_fatal);
 
-	
+	/* Register subsystem handlers */
 	ssr_register_subsystem(&qsc_subsystem);
 
-	
+	/* ERR_FATAL irq. */
 	irq = MSM_GPIO_TO_INT(mdm_drv->mdm2ap_errfatal_gpio);
 	if (irq < 0) {
 		pr_err("%s: could not get QSC2AP_ERRFATAL IRQ resource, error=%d\n",
@@ -1097,7 +1127,7 @@ int qsc_common_create(struct platform_device  *pdev,
 	}
 
 #if 0
-	
+	/* SSD_RIL: Do NOT call SSR in interrupt context. */
 	ret = request_irq(irq, qsc_errfatal,
 		IRQF_TRIGGER_RISING , "mdm errfatal", NULL);
 #else
@@ -1114,7 +1144,7 @@ int qsc_common_create(struct platform_device  *pdev,
 
 errfatal_err:
 
-	
+	/* status irq */
 	irq = MSM_GPIO_TO_INT(mdm_drv->mdm2ap_status_gpio);
 	if (irq < 0) {
 		pr_err("%s: could not get QSC2AP_STATUS IRQ resource, error=%d\n",
@@ -1135,6 +1165,7 @@ errfatal_err:
 
 status_err:
 #if 0
+/* SSD_RIL: Remove un-necessary QCT code. */
 	if (GPIO_IS_VALID(mdm_drv->mdm2ap_pblrdy)) {
 		irq = MSM_GPIO_TO_INT(mdm_drv->mdm2ap_pblrdy);
 		if (irq < 0) {
@@ -1156,11 +1187,20 @@ status_err:
 	}
 pblrdy_err:
 #endif
+	/*
+	 * If AP2MDM_PMIC_PWR_EN gpio is used, pull it high. It remains
+	 * high until the whole phone is shut down.
+	 */
+	/* For m7dxg 720p projects AP2QSC_PMIC_PWR_EN should be pulled LOW
+	 * after XC board.
+	 * For m7cdxg 1080p projects AP2QSC_PMIC_PWR_EN should be pulled LOW
+	 * after XB board.
+	 */
 	is_m7dxg = machine_is_m7_dug() || machine_is_m7_dtu() || machine_is_m7_dcg();
 	is_m7cdxg = machine_is_m7c_dtu() || machine_is_m7c_dug() || machine_is_m7c_dwg();
 
-	if ((is_m7dxg && system_rev < 0x2) ||	
-		(is_m7cdxg && system_rev < 0x1))	
+	if ((is_m7dxg && system_rev < 0x2) ||	/* EVT XC == 0x2 */
+		(is_m7cdxg && system_rev < 0x1))	/* EVT XB == 0x1 */
 	{
 		qsc_pwr_enable_value = 1;
 	}
@@ -1187,7 +1227,7 @@ pblrdy_err:
 #endif
 	}
 
-	
+	/* SSD_RIL: Register QSC2AP_VDDMIN interrupt to handle HW reset case.  */
 	irq = MSM_GPIO_TO_INT(mdm_drv->mdm2ap_vddmin_gpio);
 	if (irq < 0) {
 		pr_err("%s: could not get QSC2AP_VDDMIN IRQ resource, error=%d\n",
@@ -1209,6 +1249,9 @@ pblrdy_err:
 			, __func__, mdm_drv->mdm2ap_vddmin_gpio, irq, ret);		}
 	}
 
+	/* Perform early powerup of the external modem in order to
+	 * allow tabla devices to be found.
+	 */
 	if (mdm_drv->pdata->early_power_on)
 		mdm_drv->ops->power_on_mdm_cb(mdm_drv);
 
@@ -1230,7 +1273,7 @@ fatal_err:
 	if (GPIO_IS_VALID(mdm_drv->ap2mdm_wakeup_gpio))
 		gpio_free(mdm_drv->ap2mdm_wakeup_gpio);
 
-	
+	/* + SSD_RIL */
 	if (GPIO_IS_VALID(mdm_drv->mdm2ap_wakeup_gpio))
 		gpio_free(mdm_drv->mdm2ap_wakeup_gpio);
 
@@ -1245,7 +1288,7 @@ fatal_err:
 
 	if (GPIO_IS_VALID(mdm_drv->qsc2ap_wakeup_ack_gpio))
 		gpio_free(mdm_drv->qsc2ap_wakeup_ack_gpio);
-	
+	/* - SSD_RIL */
 
 	kfree(mdm_drv);
 	ret = -ENODEV;
@@ -1272,7 +1315,7 @@ int qsc_common_modem_remove(struct platform_device *pdev)
 	if (GPIO_IS_VALID(mdm_drv->ap2mdm_wakeup_gpio))
 		gpio_free(mdm_drv->ap2mdm_wakeup_gpio);
 
-	
+	/* + SSD_RIL */
 	if (GPIO_IS_VALID(mdm_drv->mdm2ap_wakeup_gpio))
 		gpio_free(mdm_drv->mdm2ap_wakeup_gpio);
 
@@ -1287,7 +1330,7 @@ int qsc_common_modem_remove(struct platform_device *pdev)
 
 	if (GPIO_IS_VALID(mdm_drv->qsc2ap_wakeup_ack_gpio))
 		gpio_free(mdm_drv->qsc2ap_wakeup_ack_gpio);
-	
+	/* - SSD_RIL */
 
 	device_remove_file(&pdev->dev, &dev_attr_trigger_fatal);
 	kfree(mdm_drv);
@@ -1302,7 +1345,7 @@ void qsc_common_modem_shutdown(struct platform_device *pdev)
 
 	pr_debug("%s: entry\n", __func__);
 
-	
+	/* set output low to prevent current leakage */
     if (GPIO_IS_VALID(mdm_drv->ap2mdm_vddmin_gpio))
             gpio_direction_output(mdm_drv->ap2mdm_vddmin_gpio, 0);
     if (GPIO_IS_VALID(mdm_drv->ap2mdm_status_gpio))
@@ -1315,6 +1358,8 @@ void qsc_common_modem_shutdown(struct platform_device *pdev)
             gpio_direction_output(mdm_drv->ap2mdm_ipc1_gpio, 0);
 
 #if 0
+/* SSD_RIL: Don't shutdown QSC here because we don't know if we need to capture QSC offline ramdump. */
+/* SSD_RIL: Shutdown in restart-apq8064.c */
 	mdm_drv->ops->power_down_mdm_cb(mdm_drv);
 	if (GPIO_IS_VALID(mdm_drv->ap2mdm_pmic_pwr_en_gpio))
 		gpio_direction_output(mdm_drv->ap2mdm_pmic_pwr_en_gpio, !qsc_pwr_enable_value);
@@ -1322,6 +1367,7 @@ void qsc_common_modem_shutdown(struct platform_device *pdev)
 }
 
 #if 0
+/* SSD_RIL: Remove un-necessary QCT code. */
 static void qsc_peripheral_connect(struct qsc_modem_drv *mdm_drv)
 {
 	if (!mdm_drv->pdata->peripheral_platform_device)
@@ -1351,6 +1397,7 @@ out:
 	mutex_unlock(&hsic_status_lock);
 }
 
+/* This function can be called from atomic context. */
 static void qsc_toggle_soft_reset(struct qsc_modem_drv *mdm_drv)
 {
 	int soft_reset_direction_assert = 0,
@@ -1362,11 +1409,15 @@ static void qsc_toggle_soft_reset(struct qsc_modem_drv *mdm_drv)
 	}
 	gpio_direction_output(mdm_drv->ap2mdm_soft_reset_gpio,
 			soft_reset_direction_assert);
+	/* Use mdelay because this function can be called from atomic
+	 * context.
+	 */
 	mdelay(QSC_SOFT_RESET_DELAY_MS);
 	gpio_direction_output(mdm_drv->ap2mdm_soft_reset_gpio,
 			soft_reset_direction_de_assert);
 }
 
+/* This function can be called from atomic context. */
 static void qsc_atomic_soft_reset(struct qsc_modem_drv *mdm_drv)
 {
 	qsc_toggle_soft_reset(mdm_drv);
@@ -1381,7 +1432,7 @@ static void qsc_power_down_common(struct qsc_modem_drv *mdm_drv)
 
 	qsc_peripheral_disconnect(mdm_drv);
 
-	
+	/* Wait for the modem to complete its power down actions. */
 	for (i = 20; i > 0; i--) {
 		value = gpio_get_value(mdm_drv->mdm2ap_status_gpio);
 		if (value == 0) {
@@ -1398,6 +1449,12 @@ static void qsc_power_down_common(struct qsc_modem_drv *mdm_drv)
 			   __func__);
 		gpio_direction_output(mdm_drv->ap2mdm_soft_reset_gpio,
 					soft_reset_direction);
+		/*
+		* Currently, there is a debounce timer on the charm PMIC. It is
+		* necessary to hold the PMIC RESET low for ~3.5 seconds
+		* for the reset to fully take place. Sleep here to ensure the
+		* reset has occured before the function exits.
+		*/
 		msleep(4000);
 	}
 }
@@ -1405,6 +1462,7 @@ static void qsc_power_down_common(struct qsc_modem_drv *mdm_drv)
 static void qsc_do_first_power_on(struct qsc_modem_drv *mdm_drv)
 {
 #if 0
+/* SSD_RIL: Remove un-necessary QCT code. */
 	int i;
 	int pblrdy;
 #endif
@@ -1417,28 +1475,37 @@ static void qsc_do_first_power_on(struct qsc_modem_drv *mdm_drv)
 	pr_err("%s: Powering on modem for the first time\n", __func__);
 	qsc_peripheral_disconnect(mdm_drv);
 
-	
+	/* SSD_RIL: To control QSC enter OS mode. */
 	gpio_direction_output(mdm_drv->ap2mdm_vddmin_gpio, 0);
 
+	/* If this is the first power-up after a panic, the modem may still
+	 * be in a power-on state, in which case we need to toggle the gpio
+	 * instead of just de-asserting it. No harm done if the modem was
+	 * powered down.
+	 */
 	qsc_toggle_soft_reset(mdm_drv);
 
-	
+	/* If the device has a kpd pwr gpio then toggle it. */
 	if (GPIO_IS_VALID(mdm_drv->ap2mdm_kpdpwr_n_gpio)) {
+		/* Pull AP2MDM_KPDPWR gpio high and wait for PS_HOLD to settle,
+		 * then	pull it back low.
+		 */
 		pr_debug("%s: Pulling AP2QSC_KPDPWR gpio high\n", __func__);
 		gpio_direction_output(mdm_drv->ap2mdm_kpdpwr_n_gpio, 1);
 		msleep(QSC_KPDPWR_DELAY_MS);
 		gpio_direction_output(mdm_drv->ap2mdm_kpdpwr_n_gpio, 0);
 	}
 
-	
-	
+	/*++SSD_RIL*/
+	/* pull AP2QSC_STATUS gpio high */
 	if (GPIO_IS_VALID(mdm_drv->ap2mdm_status_gpio)){
 		pr_debug("%s: Pulling AP2QSC_STATUS gpio high\n", __func__);
 		gpio_direction_output(mdm_drv->ap2mdm_status_gpio, 1);
 	}
-	
+	/*--SSD_RIL*/
 
 #if 0
+/* SSD_RIL: Remove un-necessary QCT code. */
 	if (!GPIO_IS_VALID(mdm_drv->mdm2ap_pblrdy))
 		goto start_qsc_peripheral;
 
@@ -1459,6 +1526,7 @@ start_qsc_peripheral:
 static void qsc_do_soft_power_on(struct qsc_modem_drv *mdm_drv)
 {
 #if 0
+/* SSD_RIL: Remove un-necessary QCT code. */
 	int i;
 	int pblrdy;
 #endif
@@ -1468,6 +1536,7 @@ static void qsc_do_soft_power_on(struct qsc_modem_drv *mdm_drv)
 	qsc_toggle_soft_reset(mdm_drv);
 
 #if 0
+/* SSD_RIL: Remove un-necessary QCT code. */
 	if (!GPIO_IS_VALID(mdm_drv->mdm2ap_pblrdy))
 		goto start_qsc_peripheral;
 
@@ -1490,9 +1559,18 @@ static void qsc_power_on_common(struct qsc_modem_drv *mdm_drv)
 {
 	power_on_count++;
 
+	/* this gpio will be used to indicate apq readiness,
+	 * de-assert it now so that it can be asserted later.
+	 * May not be used.
+	 */
 	if (GPIO_IS_VALID(mdm_drv->ap2mdm_wakeup_gpio))
 		gpio_direction_output(mdm_drv->ap2mdm_wakeup_gpio, 0);
 
+	/*
+	 * If we did an "early power on" then ignore the very next
+	 * power-on request because it would the be first request from
+	 * user space but we're already powered on. Ignore it.
+	 */
 	if ( (mdm_drv->pdata->early_power_on) &&
 		 (power_on_count == 2))
 		return;
@@ -1541,6 +1619,7 @@ static void qsc_status_changed(struct qsc_modem_drv *mdm_drv, int value)
 	pr_debug("%s: value:%d\n", __func__, value);
 
 #if 0
+/* SSD_RIL: Remove un-necessary QCT code. */
 	if (value) {
 		qsc_peripheral_disconnect(mdm_drv);
 		qsc_peripheral_connect(mdm_drv);
@@ -1561,6 +1640,11 @@ static void qsc_image_upgrade(struct qsc_modem_drv *mdm_drv, int type)
 	case MDM_CONTROLLED_UPGRADE:
 		pr_debug("%s QSC controlled modem image upgrade\n", __func__);
 		mdm_drv->mdm_ready = 0;
+		/*
+		 * If we have no image currently present on the modem, then we
+		 * would be in PBL, in which case the status gpio would not go
+		 * high.
+		 */
 		mdm_drv->disable_status_check = 1;
 		if (GPIO_IS_VALID(mdm_drv->usb_switch_gpio)) {
 			pr_info("%s Switching usb control to QSC\n", __func__);

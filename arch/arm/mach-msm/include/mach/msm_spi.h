@@ -10,6 +10,9 @@
  * GNU General Public License for more details.
  *
  */
+/*
+ * SPI driver for Qualcomm MSM platforms.
+ */
 
 struct msm_spi_platform_data {
 	u32 max_clock_speed;

@@ -43,9 +43,9 @@ static struct msm_fb_panel_data writeback_msm_panel_data = {
 		.wait_cycle = 0,
 		.bpp = 24,
 		.fb_num = 1,
-		
+		/* HTC_CSP_START: To avoid tearing */
 		.clk_rate = 177780000,
-		
+		/* HTC_CSP_START */
 	},
 };
 
@@ -82,4 +82,6 @@ fail_driver_registration:
 	return rc;
 }
 
+/* HTC_CSP_START: Correct initial sequence */
 late_initcall(writeback_panel_init);
+/* HTC_CSP_START */

@@ -586,6 +586,39 @@ launch_event_store(struct kobject *kobj, struct kobj_attribute *attr,
 }
 power_attr(launch_event);
 
+int grp_alarm_sec = 0;
+int nightmode_enabled = 0;
+static ssize_t
+nightmode_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
+{
+	return sprintf(buf, "%d\n", nightmode_enabled);
+}
+
+static ssize_t
+nightmode_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t n)
+{
+	unsigned long val;
+	struct timespec ts;
+
+	if (strict_strtoul(buf, 10, &val))
+		return -EINVAL;
+
+	nightmode_enabled = val;
+
+	if(nightmode_enabled == 1){
+		getnstimeofday(&ts);
+		grp_alarm_sec = ts.tv_sec % 60;
+	}
+
+	printk(KERN_INFO "Set nightmode to %d, group alarm second to %d\n", nightmode_enabled, grp_alarm_sec);
+	sysfs_notify(kobj, NULL, "nightmode");
+	return n;
+}
+power_attr(nightmode);
+
+
 int powersave_enabled = 0;
 static ssize_t
 powersave_show(struct kobject *kobj, struct kobj_attribute *attr,
@@ -611,6 +644,34 @@ powersave_store(struct kobject *kobj, struct kobj_attribute *attr,
         return n;
 }
 power_attr(powersave);
+
+int screenoff_policy = 1;
+extern void screenoff_policy_change(void);
+static ssize_t
+screenoff_policy_show(struct kobject *kobj, struct kobj_attribute *attr,
+			char *buf)
+{
+	return sprintf(buf, "%d\n", screenoff_policy);
+}
+
+static ssize_t
+screenoff_policy_store(struct kobject *kobj, struct kobj_attribute *attr,
+			const char *buf, size_t n)
+{
+	unsigned long val;
+
+	if (strict_strtoul(buf, 10, &val))
+		return -EINVAL;
+
+	printk(KERN_INFO "Change screeoff policy from %d to %ld\n", screenoff_policy, val);
+	if ((screenoff_policy != val) && (val >= 0) && (val <=2)) {
+		screenoff_policy = val;
+		screenoff_policy_change();
+		sysfs_notify(kobj, NULL, "screenoff_policy");
+	}
+	return n;
+}
+power_attr(screenoff_policy);
 
 static ssize_t
 cpufreq_ceiling_show(struct kobject *kobj, struct kobj_attribute *attr,
@@ -828,9 +889,11 @@ static struct attribute *g[] = {
 	&perflock_attr.attr,
 	&cpufreq_ceiling_attr.attr,
 	&launch_event_attr.attr,
-	&powersave_attr.attr,
 	&cpunum_floor_attr.attr,
 	&cpunum_ceiling_attr.attr,
+	&nightmode_attr.attr,
+	&powersave_attr.attr,
+	&screenoff_policy_attr.attr,
 #endif
 	NULL,
 };

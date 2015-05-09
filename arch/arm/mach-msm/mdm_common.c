@@ -564,7 +564,7 @@ EXPORT_SYMBOL(get_mdm_errmsg);
 static int notify_mdm_nv_write_done(void)
 {
 	gpio_direction_output(mdm_drv->ap2mdm_ipc1_gpio, 1);
-	msleep(1);
+	udelay(1000);
 	gpio_direction_output(mdm_drv->ap2mdm_ipc1_gpio, 0);
 	return 0;
 }

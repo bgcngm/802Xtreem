@@ -20,8 +20,16 @@
 
 struct fiq_handler {
 	struct fiq_handler *next;
+	/* Name
+	 */
 	const char *name;
+	/* Called to ask driver to relinquish/
+	 * reacquire FIQ
+	 * return zero to accept, or -<errno>
+	 */
 	int (*fiq_op)(void *, int relinquish);
+	/* data for the relinquish/reacquire functions
+	 */
 	void *dev_id;
 };
 
@@ -42,6 +50,7 @@ static inline void enable_fiq(int fiq) { }
 static inline void disable_fiq(int fiq) { }
 #endif
 
+/* helpers defined in fiqasm.S: */
 extern void __set_fiq_regs(unsigned long const *regs);
 extern void __get_fiq_regs(unsigned long *regs);
 

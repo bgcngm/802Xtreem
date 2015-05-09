@@ -39,6 +39,7 @@
 #include "smd_private.h"
 #include <mach/htc_restart_handler.h>
 
+/* HTC add start */
 
 #if defined(CONFIG_ARCH_APQ8064)
   #define EXTERNAL_MODEM "external_modem"
@@ -75,6 +76,7 @@
 #define pr_err(x...) do {				\
 			printk(KERN_ERR "[SSR] "x);		\
 	} while (0)
+/* HTC add end */
 
 struct subsys_soc_restart_order {
 	const char * const *subsystem_list;
@@ -106,9 +108,11 @@ struct workqueue_struct *ssr_wq;
 static int crashed_modem;
 #endif
 
+//HTC+++
 #if defined(CONFIG_ARCH_APQ8064) && defined(CONFIG_USB_EHCI_MSM_HSIC)
 int mdm_is_in_restart = 0;
-#endif 
+#endif //CONFIG_USB_EHCI_MSM_HSIC
+//HTC---
 
 
 static LIST_HEAD(restart_log_list);
@@ -117,6 +121,7 @@ static DEFINE_SPINLOCK(subsystem_list_lock);
 static DEFINE_MUTEX(soc_order_reg_lock);
 static DEFINE_MUTEX(restart_log_mutex);
 
+/* SOC specific restart orders go here */
 
 #define DEFINE_SINGLE_RESTART_ORDER(name, order)		\
 	static struct subsys_soc_restart_order __##name = {	\
@@ -128,6 +133,7 @@ static DEFINE_MUTEX(restart_log_mutex);
 		&__##name,					\
 	}
 
+/* MSM 8x60 restart ordering info */
 static const char * const _order_8x60_all[] = {
 	"external_modem",  "modem", "lpass"
 };
@@ -136,11 +142,14 @@ DEFINE_SINGLE_RESTART_ORDER(orders_8x60_all, _order_8x60_all);
 static const char * const _order_8x60_modems[] = {"external_modem", "modem"};
 DEFINE_SINGLE_RESTART_ORDER(orders_8x60_modems, _order_8x60_modems);
 
+/* MSM 8960 restart ordering info */
 static const char * const order_8960[] = {"modem", "lpass"};
 
+/*SGLTE restart ordering info*/
 static const char * const order_8960_sglte[] = {"external_modem",
 						"modem"};
 
+/* DSDA restart ordering info*/
 static const char * const order_8064_dsda[] = {"external_modem",
 						"qsc_modem"};
 
@@ -174,6 +183,9 @@ static struct subsys_soc_restart_order *restart_orders_8064_dsda[] = {
 	&restart_orders_8064_fusion_dsda,
 	};
 
+/* These will be assigned to one of the sets above after
+ * runtime SoC identification.
+ */
 static struct subsys_soc_restart_order **restart_orders;
 static int n_restart_orders;
 
@@ -235,13 +247,14 @@ modify restart_level to RESET_SUBSYS_COUPLED\n", __func__ );
 module_param_call(restart_level, restart_level_set, param_get_int,
 			&restart_level, 0644);
 
+/*++SSD_RIL@20130111: Add function to set restart level in CRC stage*/
 void subsystem_update_restart_level_for_crc(void)
 {
 #if defined(CONFIG_MSM_SSR_INDEPENDENT)
 	pr_info("%s: Default SSR is Enabled...\n", __func__);
-#else
+#else//CONFIG_MSM_SSR_INDEPENDENT
 	if (board_mfg_mode() || (get_kernel_flag() & KERNEL_FLAG_ENABLE_SSR_MODEM))
-		
+		/*Always enter ramdump mode in MFG mode*/
 		restart_level = RESET_SOC;
 	else if (is_qsc_dsda())
 		restart_level = RESET_SUBSYS_COUPLED;
@@ -249,9 +262,10 @@ void subsystem_update_restart_level_for_crc(void)
 		restart_level = RESET_SUBSYS_INDEPENDENT;
 
 	pr_info("%s: Phase %d behavior activated.\n", __func__, restart_level);
-#endif
+#endif//CONFIG_MSM_SSR_INDEPENDENT
 }
 EXPORT_SYMBOL(subsystem_update_restart_level_for_crc);
+/*--SSD_RIL*/
 
 static struct subsys_data *_find_subsystem(const char *subsys_name)
 {
@@ -330,7 +344,7 @@ static void do_epoch_check(struct subsys_data *subsys)
 	max_restarts_check = max_restarts;
 	max_history_time_check = max_history_time;
 
-	
+	/* Check if epoch checking is enabled */
 	if (!max_restarts_check)
 		goto out;
 
@@ -392,6 +406,10 @@ static void subsystem_restart_wq_func(struct work_struct *work)
 	if (r_work->use_restart_order)
 		soc_restart_order = subsys->restart_order;
 
+	/* It's OK to not take the registration lock at this point.
+	 * This is because the subsystem list inside the relevant
+	 * restart order is not being traversed.
+	 */
 	if (!soc_restart_order) {
 		restart_list = subsys->single_restart_list;
 		restart_list_count = 1;
@@ -406,23 +424,35 @@ static void subsystem_restart_wq_func(struct work_struct *work)
 
 	pr_debug("[%p]: Attempting to get shutdown lock!\n", current);
 
+	/* Try to acquire shutdown_lock. If this fails, these subsystems are
+	 * already being restarted - return.
+	 */
 	if (!mutex_trylock(shutdown_lock))
 		goto out;
 
 	pr_debug("[%p]: Attempting to get powerup lock!\n", current);
 
+	/* Now that we've acquired the shutdown lock, either we're the first to
+	 * restart these subsystems or some other thread is doing the powerup
+	 * sequence for these subsystems. In the latter case, panic and bail
+	 * out, since a subsystem died in its powerup sequence.
+	 */
 	if (!mutex_trylock(powerup_lock))
 		panic("%s[%p]: Subsystem died during powerup!",
 						__func__, current);
 
 	do_epoch_check(subsys);
 
+	/* Now it is necessary to take the registration lock. This is because
+	 * the subsystem list in the SoC restart order will be traversed
+	 * and it shouldn't be changed until _this_ restart sequence completes.
+	 */
 	mutex_lock(&soc_order_reg_lock);
 
 	pr_debug("[%p]: Starting restart sequence for %s\n", current,
 			r_work->subsys->name);
 
-	
+	//HTC+++
 	#if defined(CONFIG_ARCH_APQ8064) && defined(CONFIG_USB_EHCI_MSM_HSIC)
 	for (i = 0; i < restart_list_count; i++) {
 		if (!restart_list[i])
@@ -433,8 +463,8 @@ static void subsystem_restart_wq_func(struct work_struct *work)
 			pr_debug("[%s]: mdm_is_in_restart=%d\n", __func__, mdm_is_in_restart);
 		}
 	}
-	#endif 
-	
+	#endif //CONFIG_USB_EHCI_MSM_HSIC
+	//HTC---
 
 	_send_notification_to_order(restart_list,
 				restart_list_count,
@@ -456,9 +486,14 @@ static void subsystem_restart_wq_func(struct work_struct *work)
 	_send_notification_to_order(restart_list, restart_list_count,
 				SUBSYS_AFTER_SHUTDOWN);
 
+	/* Now that we've finished shutting down these subsystems, release the
+	 * shutdown lock. If a subsystem restart request comes in for a
+	 * subsystem in _this_ restart order after the unlock below, and
+	 * before the powerup lock is released, panic and bail out.
+	 */
 	mutex_unlock(shutdown_lock);
 
-	
+	/* Collect ram dumps for all subsystems in order here */
 	for (i = 0; i < restart_list_count; i++) {
 		if (!restart_list[i])
 			continue;
@@ -494,7 +529,7 @@ static void subsystem_restart_wq_func(struct work_struct *work)
 	pr_info("[%p]: Restart sequence for %s completed.\n",
 			current, r_work->subsys->name);
 
-	
+	//HTC+++
 	#if defined(CONFIG_ARCH_APQ8064) && defined(CONFIG_USB_EHCI_MSM_HSIC)
 	for (i = 0; i < restart_list_count; i++) {
 		if (!restart_list[i])
@@ -505,8 +540,8 @@ static void subsystem_restart_wq_func(struct work_struct *work)
 			pr_debug("[%s]: mdm_is_in_restart=%d\n", __func__, mdm_is_in_restart);
 		}
 	}
-	#endif 
-	
+	#endif //CONFIG_USB_EHCI_MSM_HSIC
+	//HTC---
 
 	mutex_unlock(powerup_lock);
 
@@ -555,18 +590,18 @@ void dump_uart_ringbuffer(void);
 int subsystem_restart(const char *subsys_name)
 {
 	struct subsys_data *subsys;
-	
+	//HTC+++
 	#if defined(CONFIG_ARCH_APQ8064) && defined(CONFIG_USB_EHCI_MSM_HSIC)
 	extern bool ehci_hsic_is_2nd_enum_done(void);
-	#endif 
-	
+	#endif //CONFIG_USB_EHCI_MSM_HSIC
+	//HTC---
 
 	if (!subsys_name) {
 		pr_err("Invalid subsystem name.\n");
 		return -EINVAL;
 	}
 
-	
+	//HTC+++
 	#if defined(CONFIG_ARCH_APQ8064) && defined(CONFIG_USB_EHCI_MSM_HSIC)
 	if (strcmp(subsys_name, EXTERNAL_MODEM) == 0) {
 		if (!ehci_hsic_is_2nd_enum_done()) {
@@ -577,12 +612,15 @@ int subsystem_restart(const char *subsys_name)
 			pr_info("%s: 2nd enum is done\n", __func__);
 		}
 	}
-	#endif 
-	
+	#endif //CONFIG_USB_EHCI_MSM_HSIC
+	//HTC---
 
 	pr_info("Restart sequence requested for %s, restart_level = %d.\n",
 		subsys_name, restart_level);
 
+	/* List of subsystems is protected by a lock. New subsystems can
+	 * still come in.
+	 */
 	subsys = _find_subsystem(subsys_name);
 
 	if (!subsys) {
@@ -615,7 +653,7 @@ int subsystem_restart(const char *subsys_name)
 		break;
 
 	case RESET_SOC:
-		
+		/* HTC start */
 		if(strcmp(subsys_name, "riva") == 0){
 			pr_info("%s: %s use its SSR config. Call subsystem_restart directly.\n", __func__, subsys_name);
 			__subsystem_restart(subsys);
@@ -625,11 +663,11 @@ int subsystem_restart(const char *subsys_name)
 		if (strcmp(subsys_name, EXTERNAL_MODEM) == 0) {
 			char *errmsg = get_mdm_errmsg();
 
-			
+			/* Set ramdump restart message earlier to avoid the unknown reset symptoms */
 			char ramdump_msg[SZ_DIAG_ERR_MSG] = "";
 			snprintf(ramdump_msg, (SZ_DIAG_ERR_MSG - 1), "KP: subsys-restart: %s crashed. %s", subsys->name, (errmsg? errmsg: ""));
 			set_restart_to_ramdump(ramdump_msg);
-			
+			/* ------------------ */
 
 			panic("subsys-restart: %s crashed. %s", subsys->name, (errmsg? errmsg: ""));
 		} else
@@ -637,7 +675,7 @@ int subsystem_restart(const char *subsys_name)
 		{
 			panic("subsys-restart: Resetting the SoC - %s crashed.", subsys->name);
 		}
-		
+		/* HTC end */
 		break;
 
 	default:
@@ -733,15 +771,15 @@ static int __init ssr_init_soc_restart_orders(void)
 			restart_orders = restart_orders_8960;
 			n_restart_orders = ARRAY_SIZE(restart_orders_8960);
 		}
-		
+		/* HTC change start */
 #if defined(CONFIG_ARCH_APQ8064_M7DXG) || defined(CONFIG_ARCH_APQ8064_DLPDXG) || defined(CONFIG_ARCH_APQ8064_T6DXG)
-		if (!machine_is_m7_evm()) { 
+		if (!machine_is_m7_evm()) { /* SSR is not supported on EVM board */
 			restart_orders = restart_orders_8064_dsda;
 			n_restart_orders =
 				ARRAY_SIZE(restart_orders_8064_dsda);
 		}
 #endif
-		
+		/* HTC change end */
 		for (i = 0; i < n_restart_orders; i++) {
 			mutex_init(&restart_orders[i]->powerup_lock);
 			mutex_init(&restart_orders[i]->shutdown_lock);
@@ -760,7 +798,7 @@ static int __init subsys_restart_init(void)
 {
 	int ret = 0;
 
-	
+	/* HTC change start */
 #if defined(CONFIG_MSM_SSR_INDEPENDENT)
 	pr_info("%s: Default SSR is Enabled...\n", __func__);
 
@@ -789,7 +827,7 @@ static int __init subsys_restart_init(void)
 		enable_ramdumps = 1;
 
 	pr_info("%s: ramdump function is %s\n", __func__, (enable_ramdumps? "Enabled": "Disabled"));
-	
+	/* HTC change end */
 
 	ssr_wq = alloc_workqueue("ssr_wq", 0, 0);
 

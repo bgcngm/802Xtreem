@@ -38,6 +38,41 @@
 #include "acpuclock-krait.h"
 #include "avs.h"
 
+/*
+PHY define in msm_iomap-8960.h, VIRT define in msm_iomap.h
+The counters to check kernel exit for both cpu's
+kernel foot print for cpu0  		: phy 0x8F1F1000 : virt 0xFB600000
+kernel foot print for cpu1  		: phy 0x8F1F1004 : virt 0xFB600004
+kernel foot print for cpu2 		: phy 0x8F1F1008 : virt 0xFB600008
+kernel foot print for cpu3 		: phy 0x8F1F100C : virt 0xFB60000C
+kernel exit counter from cpu0		: phy 0x8F1F1010 : virt 0xFB600010
+kernel exit counter from cpu1		: phy 0x8F1F1014 : virt 0xFB600014
+kernel exit counter from cpu2		: phy 0x8F1F1018 : virt 0xFB600018
+kernel exit counter from cpu3		: phy 0x8F1F101C : virt 0xFB60001C
+msm_pm_boot_entry       		: phy 0x8F1F1020 : virt 0xFB600020
+msm_pm_boot_vector      		: phy 0x8F1F1024 : virt 0xFB600024
+reset vector for cpu0(init)		: phy 0x8F1F1028 : virt 0xFB600028
+reset vector for cpu1(init)     	: phy 0x8F1F102C : virt 0xFB60002C
+reset vector for cpu2(init)		: phy 0x8F1F1030 : virt 0xFB600030
+reset vector for cpu3(init)	        : phy 0x8F1F1034 : virt 0xFB600034
+cpu0 reset vector address		: phy 0x8F1F1038 : virt 0xFB600038
+cpu1 reset vector address		: phy 0x8F1F103C : virt 0xFB60003C
+cpu2 reset vector address		: phy 0x8F1F1040 : virt 0xFB600040
+cpu3 reset vector address		: phy 0x8F1F1044 : virt 0xFB600044
+cpu0 reset vector address value		: phy 0x8F1F1048 : virt 0xFB600048
+cpu1 reset vector address value		: phy 0x8F1F104C : virt 0xFB60004C
+cpu2 reset vector address value		: phy 0x8F1F1050 : virt 0xFB600050
+cpu3 reset vector address value		: phy 0x8F1F1054 : virt 0xFB600054
+cpu0 frequency          		: phy 0x8F1F1058 : virt 0xFB600058
+cpu1 frequency          		: phy 0x8F1F105C : virt 0xFB60005C
+cpu2 frequency                      	: phy 0x8F1F1060 : virt 0xFB600060
+cpu3 frequency                      	: phy 0x8F1F1064 : virt 0xFB600064
+L2 frequency				: phy 0x8F1F1068 : virt 0xFB600068
+acpuclk_set_rate footprint cpu0 	: phy 0x8F1F106C : virt 0xFB60006C
+acpuclk_set_rate footprint cpu1		: phy 0x8F1F1070 : virt 0xFB600070
+acpuclk_set_rate footprint cpu2		: phy 0x8F1F1074 : virt 0xFB600074
+acpuclk_set_rate footprint cpu3		: phy 0x8F1F1078 : virt 0xFB600078
+*/
 #define CPU_FOOT_PRINT_MAGIC				0xACBDFE00
 static void set_acpuclk_foot_print(unsigned cpu, unsigned state)
 {
@@ -60,10 +95,12 @@ static void set_acpuclk_L2_freq_foot_print(unsigned khz)
 	mb();
 }
 
+/* HTC: Custom max frequency. */
 #ifdef CONFIG_ACPU_CUSTOM_FREQ_SUPPORT
 static unsigned long acpu_max_freq = CONFIG_ACPU_MAX_FREQ;
 #endif
 
+/* MUX source selects. */
 #define PRI_SRC_SEL_SEC_SRC	0
 #define PRI_SRC_SEL_HFPLL	1
 #define PRI_SRC_SEL_HFPLL_DIV2	2
@@ -80,6 +117,7 @@ static unsigned long acpuclk_krait_get_rate(int cpu)
 	return drv.scalable[cpu].cur_speed->khz;
 }
 
+/* Select a source on the primary MUX. */
 static void set_pri_clk_src(struct scalable *sc, u32 pri_src_sel)
 {
 	u32 regval;
@@ -88,30 +126,31 @@ static void set_pri_clk_src(struct scalable *sc, u32 pri_src_sel)
 	regval &= ~0x3;
 	regval |= (pri_src_sel & 0x3);
 	set_l2_indirect_reg(sc->l2cpmr_iaddr, regval);
-	
+	/* Wait for switch to complete. */
 	mb();
 	udelay(1);
 }
 
+/* Select a source on the secondary MUX. */
 static void __cpuinit set_sec_clk_src(struct scalable *sc, u32 sec_src_sel)
 {
 	u32 regval;
 
-	
+	/* 8064 Errata: disable sec_src clock gating during switch. */
 	regval = get_l2_indirect_reg(sc->l2cpmr_iaddr);
 	regval |= SECCLKAGD;
 	set_l2_indirect_reg(sc->l2cpmr_iaddr, regval);
 
-	
+	/* Program the MUX */
 	regval &= ~(0x3 << 2);
 	regval |= ((sec_src_sel & 0x3) << 2);
 	set_l2_indirect_reg(sc->l2cpmr_iaddr, regval);
 
-	
+	/* 8064 Errata: re-enabled sec_src clock gating. */
 	regval &= ~SECCLKAGD;
 	set_l2_indirect_reg(sc->l2cpmr_iaddr, regval);
 
-	
+	/* Wait for switch to complete. */
 	mb();
 	udelay(1);
 }
@@ -142,54 +181,66 @@ static void disable_rpm_vreg(struct vreg *vreg)
 	}
 }
 
+/* Enable an already-configured HFPLL. */
 static void hfpll_enable(struct scalable *sc, bool skip_regulators)
 {
 	if (!skip_regulators) {
-		
+		/* Enable regulators required by the HFPLL. */
 		enable_rpm_vreg(&sc->vreg[VREG_HFPLL_A]);
 		enable_rpm_vreg(&sc->vreg[VREG_HFPLL_B]);
 	}
 
-	
+	/* Disable PLL bypass mode. */
 	writel_relaxed(0x2, sc->hfpll_base + drv.hfpll_data->mode_offset);
 
+	/*
+	 * H/W requires a 5us delay between disabling the bypass and
+	 * de-asserting the reset. Delay 10us just to be safe.
+	 */
 	mb();
 	udelay(10);
 
-	
+	/* De-assert active-low PLL reset. */
 	writel_relaxed(0x6, sc->hfpll_base + drv.hfpll_data->mode_offset);
 
-	
+	/* Wait for PLL to lock. */
 	mb();
 	udelay(60);
 
-	
+	/* Enable PLL output. */
 	writel_relaxed(0x7, sc->hfpll_base + drv.hfpll_data->mode_offset);
 }
 
+/* Disable a HFPLL for power-savings or while it's being reprogrammed. */
 static void hfpll_disable(struct scalable *sc, bool skip_regulators)
 {
+	/*
+	 * Disable the PLL output, disable test mode, enable the bypass mode,
+	 * and assert the reset.
+	 */
 	writel_relaxed(0, sc->hfpll_base + drv.hfpll_data->mode_offset);
 
 	if (!skip_regulators) {
-		
+		/* Remove voltage votes required by the HFPLL. */
 		disable_rpm_vreg(&sc->vreg[VREG_HFPLL_B]);
 		disable_rpm_vreg(&sc->vreg[VREG_HFPLL_A]);
 	}
 }
 
+/* Program the HFPLL rate. Assumes HFPLL is already disabled. */
 static void hfpll_set_rate(struct scalable *sc, const struct core_speed *tgt_s)
 {
 	writel_relaxed(tgt_s->pll_l_val,
 		sc->hfpll_base + drv.hfpll_data->l_offset);
 }
 
+/* Return the L2 speed that should be applied. */
 static unsigned int compute_l2_level(struct scalable *sc, unsigned int vote_l)
 {
 	unsigned int new_l = 0;
 	int cpu;
 
-	
+	/* Find max L2 speed vote. */
 	sc->l2_vote = vote_l;
 	for_each_present_cpu(cpu)
 		new_l = max(new_l, drv.scalable[cpu].l2_vote);
@@ -197,30 +248,36 @@ static unsigned int compute_l2_level(struct scalable *sc, unsigned int vote_l)
 	return new_l;
 }
 
+/* Update the bus bandwidth request. */
 static void set_bus_bw(unsigned int bw)
 {
 	int ret;
 
-	
+	/* Update bandwidth if request has changed. This may sleep. */
 	ret = msm_bus_scale_client_update_request(drv.bus_perf_client, bw);
 	if (ret)
 		dev_err(drv.dev, "bandwidth request failed (%d)\n", ret);
 }
 
+/* Set the CPU or L2 clock speed. */
 static void set_speed(struct scalable *sc, const struct core_speed *tgt_s,
 	bool skip_regulators)
 {
 	const struct core_speed *strt_s = sc->cur_speed;
 
 	if (strt_s->src == HFPLL && tgt_s->src == HFPLL) {
+		/*
+		 * Move to an always-on source running at a frequency
+		 * that does not require an elevated CPU voltage.
+		 */
 		set_pri_clk_src(sc, PRI_SRC_SEL_SEC_SRC);
 
-		
+		/* Re-program HFPLL. */
 		hfpll_disable(sc, true);
 		hfpll_set_rate(sc, tgt_s);
 		hfpll_enable(sc, true);
 
-		
+		/* Move to HFPLL. */
 		set_pri_clk_src(sc, tgt_s->pri_src_sel);
 	} else if (strt_s->src == HFPLL && tgt_s->src != HFPLL) {
 		set_pri_clk_src(sc, tgt_s->pri_src_sel);
@@ -241,12 +298,17 @@ struct vdd_data {
 	int ua_core;
 };
 
+/* Apply any per-cpu voltage increases. */
 static int increase_vdd(int cpu, struct vdd_data *data,
 			enum setrate_reason reason)
 {
 	struct scalable *sc = &drv.scalable[cpu];
 	int rc;
 
+	/*
+	 * Increase vdd_mem active-set before vdd_dig.
+	 * vdd_mem should be >= vdd_dig.
+	 */
 	if (data->vdd_mem > sc->vreg[VREG_MEM].cur_vdd) {
 		rc = rpm_regulator_set_voltage(sc->vreg[VREG_MEM].rpm_reg,
 				data->vdd_mem, sc->vreg[VREG_MEM].max_vdd);
@@ -259,7 +321,7 @@ static int increase_vdd(int cpu, struct vdd_data *data,
 		 sc->vreg[VREG_MEM].cur_vdd = data->vdd_mem;
 	}
 
-	
+	/* Increase vdd_dig active-set vote. */
 	if (data->vdd_dig > sc->vreg[VREG_DIG].cur_vdd) {
 		rc = rpm_regulator_set_voltage(sc->vreg[VREG_DIG].rpm_reg,
 				data->vdd_dig, sc->vreg[VREG_DIG].max_vdd);
@@ -272,7 +334,7 @@ static int increase_vdd(int cpu, struct vdd_data *data,
 		sc->vreg[VREG_DIG].cur_vdd = data->vdd_dig;
 	}
 
-	
+	/* Increase current request. */
 	if (data->ua_core > sc->vreg[VREG_CORE].cur_ua) {
 		rc = regulator_set_optimum_mode(sc->vreg[VREG_CORE].reg,
 						data->ua_core);
@@ -284,6 +346,12 @@ static int increase_vdd(int cpu, struct vdd_data *data,
 		sc->vreg[VREG_CORE].cur_ua = data->ua_core;
 	}
 
+	/*
+	 * Update per-CPU core voltage. Don't do this for the hotplug path for
+	 * which it should already be correct. Attempting to set it is bad
+	 * because we don't know what CPU we are running on at this point, but
+	 * the CPU regulator API requires we call it from the affected CPU.
+	 */
 	if (data->vdd_core > sc->vreg[VREG_CORE].cur_vdd
 			&& reason != SETRATE_HOTPLUG) {
 		rc = regulator_set_voltage(sc->vreg[VREG_CORE].reg,
@@ -300,12 +368,18 @@ static int increase_vdd(int cpu, struct vdd_data *data,
 	return 0;
 }
 
+/* Apply any per-cpu voltage decreases. */
 static void decrease_vdd(int cpu, struct vdd_data *data,
 			 enum setrate_reason reason)
 {
 	struct scalable *sc = &drv.scalable[cpu];
 	int ret;
 
+	/*
+	 * Update per-CPU core voltage. This must be called on the CPU
+	 * that's being affected. Don't do this in the hotplug remove path,
+	 * where the rail is off and we're executing on the other CPU.
+	 */
 	if (data->vdd_core < sc->vreg[VREG_CORE].cur_vdd
 			&& reason != SETRATE_HOTPLUG) {
 		ret = regulator_set_voltage(sc->vreg[VREG_CORE].reg,
@@ -319,7 +393,7 @@ static void decrease_vdd(int cpu, struct vdd_data *data,
 		sc->vreg[VREG_CORE].cur_vdd = data->vdd_core;
 	}
 
-	
+	/* Decrease current request. */
 	if (data->ua_core < sc->vreg[VREG_CORE].cur_ua) {
 		ret = regulator_set_optimum_mode(sc->vreg[VREG_CORE].reg,
 						data->ua_core);
@@ -331,7 +405,7 @@ static void decrease_vdd(int cpu, struct vdd_data *data,
 		sc->vreg[VREG_CORE].cur_ua = data->ua_core;
 	}
 
-	
+	/* Decrease vdd_dig active-set vote. */
 	if (data->vdd_dig < sc->vreg[VREG_DIG].cur_vdd) {
 		ret = rpm_regulator_set_voltage(sc->vreg[VREG_DIG].rpm_reg,
 				data->vdd_dig, sc->vreg[VREG_DIG].max_vdd);
@@ -344,6 +418,10 @@ static void decrease_vdd(int cpu, struct vdd_data *data,
 		sc->vreg[VREG_DIG].cur_vdd = data->vdd_dig;
 	}
 
+	/*
+	 * Decrease vdd_mem active-set after vdd_dig.
+	 * vdd_mem should be >= vdd_dig.
+	 */
 	if (data->vdd_mem < sc->vreg[VREG_MEM].cur_vdd) {
 		ret = rpm_regulator_set_voltage(sc->vreg[VREG_MEM].rpm_reg,
 				data->vdd_mem, sc->vreg[VREG_MEM].max_vdd);
@@ -438,6 +516,7 @@ out:
 	mutex_unlock(&l2_regulator_lock);
 }
 
+/* Set the CPU's clock rate and adjust the L2 rate, voltage and BW requests. */
 static int acpuclk_krait_set_rate(int cpu, unsigned long rate,
 				  enum setrate_reason reason)
 {
@@ -461,11 +540,11 @@ static int acpuclk_krait_set_rate(int cpu, unsigned long rate,
 
 	strt_acpu_s = drv.scalable[cpu].cur_speed;
 
-	
+	/* Return early if rate didn't change. */
 	if (rate == strt_acpu_s->khz)
 		goto out;
 
-	
+	/* Find target frequency. */
 	for (tgt = drv.acpu_freq_tbl; tgt->speed.khz != 0; tgt++) {
 		if (tgt->speed.khz == rate) {
 			tgt_acpu_s = &tgt->speed;
@@ -477,19 +556,19 @@ static int acpuclk_krait_set_rate(int cpu, unsigned long rate,
 		goto out;
 	}
 
-	
+	/* Calculate voltage requirements for the current CPU. */
 	vdd_data.vdd_mem  = calculate_vdd_mem(tgt);
 	vdd_data.vdd_dig  = calculate_vdd_dig(tgt);
 	vdd_data.vdd_core = calculate_vdd_core(tgt);
 	vdd_data.ua_core = tgt->ua_core;
 
-	
+	/* Disable AVS before voltage switch */
 	if (reason == SETRATE_CPUFREQ && drv.scalable[cpu].avs_enabled) {
 		AVS_DISABLE(cpu);
 		drv.scalable[cpu].avs_enabled = false;
 	}
 
-	
+	/* Increase VDD levels if needed. */
 	if (reason == SETRATE_CPUFREQ || reason == SETRATE_HOTPLUG) {
 		rc = increase_vdd(cpu, &vdd_data, reason);
 		udelay(60);
@@ -500,7 +579,7 @@ static int acpuclk_krait_set_rate(int cpu, unsigned long rate,
 
 		prev_l2_src =
 			drv.l2_freq_tbl[drv.scalable[cpu].l2_vote].speed.src;
-		
+		/* Vote for the L2 regulators here if necessary. */
 		if (drv.l2_freq_tbl[tgt->l2_level].speed.src == HFPLL) {
 			rc = enable_l2_regulators();
 
@@ -514,15 +593,29 @@ static int acpuclk_krait_set_rate(int cpu, unsigned long rate,
 	dev_dbg(drv.dev, "Switching from ACPU%d rate %lu KHz -> %lu KHz\n",
 		cpu, strt_acpu_s->khz, tgt_acpu_s->khz);
 
+	/*
+	 * If we are setting the rate as part of power collapse or in the resume
+	 * path after power collapse, skip the vote for the HFPLL regulators,
+	 * which are active-set-only votes that will be removed when apps enters
+	 * its sleep set. This is needed to avoid voting for regulators with
+	 * sleeping APIs from an atomic context.
+	 */
 	skip_regulators = (reason == SETRATE_PC);
 
-	
+	/* Set the new CPU speed. */
 	set_speed(&drv.scalable[cpu], tgt_acpu_s, skip_regulators);
 
 	set_acpuclk_cpu_freq_foot_print(cpu, tgt_acpu_s->khz);
 	set_acpuclk_foot_print(cpu, 0x5);
 
 
+	/*
+	 * Update the L2 vote and apply the rate change. A spinlock is
+	 * necessary to ensure L2 rate is calculated and set atomically
+	 * with the CPU frequency, even if acpuclk_krait_set_rate() is
+	 * called from an atomic context and the driver_lock mutex is not
+	 * acquired.
+	 */
 	spin_lock(&l2_lock);
 	tgt_l2_l = compute_l2_level(&drv.scalable[cpu], tgt->l2_level);
 	set_speed(&drv.scalable[L2],
@@ -533,26 +626,30 @@ static int acpuclk_krait_set_rate(int cpu, unsigned long rate,
 
 	spin_unlock(&l2_lock);
 
-	
+	/* Nothing else to do for power collapse or SWFI. */
 	if (reason == SETRATE_PC || reason == SETRATE_SWFI)
 		goto out;
 
+	/*
+	 * Remove the vote for the L2 HFPLL regulators only if the L2
+	 * was already on an HFPLL source.
+	 */
 	if (prev_l2_src == HFPLL)
 		disable_l2_regulators();
 
 	set_acpuclk_foot_print(cpu, 0x7);
 
-	
+	/* Update bus bandwith request. */
 	set_bus_bw(drv.l2_freq_tbl[tgt_l2_l].bw_level);
 
 	set_acpuclk_foot_print(cpu, 0x8);
 
-	
+	/* Drop VDD levels if we can. */
 	decrease_vdd(cpu, &vdd_data, reason);
 
 	set_acpuclk_foot_print(cpu, 0x9);
 
-	
+	/* Re-enable AVS */
 	if (reason == SETRATE_CPUFREQ && tgt->avsdscr_setting) {
 		AVS_ENABLE(cpu, tgt->avsdscr_setting);
 		drv.scalable[cpu].avs_enabled = true;
@@ -574,7 +671,7 @@ static struct acpuclk_data acpuclk_krait_data = {
 	.get_rate = acpuclk_krait_get_rate,
 };
 
-#ifdef CONFIG_APQ8064_ONLY 
+#ifdef CONFIG_APQ8064_ONLY /* WA: Set 384MHz when cpu is down */
 unsigned long acpuclk_krait_power_collapse(void)
 {
 	unsigned long rate = acpuclk_get_rate(smp_processor_id());
@@ -583,26 +680,27 @@ unsigned long acpuclk_krait_power_collapse(void)
 }
 #endif
 
+/* Initialize a HFPLL at a given rate and enable it. */
 static void __init hfpll_init(struct scalable *sc,
 			      const struct core_speed *tgt_s)
 {
 	dev_dbg(drv.dev, "Initializing HFPLL%d\n", sc - drv.scalable);
 
-	
+	/* Disable the PLL for re-programming. */
 	hfpll_disable(sc, true);
 
-	
+	/* Configure PLL parameters for integer mode. */
 	writel_relaxed(drv.hfpll_data->config_val,
 		       sc->hfpll_base + drv.hfpll_data->config_offset);
 	writel_relaxed(0, sc->hfpll_base + drv.hfpll_data->m_offset);
 	writel_relaxed(1, sc->hfpll_base + drv.hfpll_data->n_offset);
 
-	
+	/* Program droop controller, if supported */
 	if (drv.hfpll_data->has_droop_ctl)
 		writel_relaxed(drv.hfpll_data->droop_val,
 			       sc->hfpll_base + drv.hfpll_data->droop_offset);
 
-	
+	/* Set an initial rate and enable the PLL. */
 	hfpll_set_rate(sc, tgt_s);
 	hfpll_enable(sc, false);
 }
@@ -658,6 +756,7 @@ static void __cpuinit rpm_regulator_cleanup(struct scalable *sc,
 	rpm_regulator_put(sc->vreg[vreg].rpm_reg);
 }
 
+/* Voltage regulator initialization. */
 static int __cpuinit regulator_init(struct scalable *sc,
 				const struct acpu_level *acpu_level)
 {
@@ -682,7 +781,7 @@ static int __cpuinit regulator_init(struct scalable *sc,
 	if (ret)
 		goto err_hfpll_b;
 
-	
+	/* Setup Krait CPU regulators and initial core voltage. */
 	sc->vreg[VREG_CORE].reg = regulator_get(drv.dev,
 				  sc->vreg[VREG_CORE].name);
 	if (IS_ERR(sc->vreg[VREG_CORE].reg)) {
@@ -715,6 +814,11 @@ static int __cpuinit regulator_init(struct scalable *sc,
 		goto err_core_conf;
 	}
 
+	/*
+	 * Increment the L2 HFPLL regulator refcount if _this_ CPU's frequency
+	 * requires a corresponding target L2 frequency that needs the L2 to
+	 * run off of an HFPLL.
+	 */
 	if (drv.l2_freq_tbl[acpu_level->l2_level].speed.src == HFPLL)
 		l2_vreg_count++;
 
@@ -744,13 +848,14 @@ static void __cpuinit regulator_cleanup(struct scalable *sc)
 	rpm_regulator_cleanup(sc, VREG_MEM);
 }
 
+/* Set initial rate for a given core. */
 static int __cpuinit init_clock_sources(struct scalable *sc,
 					 const struct core_speed *tgt_s)
 {
 	u32 regval;
 	void __iomem *aux_reg;
 
-	
+	/* Program AUX source input to the secondary MUX. */
 	if (sc->aux_clk_sel_phys) {
 		aux_reg = ioremap(sc->aux_clk_sel_phys, 4);
 		if (!aux_reg)
@@ -759,17 +864,17 @@ static int __cpuinit init_clock_sources(struct scalable *sc,
 		iounmap(aux_reg);
 	}
 
-	
+	/* Switch away from the HFPLL while it's re-initialized. */
 	set_sec_clk_src(sc, sc->sec_clk_sel);
 	set_pri_clk_src(sc, PRI_SRC_SEL_SEC_SRC);
 	hfpll_init(sc, tgt_s);
 
-	
+	/* Set PRI_SRC_SEL_HFPLL_DIV2 divider to div-2. */
 	regval = get_l2_indirect_reg(sc->l2cpmr_iaddr);
 	regval &= ~(0x3 << 6);
 	set_l2_indirect_reg(sc->l2cpmr_iaddr, regval);
 
-	
+	/* Switch to the target clock source. */
 	set_pri_clk_src(sc, tgt_s->pri_src_sel);
 	sc->cur_speed = tgt_s;
 
@@ -875,6 +980,7 @@ err_ioremap:
 	return ret;
 }
 
+/* Register with bus driver. */
 static void __init bus_init(const struct l2_level *l2_level)
 {
 	int ret;
@@ -900,7 +1006,7 @@ static void __init cpufreq_table_init(void)
 
 	for_each_possible_cpu(cpu) {
 		int i, freq_cnt = 0;
-		
+		/* Construct the freq_table tables from acpu_freq_tbl. */
 		for (i = 0; drv.acpu_freq_tbl[i].speed.khz != 0
 				&& freq_cnt < ARRAY_SIZE(*freq_table); i++) {
 			if (drv.acpu_freq_tbl[i].use_for_scaling) {
@@ -910,7 +1016,7 @@ static void __init cpufreq_table_init(void)
 				freq_cnt++;
 			}
 		}
-		
+		/* freq_table not big enough to store all usable freqs. */
 		BUG_ON(drv.acpu_freq_tbl[i].speed.khz != 0);
 
 		freq_table[cpu][freq_cnt].index = freq_cnt;
@@ -919,7 +1025,7 @@ static void __init cpufreq_table_init(void)
 		dev_info(drv.dev, "CPU%d: %d frequencies supported\n",
 			cpu, freq_cnt);
 
-		
+		/* Register table with CPUFreq. */
 		cpufreq_frequency_table_get_attr(freq_table[cpu], cpu);
 	}
 }
@@ -938,7 +1044,7 @@ static int __cpuinit acpuclk_cpu_callback(struct notifier_block *nfb,
 	switch (action & ~CPU_TASKS_FROZEN) {
 	case CPU_DEAD:
 		prev_khz[cpu] = acpuclk_krait_get_rate(cpu);
-		
+		/* Fall through. */
 	case CPU_UP_CANCELED:
 		acpuclk_krait_set_rate(cpu, hot_unplug_khz, SETRATE_HOTPLUG);
 		regulator_set_optimum_mode(sc->vreg[VREG_CORE].reg, 0);
@@ -972,9 +1078,9 @@ static struct notifier_block __cpuinitdata acpuclk_cpu_notifier = {
 static const int krait_needs_vmin(void)
 {
 	switch (read_cpuid_id()) {
-	case 0x511F04D0: 
-	case 0x511F04D1: 
-	case 0x510F06F0: 
+	case 0x511F04D0: /* KR28M2A20 */
+	case 0x511F04D1: /* KR28M2A21 */
+	case 0x510F06F0: /* KR28M4A10 */
 		return 1;
 	default:
 		return 0;
@@ -1060,7 +1166,7 @@ static struct pvs_table * __init select_freq_plan(u32 pte_efuse_phys,
 	pte_efuse_val = readl_relaxed(pte_efuse);
 	iounmap(pte_efuse);
 
-	
+	/* Select frequency tables. */
 	drv.speed_bin = get_speed_bin(pte_efuse_val);
 	drv.pvs_bin = get_pvs_bin(pte_efuse_val);
 
@@ -1073,10 +1179,14 @@ static struct pvs_table * __init select_freq_plan(u32 pte_efuse_phys,
 	pvs = &pvs_tables[drv.speed_bin][drv.pvs_bin];
 	BUG_ON(!pvs->table);
 
-	
+	/* Adjust frequency table according to custom acpu_max_freq */
 	if (acpu_max_freq) {
 		for (l = pvs->table; l->speed.khz != 0; l++) {
 			if (l->speed.khz >= acpu_max_freq) {
+				/* Custom max freq reached in table.
+				* Mark all subsequent frequencies
+				* as not supported.
+				*/
 				if(l->speed.khz == acpu_max_freq)
 					l++;
 				for (; l->speed.khz != 0; l++)

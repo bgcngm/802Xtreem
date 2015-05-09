@@ -249,6 +249,9 @@ phys_addr_t msm_subsystem_check_iova_mapping(int subsys_id, unsigned long iova)
 	struct iommu_domain *subsys_domain;
 
 	if (!msm_use_iommu())
+		/*
+		 * If there is no iommu, Just return the iova in this case.
+		 */
 		return iova;
 
 	subsys_domain = msm_get_iommu_domain(msm_subsystem_get_domain_no
@@ -347,6 +350,10 @@ struct msm_mapped_buffer *msm_subsystem_map_buffer(unsigned long phys,
 			goto outremovephys;
 		}
 
+		/*
+		 * The alignment must be specified as the exact value wanted
+		 * e.g. 8k alignment must pass (0x2000 | other flags)
+		 */
 		min_align = flags & ~(SZ_4K - 1);
 
 		for (i = 0; i < nsubsys; i++) {
@@ -426,12 +433,12 @@ outiova:
 		iommu_unmap(d, temp_va, SZ_4K);
 outdomain:
 	if (flags & MSM_SUBSYSTEM_MAP_IOVA) {
-		
+		/* Unmap the rest of the current domain, i */
 		for (j -= SZ_4K, temp_va -= SZ_4K;
 			j > 0; temp_va -= SZ_4K, j -= SZ_4K)
 			iommu_unmap(d, temp_va, SZ_4K);
 
-		
+		/* Unmap all the other domains */
 		for (i--; i >= 0; i--) {
 			unsigned int domain_no, partition_no;
 			if (!msm_use_iommu())

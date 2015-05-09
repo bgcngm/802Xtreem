@@ -15,10 +15,10 @@
 #include "msm_camera_i2c.h"
 #include <mach/gpio.h>
 
-#define	LC898212_TOTAL_STEPS_NEAR_TO_FAR			  20 
+#define	LC898212_TOTAL_STEPS_NEAR_TO_FAR			  20 // HTC pg 20130311 add dof table
 #define	LC898212_STEP_NEAR_10CM			  18
 #define	LC898212_STEP_FAR			  2
-#define LC898212_TOTAL_STEPS_NEAR_TO_FAR_RAWCHIP_AF                        256 
+#define LC898212_TOTAL_STEPS_NEAR_TO_FAR_RAWCHIP_AF                        256 // HTC 20121004
 
 #define REG_VCM_I2C_ADDR			0xe4
 #define REG_VCM_CODE_MSB			0x04
@@ -38,7 +38,10 @@ DEFINE_MUTEX(lc898212_act_mutex);
 static struct msm_actuator_ctrl_t lc898212_act_t;
 
 static struct region_params_t g_regions[] = {
-	
+	/* step_bound[0] - macro side boundary
+	 * step_bound[1] - infinity side boundary
+	 */
+	/* Region 1 */
 	{
 		.step_bound = {LC898212_TOTAL_STEPS_NEAR_TO_FAR, 0},
 		.code_per_step = 2,
@@ -46,13 +49,13 @@ static struct region_params_t g_regions[] = {
 };
 
 static uint16_t g_scenario[] = {
-	
+	/* MOVE_NEAR and MOVE_FAR dir*/
 	LC898212_TOTAL_STEPS_NEAR_TO_FAR,
 };
 
 static struct damping_params_t g_damping[] = {
-	
-	
+	/* MOVE_NEAR Dir */
+	/* Scene 1 => Damping params */
 	{
 		.damping_step = 2,
 		.damping_delay = 0,
@@ -60,8 +63,8 @@ static struct damping_params_t g_damping[] = {
 };
 
 static struct damping_t g_damping_params[] = {
-	
-	
+	/* MOVE_NEAR and MOVE_FAR dir */
+	/* Region 1 */
 	{
 		.ringing_params = g_damping,
 	},
@@ -102,6 +105,7 @@ static void lc898212_poweroff_af(void)
 	msleep(1);
 }
 
+// HTC_END pg 20130311 add dof table
 int32_t lc898212_msm_actuator_init_table(
 	struct msm_actuator_ctrl_t *a_ctrl)
 {
@@ -114,7 +118,7 @@ int32_t lc898212_msm_actuator_init_table(
 
 	a_ctrl->set_info.total_steps = LC898212_TOTAL_STEPS_NEAR_TO_FAR;
 
-	
+	/* Fill step position table */
 	if (a_ctrl->step_position_table != NULL) {
 		kfree(a_ctrl->step_position_table);
 		a_ctrl->step_position_table = NULL;
@@ -181,7 +185,7 @@ int32_t lc898212_msm_actuator_move_focus(
 		dir,
 		num_steps);
 
-	
+	/* Determine sign direction */
 	if (dir == MOVE_NEAR)
 		sign_dir = 1;
 	else if (dir == MOVE_FAR)
@@ -192,7 +196,7 @@ int32_t lc898212_msm_actuator_move_focus(
 		return rc;
 	}
 
-	
+	/* Determine destination step position */
 	dest_step_pos = a_ctrl->curr_step_pos +
 		(sign_dir * num_steps);
 
@@ -226,6 +230,7 @@ int lc898212_actuator_af_power_down(void *params)
 	lc898212_poweroff_af();
 	return rc;
 }
+// HTC_START pg 20130221 step move
 static int32_t lc898212_wrapper_i2c_write(struct msm_actuator_ctrl_t *a_ctrl,
 	int16_t next_lens_position, void *params)
 {
@@ -264,6 +269,7 @@ static int32_t lc898212_wrapper_i2c_write(struct msm_actuator_ctrl_t *a_ctrl,
 
 	return rc;
 }
+// HTC_END pg 20130221 step move
 int32_t lc898212_act_write_focus(
 	struct msm_actuator_ctrl_t *a_ctrl,
 	uint16_t curr_lens_pos,
@@ -272,7 +278,7 @@ int32_t lc898212_act_write_focus(
 	int16_t code_boundary)
 {
 	int32_t rc = 0;
-	
+	//uint16_t dac_value = 0;
 
 	LINFO("%s called, curr lens pos = %d, code_boundary = %d\n",
 		  __func__,
@@ -318,6 +324,95 @@ static struct msm_camera_i2c_reg_conf lc898212_settings_1[] = {
 {0x99, 0x00},
 {0x9A, 0x00},
 };
+//*the time and date : 2012/5/24 18:06:46*/
+//*FC filename :ST13014-1*/
+//*fs,23438Hz*/
+//*LSI No.,LC898211*/
+//*Comment,*/
+/*
+static struct msm_camera_i2c_reg_conf lc898212_settings_2_0x11[] = {
+{0x88, 0x70},
+{0x92, 0x00},
+{0xA0, 0x01},
+{0x7A, 0x68},
+{0x7B, 0x00},
+{0x7E, 0x78},
+{0x7F, 0x00},
+{0x7C, 0x03},
+{0x7D, 0x00},
+{0x93, 0x00},
+{0x86, 0x60},
+
+{0x40, 0x80},
+{0x41, 0x10},
+{0x42, 0x71},
+{0x43, 0x50},
+{0x44, 0x8F},
+{0x45, 0x90},
+{0x46, 0x61},
+{0x47, 0xB0},
+{0x48, 0x65},
+{0x49, 0xB0},
+{0x76, 0x0C},
+{0x77, 0x50},
+{0x4A, 0x28},
+{0x4B, 0x70},
+{0x50, 0x04},
+{0x51, 0xF0},
+{0x52, 0x76},
+{0x53, 0x10},
+{0x54, 0x16},
+{0x55, 0xC0},
+{0x56, 0x00},
+{0x57, 0x00},
+{0x58, 0x7F},
+{0x59, 0xF0},
+{0x4C, 0x40},
+{0x4D, 0x30},
+{0x78, 0x40},
+{0x79, 0x00},
+{0x4E, 0x7F},
+{0x4F, 0xF0},
+{0x6E, 0x00},
+{0x6F, 0x00},
+{0x72, 0x18},
+{0x73, 0xE0},
+{0x74, 0x4E},
+{0x75, 0x30},
+{0x30, 0x00},
+{0x31, 0x00},
+{0x5A, 0x06},
+{0x5B, 0x80},
+{0x5C, 0x72},
+{0x5D, 0xF0},
+{0x5E, 0x7F},
+{0x5F, 0x70},
+{0x60, 0x7E},
+{0x61, 0xD0},
+{0x62, 0x7F},
+{0x63, 0xF0},
+{0x64, 0x00},
+{0x65, 0x00},
+{0x66, 0x00},
+{0x67, 0x00},
+{0x68, 0x51},
+{0x69, 0x30},
+{0x6A, 0x72},
+{0x6B, 0xF0},
+{0x70, 0x00},
+{0x71, 0x00},
+{0x6C, 0x80},
+{0x6D, 0x10},
+
+{0x76, 0x0c},
+{0x77, 0x50},
+{0x78, 0x40},
+{0x79, 0x00},
+{0x30, 0x00},
+{0x31, 0x00},
+};
+*/
+//ST1130305-1.h
 static struct msm_camera_i2c_reg_conf lc898212_settings_2_0x12[] = {
 {0x88, 0x70},
 {0x92, 0x00},
@@ -400,6 +495,7 @@ static struct msm_camera_i2c_reg_conf lc898212_settings_2_0x12[] = {
 {0x31, 0x00},
 };
 
+// ST1130325-T2.h
 static struct msm_camera_i2c_reg_conf lc898212_settings_2_0x13[] = {
 {0x88, 0x70},
 {0x92, 0x00},
@@ -482,6 +578,7 @@ static struct msm_camera_i2c_reg_conf lc898212_settings_2_0x13[] = {
 {0x31, 0x00},
 };
 
+// ST1130325-T2.h, Fix the damping issue in the old components.(VCM_Vendor_Id_Version = 0x11), the table is based on the lc898212_settings_2_0x11 table and applied the vcm countermeasure patch.
 static struct msm_camera_i2c_reg_conf lc898212_settings_2_default[] = {
 {0x88, 0x70},
 {0x92, 0x00},
@@ -498,14 +595,14 @@ static struct msm_camera_i2c_reg_conf lc898212_settings_2_default[] = {
 {0x40, 0x80},
 {0x41, 0x10},
 {0x42, 0x71},
-{0x43, 0x10},
+{0x43, 0x10},//0x50
 {0x44, 0x8F},
-{0x45, 0x50},
+{0x45, 0x50},//0x90
 {0x46, 0x61},
 {0x47, 0xB0},
 {0x48, 0x65},
 {0x49, 0xB0},
-{0x76, 0x08},
+{0x76, 0x08},//0x0c
 {0x77, 0x50},
 {0x4A, 0x28},
 {0x4B, 0x70},
@@ -521,7 +618,7 @@ static struct msm_camera_i2c_reg_conf lc898212_settings_2_default[] = {
 {0x59, 0xF0},
 {0x4C, 0x40},
 {0x4D, 0x30},
-{0x78, 0x20},
+{0x78, 0x20},//0x40
 {0x79, 0x00},
 {0x4E, 0x7F},
 {0x4F, 0xF0},
@@ -556,9 +653,9 @@ static struct msm_camera_i2c_reg_conf lc898212_settings_2_default[] = {
 {0x6C, 0x80},
 {0x6D, 0x10},
 
-{0x76, 0x08},
+{0x76, 0x08},//0x0c
 {0x77, 0x50},
-{0x78, 0x20},
+{0x78, 0x20},//0x40
 {0x79, 0x00},
 {0x30, 0x00},
 {0x31, 0x00},
@@ -567,24 +664,32 @@ static struct msm_camera_i2c_reg_conf lc898212_settings_2_default[] = {
 
 static struct msm_camera_i2c_reg_conf lc898212_settings_3[] = {
 {0x3A, 0x00},
-{0x3B, 0x00}, 
+{0x3B, 0x00}, // OFFSET Clear
 {0x04, 0x00},
-{0x05, 0x00}, 
+{0x05, 0x00}, // RZ Clear(Target Value)
 {0x02, 0x00},
-{0x03, 0x00}, 
-{0x85, 0xC0}, 
+{0x03, 0x00}, // PIDZO Clear
+// Calibration value (load from otp)
+//{0x28, 0xaf}, // Read from OTP and write into 0x28h(Offset) @ fuse  0x3ce
+//{0x29, 0x40}, // Read from OTP and write into 0x29h(Bias #17) @ fuse 0x3cd
+// Servo ON
+{0x85, 0xC0}, // AF filter,MS1 Clr (Need > 100uS delay time)
 };
+// HTC_START pg 20130221 step move
 static struct msm_camera_i2c_reg_conf lc898212_settings_4[] = {
+// switch to stmv
 {0x5A, 0x08},
 {0x5B, 0x00},
 {0x83, 0xac},
+// stmv int time
 {0xA0, 0x01},
 };
 
+// HTC_START pg 20130225 vcm cal
 #include "lc898212_act.h"
 
 
-stAdjPar	StAdjPar ;				
+stAdjPar	StAdjPar ;				// Execute Command Parameter
 
 void RamReadA (struct msm_camera_i2c_client* i2c_client, uint8_t addr, uint16_t* data)
 {
@@ -614,6 +719,13 @@ void WitTim(int ms)
 }
 
 
+//********************************************************************************
+// Function Name 	: TnePtpAf
+// Retun Value		: Hall Top & Bottom Gaps
+// Argment Value	: X,Y Direction, Adjust Before After Parameter
+// Explanation		: Measuring Hall Paek To Peak
+// History			: First edition 						2012.6.111 YS.Kim
+//********************************************************************************
 unsigned long TnePtpAf ( unsigned char	UcDirSel , unsigned char UcBfrAft ,struct msm_actuator_ctrl_t* a_ctrl)
 {
 	UnDwdVal			StTneVal;
@@ -689,21 +801,28 @@ unsigned long TnePtpAf ( unsigned char	UcDirSel , unsigned char UcBfrAft ,struct
 		StTneVal.StDwdVal.UsLowVal	= StTneVal.StDwdVal.UsLowVal - (unsigned short)0x7fff;
 	}
 
-	
+	//pr_info ("%s full stroke level = 0x%x/0x%x\n",__func__,StTneVal.StDwdVal.UsHigVal, StTneVal.StDwdVal.UsLowVal);
 	return( StTneVal.UlDwdVal ) ;
 }
 
 
 
+//********************************************************************************
+// Function Name 	: TneOffAf
+// Retun Value		: Hall Top & Bottom Gaps
+// Argment Value	: Hall Top & Bottom Gaps , X,Y Direction
+// Explanation		: Hall Offset Tuning Function
+// History			: First edition 						2012.6.11 YS.Kim
+//********************************************************************************
 unsigned long	TneOffAf( UnDwdVal StTneVal, struct msm_actuator_ctrl_t* a_ctrl )
 {
 	signed long		SlSetOff ;
 	unsigned short	UsSetOff ;
 
-	RamReadA(&a_ctrl->i2c_client,  DAHLXO_211H , &UsSetOff ) ;															
+	RamReadA(&a_ctrl->i2c_client,  DAHLXO_211H , &UsSetOff ) ;															// 0x0028	Offset Read
 	SlSetOff	= (signed long)(UsSetOff & 0xFF00) ;
 
-	SlSetOff	+= ( (signed long)( StTneVal.StDwdVal.UsHigVal - StTneVal.StDwdVal.UsLowVal ) / ( 0xDE << 1 ) ) << 8 ;	
+	SlSetOff	+= ( (signed long)( StTneVal.StDwdVal.UsHigVal - StTneVal.StDwdVal.UsLowVal ) / ( 0xDE << 1 ) ) << 8 ;	// Calculating Value For Increase Step
 	if( SlSetOff > (signed long)0x0000FFFF ) {
 		SlSetOff	= 0x0000FFFF ;
 	} else if( SlSetOff < (signed long)0x00000000 ) {
@@ -711,7 +830,7 @@ unsigned long	TneOffAf( UnDwdVal StTneVal, struct msm_actuator_ctrl_t* a_ctrl )
 	}
 
 	UsSetOff = (unsigned short)( ( SlSetOff & 0xFF00 ) | ( UsSetOff & 0x00FF ) );
-	RamWriteA(&a_ctrl->i2c_client,  DAHLXO_211H , UsSetOff ) ;															
+	RamWriteA(&a_ctrl->i2c_client,  DAHLXO_211H , UsSetOff ) ;															// 0x0028	Offset Write
 
 	StTneVal.UlDwdVal	= TnePtpAf( PTP_DIR , PTP_AFTER, a_ctrl ) ;
 
@@ -720,6 +839,13 @@ unsigned long	TneOffAf( UnDwdVal StTneVal, struct msm_actuator_ctrl_t* a_ctrl )
 
 
 
+//********************************************************************************
+// Function Name 	: TneBiaAf
+// Retun Value		: Hall Top & Bottom Gaps
+// Argment Value	: Hall Top & Bottom Gaps , X,Y Direction
+// Explanation		: Hall Bias Tuning Function
+// History			: First edition 						2012.6.11 YS.Kim
+//********************************************************************************
 unsigned long TneBiaAf( UnDwdVal StTneVal, struct msm_actuator_ctrl_t* a_ctrl )
 {
 	signed long		SlSetBia, UlSumAvr;
@@ -730,7 +856,7 @@ unsigned long TneBiaAf( UnDwdVal StTneVal, struct msm_actuator_ctrl_t* a_ctrl )
 	RamReadA(&a_ctrl->i2c_client,  DAHLXO_211H ,	&UsSetBia );
 	SlSetBia	= (signed long)UsSetBia & 0xFF;
 
-	UsStpSiz	= UsStpSiz >> 1 ;																
+	UsStpSiz	= UsStpSiz >> 1 ;																// From 0x100	// Calculatiton For Hall BIAS 1/2 Searching
 
 	if ( UlSumAvr > BIAS_ADJ_BORDER ){
 		if( ( SlSetBia + UsStpSiz ) < (signed short)0x0100 ){
@@ -752,6 +878,13 @@ unsigned long TneBiaAf( UnDwdVal StTneVal, struct msm_actuator_ctrl_t* a_ctrl )
 
 
 
+//********************************************************************************
+// Function Name 	: TneCenAf
+// Retun Value		: Hall Center Tuning Result
+// Argment Value	: X,Y Direction, Hall Top & Bottom Gaps
+// Explanation		: Hall Center Tuning Function
+// History			: First edition 						2012.6.11 YS.Kim
+//********************************************************************************
 unsigned char TneCenAf (struct msm_actuator_ctrl_t* a_ctrl)
 {
 	UnDwdVal		StTneVal;
@@ -775,7 +908,7 @@ unsigned char TneCenAf (struct msm_actuator_ctrl_t* a_ctrl)
 			UcTofRst	= FAILURE ;
 		}
 
-		UsOffDif	= abs( StTneVal.StDwdVal.UsHigVal - StTneVal.StDwdVal.UsLowVal ) / 2;					
+		UsOffDif	= abs( StTneVal.StDwdVal.UsHigVal - StTneVal.StDwdVal.UsLowVal ) / 2;					// Check Offset Tuning Result
 
 		if( UsOffDif < MARGIN ){
 			UcTofRst	= SUCCESS ;
@@ -783,7 +916,7 @@ unsigned char TneCenAf (struct msm_actuator_ctrl_t* a_ctrl)
 			UcTofRst	= FAILURE ;
 		}
 
-		if( ( StTneVal.StDwdVal.UsHigVal < HALL_MIN_GAP && StTneVal.StDwdVal.UsLowVal < HALL_MIN_GAP )		
+		if( ( StTneVal.StDwdVal.UsHigVal < HALL_MIN_GAP && StTneVal.StDwdVal.UsLowVal < HALL_MIN_GAP )		// Check Tuning Result
 		&&  ( StTneVal.StDwdVal.UsHigVal > HALL_MAX_GAP && StTneVal.StDwdVal.UsLowVal > HALL_MAX_GAP ) ){
 			UcTneRst	= SUCCESS ;
 			break ;
@@ -797,7 +930,7 @@ unsigned char TneCenAf (struct msm_actuator_ctrl_t* a_ctrl)
 
 		if ( UcTmeOut == TIME_OUT ){
 			UcTmeOut	= 0 ;
-		}		 																							
+		}		 																							// Set Time Out Count
 	}
 
 	if( UcTneRst == FAILURE ){
@@ -860,6 +993,7 @@ int32_t lc898212_act_do_cal(struct msm_actuator_ctrl_t* a_ctrl, struct msm_actua
     pr_err("%s: lc898212_act_do_cal fail (%d)\n", __func__, rc);
     return -EFAULT;
 }
+// HTC_END pg 20130225 vcm cal
 static int32_t lc898212_act_init_focus(struct msm_actuator_ctrl_t *a_ctrl)
 {
 	int32_t rc = 0;
@@ -892,8 +1026,8 @@ static int32_t lc898212_act_init_focus(struct msm_actuator_ctrl_t *a_ctrl)
         case 0x13:
             rc = msm_camera_i2c_write_tbl (&a_ctrl->i2c_client,lc898212_settings_2_0x13, ARRAY_SIZE(lc898212_settings_2_0x13), MSM_CAMERA_I2C_BYTE_DATA);
             break;
-        
-        default:
+        // give it a try
+        default:/* The default setting was set to the normal case table to prevent from abnormal behavior while reading otp fail. There is no failing otp data in VCM_Vendor_Id_Version currently.*/
             rc = msm_camera_i2c_write_tbl (&a_ctrl->i2c_client,lc898212_settings_2_default, ARRAY_SIZE(lc898212_settings_2_default), MSM_CAMERA_I2C_BYTE_DATA);
             break;
         break;
@@ -903,12 +1037,12 @@ static int32_t lc898212_act_init_focus(struct msm_actuator_ctrl_t *a_ctrl)
 	    return rc;
     }
 
-    rc = msm_camera_i2c_write(&a_ctrl->i2c_client, 0x28, offset, MSM_CAMERA_I2C_BYTE_DATA); 
+    rc = msm_camera_i2c_write(&a_ctrl->i2c_client, 0x28, offset, MSM_CAMERA_I2C_BYTE_DATA); // HTC pg 20130319 lc898212 default value
 	if (rc < 0) {
 	    pr_err("%s 0x28 i2c write failed (%d)\n", __func__, rc);
 	    return rc;
     }
-    rc = msm_camera_i2c_write(&a_ctrl->i2c_client, 0x29, bias, MSM_CAMERA_I2C_BYTE_DATA); 
+    rc = msm_camera_i2c_write(&a_ctrl->i2c_client, 0x29, bias, MSM_CAMERA_I2C_BYTE_DATA); // HTC pg 20130319 lc898212 default value
     if (rc < 0) {
         pr_err("%s 0x29 i2c write failed (%d)\n", __func__, rc);
         return rc;
@@ -921,13 +1055,13 @@ static int32_t lc898212_act_init_focus(struct msm_actuator_ctrl_t *a_ctrl)
     }
     mdelay(1);
 
-    
+    // read current position
     rc = msm_camera_i2c_read (&a_ctrl->i2c_client, 0x3c, &data, MSM_CAMERA_I2C_WORD_DATA);
     if (rc < 0) {
         pr_err("%s: i2c read failed (%d)\n", __func__, rc);
         return rc;
     }
-    
+    // move it
     rc = msm_camera_i2c_write(&a_ctrl->i2c_client, 0x4, data, MSM_CAMERA_I2C_WORD_DATA);
     if (rc < 0) {
         pr_err("%s: 0x87 i2c write failed (%d)\n", __func__, rc);
@@ -946,7 +1080,7 @@ static int32_t lc898212_act_init_focus(struct msm_actuator_ctrl_t *a_ctrl)
         return rc;
     }
 
-    
+    // read current position
     rc = msm_camera_i2c_read (&a_ctrl->i2c_client, 0x3c, &data, MSM_CAMERA_I2C_WORD_DATA);
     if (rc < 0) {
         pr_err("%s: i2c read failed (%d)\n", __func__, rc);
@@ -982,6 +1116,7 @@ static int32_t lc898212_act_init_focus(struct msm_actuator_ctrl_t *a_ctrl)
     return rc;
 
 }
+// HTC_END pg 20130221 step move
 
 int32_t lc898212_act_set_af_value(struct msm_actuator_ctrl_t *a_ctrl, af_value_t af_value)
 {
@@ -1037,7 +1172,7 @@ static int lc898212_act_config(
 {
 	LINFO("%s called\n", __func__);
 	return (int) msm_actuator_config(&lc898212_act_t,
-		lc898212_msm_actuator_info, argp); 
+		lc898212_msm_actuator_info, argp); /* HTC Angie 20111212 - Rawchip */
 }
 
 static int lc898212_i2c_add_driver_table(
@@ -1099,7 +1234,7 @@ static struct msm_actuator_ctrl_t lc898212_act_t = {
 		.a_power_down = lc898212_actuator_af_power_down,
 		.a_create_subdevice = lc898212_act_create_subdevice,
 		.a_config = lc898212_act_config,
-		.is_cal_supported = 1, 
+		.is_cal_supported = 1, // HTC pg 20130225 vcm cal
 		.small_step_damping = 17,
 		.medium_step_damping = 20,
 		.big_step_damping = 30,
@@ -1111,14 +1246,14 @@ static struct msm_actuator_ctrl_t lc898212_act_t = {
 	},
 
 	.set_info = {
-		.total_steps = LC898212_TOTAL_STEPS_NEAR_TO_FAR, 
-		.gross_steps = 3,	
-		.fine_steps = 1,	
+		.total_steps = LC898212_TOTAL_STEPS_NEAR_TO_FAR, // HTC 20121004
+		.gross_steps = 3,	/*[TBD]*/
+		.fine_steps = 1,	/*[TBD]*/
 	},
 
 	.curr_step_pos = 0,
 	.curr_region_index = 0,
-	.initial_code = 0,	
+	.initial_code = 0,	/*[TBD]*/
 	.actuator_mutex = &lc898212_act_mutex,
 	.af_algo = AF_ALGO_QCT,
 
@@ -1130,10 +1265,10 @@ static struct msm_actuator_ctrl_t lc898212_act_t = {
 		.actuator_init_focus = lc898212_act_init_focus,
 		.actuator_i2c_write = lc898212_wrapper_i2c_write,
 		.actuator_set_af_value = lc898212_act_set_af_value,
-		.actuator_do_cal = lc898212_act_do_cal, 
+		.actuator_do_cal = lc898212_act_do_cal, // HTC pg 20130225 vcm cal
 	},
 
-	.get_info = {	
+	.get_info = {	/*[TBD]*/
 		.focal_length_num = 46,
 		.focal_length_den = 10,
 		.f_number_num = 265,
@@ -1144,17 +1279,17 @@ static struct msm_actuator_ctrl_t lc898212_act_t = {
 		.total_f_dist_den = 1000,
 	},
 
-	
+	/* Initialize scenario */
 	.ringing_scenario[MOVE_NEAR] = g_scenario,
 	.scenario_size[MOVE_NEAR] = ARRAY_SIZE(g_scenario),
 	.ringing_scenario[MOVE_FAR] = g_scenario,
 	.scenario_size[MOVE_FAR] = ARRAY_SIZE(g_scenario),
 
-	
+	/* Initialize region params */
 	.region_params = g_regions,
 	.region_size = ARRAY_SIZE(g_regions),
 
-	
+	/* Initialize damping params */
 	.damping[MOVE_NEAR] = g_damping_params,
 	.damping[MOVE_FAR] = g_damping_params,
 };

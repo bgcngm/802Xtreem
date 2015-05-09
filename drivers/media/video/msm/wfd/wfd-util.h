@@ -18,6 +18,7 @@
 #ifndef _WFD_UTIL_H_
 #define _WFD_UTIL_H_
 
+/*#define DEBUG_WFD*/
 
 #define WFD_TAG "wfd: "
 #ifdef DEBUG_WFD
@@ -38,15 +39,15 @@ struct wfd_stats_encode_sample {
 };
 
 struct wfd_stats {
-	
+	/* Output Buffers */
 	uint32_t v4l2_buf_count;
 
-	
+	/* Input Buffers */
 	uint32_t mdp_buf_count;
 	uint32_t vsg_buf_count;
 	uint32_t enc_buf_count;
 
-	
+	/* Other */
 	uint32_t frames_encoded;
 	uint32_t mdp_updates;
 
@@ -55,7 +56,7 @@ struct wfd_stats {
 	uint32_t enc_latency_samples;
 	struct list_head enc_queue;
 
-	
+	/* Debugfs entries */
 	struct dentry *d_parent;
 	struct dentry *d_v4l2_buf_count;
 	struct dentry *d_mdp_buf_count;

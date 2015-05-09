@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -53,6 +53,7 @@ struct res_trk_context {
 	struct ion_client *res_ion_client;
 	u32 disable_dmx;
 	u32 disable_fullhd;
+	u32 enable_sec_metadata;
 	enum ddl_mem_area res_mem_type;
 	u32 mmu_clks_on;
 	u32 secure_session;
@@ -60,6 +61,7 @@ struct res_trk_context {
 	u32 sec_clk_heap;
 };
 
+/*HTC_START*/
 extern u32 vidc_msg_debug;
 
 #define VCDRES_MSG_LOW(xx_fmt...)			\
@@ -70,6 +72,7 @@ extern u32 vidc_msg_debug;
 	if (vidc_msg_debug) {				\
 		printk(KERN_INFO "\n  * [VID] " xx_fmt);\
 	}
+/*HTC_END*/
 
 #define VCDRES_MSG_HIGH(xx_fmt...)	printk(KERN_WARNING "\n [VID] " xx_fmt)
 #define VCDRES_MSG_ERROR(xx_fmt...)	printk(KERN_ERR "\n [VID] err: " xx_fmt)

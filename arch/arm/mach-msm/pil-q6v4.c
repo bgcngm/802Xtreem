@@ -146,6 +146,10 @@ static int pil_q6v4_power_up(struct device *dev)
 		return err;
 	}
 
+	/*
+	 * Q6 hardware requires a two step voltage ramp-up.
+	 * Delay between the steps.
+	 */
 	udelay(100);
 
 	err = regulator_set_voltage(drv->vreg, 1050000, 1050000);
@@ -160,35 +164,37 @@ static int pil_q6v4_power_up(struct device *dev)
 static DEFINE_MUTEX(pil_q6v4_modem_lock);
 static unsigned pil_q6v4_modem_count;
 
+/* Bring modem subsystem out of reset */
 static void pil_q6v4_init_modem(void __iomem *base, void __iomem *jtag_clk)
 {
 	mutex_lock(&pil_q6v4_modem_lock);
 	if (!pil_q6v4_modem_count) {
-		
+		/* Enable MSS clocks */
 		writel_relaxed(0x10, SFAB_MSS_M_ACLK_CTL);
 		writel_relaxed(0x10, SFAB_MSS_S_HCLK_CTL);
 		writel_relaxed(0x10, MSS_S_HCLK_CTL);
 		writel_relaxed(0x10, MSS_SLP_CLK_CTL);
-		
+		/* Wait for clocks to enable */
 		mb();
 		udelay(10);
 
-		
+		/* De-assert MSS reset */
 		writel_relaxed(0x0, MSS_RESET);
 		mb();
 		udelay(10);
-		
+		/* Enable MSS */
 		writel_relaxed(0x7, base);
 	}
 
-	
-	
+	/* Enable JTAG clocks */
+	/* TODO: Remove if/when Q6 software enables them? */
 	writel_relaxed(0x10, jtag_clk);
 
 	pil_q6v4_modem_count++;
 	mutex_unlock(&pil_q6v4_modem_lock);
 }
 
+/* Put modem subsystem back into reset */
 static void pil_q6v4_shutdown_modem(void)
 {
 	mutex_lock(&pil_q6v4_modem_lock);
@@ -208,64 +214,64 @@ static int pil_q6v4_reset(struct pil_desc *pil)
 	err = pil_q6v4_power_up(pil->dev);
 	if (err)
 		return err;
-	
+	/* Enable Q6 ACLK */
 	writel_relaxed(0x10, pdata->aclk_reg);
 
 	if (drv->modem_base)
 		pil_q6v4_init_modem(drv->modem_base, pdata->jtag_clk_reg);
 
-	
+	/* Unhalt bus port */
 	err = msm_bus_axi_portunhalt(pdata->bus_port);
 	if (err)
 		dev_err(pil->dev, "Failed to unhalt bus port\n");
 
-	
+	/* Deassert Q6SS_SS_ARES */
 	reg = readl_relaxed(drv->base + QDSP6SS_RESET);
 	reg &= ~(Q6SS_SS_ARES);
 	writel_relaxed(reg, drv->base + QDSP6SS_RESET);
 
-	
+	/* Program boot address */
 	writel_relaxed((drv->start_addr >> 8) & 0xFFFFFF,
 			drv->base + QDSP6SS_RST_EVB);
 
-	
+	/* Program TCM and AHB address ranges */
 	writel_relaxed(pdata->strap_tcm_base, drv->base + QDSP6SS_STRAP_TCM);
 	writel_relaxed(pdata->strap_ahb_upper | pdata->strap_ahb_lower,
 		       drv->base + QDSP6SS_STRAP_AHB);
 
-	
+	/* Turn off Q6 core clock */
 	writel_relaxed(Q6SS_SRC_SWITCH_CLK_OVR,
 		       drv->base + QDSP6SS_GFMUX_CTL);
 
-	
+	/* Put memories to sleep */
 	writel_relaxed(Q6SS_CLAMP_IO, drv->base + QDSP6SS_PWR_CTL);
 
-	
+	/* Assert resets */
 	reg = readl_relaxed(drv->base + QDSP6SS_RESET);
 	reg |= (Q6SS_CORE_ARES | Q6SS_ISDB_ARES | Q6SS_ETM_ARES
 	    | Q6SS_STOP_CORE_ARES);
 	writel_relaxed(reg, drv->base + QDSP6SS_RESET);
 
-	
+	/* Wait 8 AHB cycles for Q6 to be fully reset (AHB = 1.5Mhz) */
 	mb();
 	usleep_range(20, 30);
 
-	
+	/* Turn on Q6 memories */
 	reg = Q6SS_L2DATA_SLP_NRET_N | Q6SS_SLP_RET_N | Q6SS_L1TCM_SLP_NRET_N
 	    | Q6SS_L2TAG_SLP_NRET_N | Q6SS_ETB_SLEEP_NRET_N | Q6SS_ARR_STBY_N
 	    | Q6SS_CLAMP_IO;
 	writel_relaxed(reg, drv->base + QDSP6SS_PWR_CTL);
 
-	
+	/* Turn on Q6 core clock */
 	reg = Q6SS_CLK_ENA | Q6SS_SRC_SWITCH_CLK_OVR;
 	writel_relaxed(reg, drv->base + QDSP6SS_GFMUX_CTL);
 
-	
+	/* Remove Q6SS_CLAMP_IO */
 	reg = readl_relaxed(drv->base + QDSP6SS_PWR_CTL);
 	reg &= ~Q6SS_CLAMP_IO;
 	writel_relaxed(reg, drv->base + QDSP6SS_PWR_CTL);
 
-	
+	/* Bring Q6 core out of reset and start execution. */
 	writel_relaxed(0x0, drv->base + QDSP6SS_RESET);
 
 	return 0;
@@ -277,19 +283,19 @@ static int pil_q6v4_shutdown(struct pil_desc *pil)
 	struct q6v4_data *drv = dev_get_drvdata(pil->dev);
 	const struct pil_q6v4_pdata *pdata = pil->dev->platform_data;
 
-	
+	/* Make sure bus port is halted */
 	msm_bus_axi_porthalt(pdata->bus_port);
 
-	
+	/* Turn off Q6 core clock */
 	writel_relaxed(Q6SS_SRC_SWITCH_CLK_OVR,
 		       drv->base + QDSP6SS_GFMUX_CTL);
 
-	
+	/* Assert resets */
 	reg = (Q6SS_SS_ARES | Q6SS_CORE_ARES | Q6SS_ISDB_ARES
 	     | Q6SS_ETM_ARES | Q6SS_STOP_CORE_ARES | Q6SS_PRIV_ARES);
 	writel_relaxed(reg, drv->base + QDSP6SS_RESET);
 
-	
+	/* Turn off Q6 memories */
 	writel_relaxed(Q6SS_CLAMP_IO, drv->base + QDSP6SS_PWR_CTL);
 
 	if (drv->modem_base)
@@ -327,7 +333,7 @@ static int pil_q6v4_reset_trusted(struct pil_desc *pil)
 	if (err)
 		return err;
 
-	
+	/* Unhalt bus port */
 	err = msm_bus_axi_portunhalt(pdata->bus_port);
 	if (err)
 		dev_err(pil->dev, "Failed to unhalt bus port\n");
@@ -340,7 +346,7 @@ static int pil_q6v4_shutdown_trusted(struct pil_desc *pil)
 	struct q6v4_data *drv = dev_get_drvdata(pil->dev);
 	struct pil_q6v4_pdata *pdata = pil->dev->platform_data;
 
-	
+	/* Make sure bus port is halted */
 	msm_bus_axi_porthalt(pdata->bus_port);
 
 	ret = pas_shutdown(pdata->pas_id);

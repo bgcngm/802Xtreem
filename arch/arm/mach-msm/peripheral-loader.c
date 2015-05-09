@@ -172,7 +172,7 @@ static int load_segment(const struct elf32_phdr *phdr, unsigned num,
 		}
 	}
 
-	
+	/* Load the segment into memory */
 	count = phdr->p_filesz;
 	paddr = phdr->p_paddr;
 	data = fw ? fw->data : NULL;
@@ -196,7 +196,7 @@ static int load_segment(const struct elf32_phdr *phdr, unsigned num,
 		data += size;
 	}
 
-	
+	/* Zero out trailing memory */
 	count = phdr->p_memsz - phdr->p_filesz;
 	while (count > 0) {
 		int size;
@@ -237,6 +237,7 @@ static int segment_is_loadable(const struct elf32_phdr *p)
 	return (p->p_type == PT_LOAD) && !segment_is_hash(p->p_flags);
 }
 
+/* Sychronize request_firmware() with suspend */
 static DECLARE_RWSEM(pil_pm_rwsem);
 
 static int load_image(struct pil_device *pil)
@@ -316,7 +317,7 @@ static int load_image(struct pil_device *pil)
 	if (ret) {
 		dev_err(&pil->dev, "%s: Failed to bring out of reset\n",
 				pil->desc->name);
-		proxy_timeout = 0; 
+		proxy_timeout = 0; /* Remove proxy vote immediately on error */
 		goto err_boot;
 	}
 	dev_info(&pil->dev, "%s: Brought out of reset\n", pil->desc->name);
@@ -337,6 +338,15 @@ static void pil_set_state(struct pil_device *pil, enum pil_state state)
 	}
 }
 
+/**
+ * pil_get() - Load a peripheral into memory and take it out of reset
+ * @name: pointer to a string containing the name of the peripheral to load
+ *
+ * This function returns a pointer if it succeeds. If an error occurs an
+ * ERR_PTR is returned.
+ *
+ * If PIL is not enabled in the kernel, the value %NULL will be returned.
+ */
 void *pil_get(const char *name)
 {
 	int ret;
@@ -368,7 +378,7 @@ void *pil_get(const char *name)
 #if defined(CONFIG_MSM8960_ONLY) || defined(CONFIG_MSM8930_ONLY)
 	if (!strcmp("modem", name)) {
 		while (unlikely(!modem_initialized && strcmp("rmt_storage", current->comm) && loop_count++ < 10)) {
-			
+			/* if rmt_storage is not initialized, wait no more than 5 sec */
 			printk("%s: %s(%d) waiting for rmt_storage %d\n", __func__, current->comm, current->pid, loop_count);
 			msleep(500);
 		}
@@ -417,6 +427,13 @@ static void pil_shutdown(struct pil_device *pil)
 	pil_set_state(pil, PIL_OFFLINE);
 }
 
+/**
+ * pil_put() - Inform PIL the peripheral no longer needs to be active
+ * @peripheral_handle: pointer from a previous call to pil_get()
+ *
+ * This doesn't imply that a peripheral is shutdown or in reset since another
+ * driver could be using the peripheral.
+ */
 void pil_put(void *peripheral_handle)
 {
 	struct pil_device *pil_d, *pil = peripheral_handle;
@@ -612,7 +629,7 @@ struct pil_device *msm_pil_register(struct pil_desc *desc)
 	static atomic_t pil_count = ATOMIC_INIT(-1);
 	struct pil_device *pil;
 
-	
+	/* Ignore users who don't make any sense */
 	if (WARN(desc->ops->proxy_unvote && !desc->ops->proxy_vote,
 				"invalid proxy voting. ignoring\n"))
 		((struct pil_reset_ops *)desc->ops)->proxy_unvote = NULL;

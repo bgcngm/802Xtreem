@@ -25,53 +25,137 @@
 
 #define DEBUG_MAX_RW_BUF 4096
 
+/*
+ * Preprocessor Definitions and Constants
+ */
 #define TZBSP_CPU_COUNT 0x02
+/*
+ * Number of VMID Tables
+ */
 #define TZBSP_DIAG_NUM_OF_VMID 16
+/*
+ * VMID Description length
+ */
 #define TZBSP_DIAG_VMID_DESC_LEN 7
+/*
+ * Number of Interrupts
+ */
 #define TZBSP_DIAG_INT_NUM  32
+/*
+ * Length of descriptive name associated with Interrupt
+ */
 #define TZBSP_MAX_INT_DESC 16
+/*
+ * VMID Table
+ */
 struct tzdbg_vmid_t {
-	uint8_t vmid; 
-	uint8_t desc[TZBSP_DIAG_VMID_DESC_LEN];	
+	uint8_t vmid; /* Virtual Machine Identifier */
+	uint8_t desc[TZBSP_DIAG_VMID_DESC_LEN];	/* ASCII Text */
 };
+/*
+ * Boot Info Table
+ */
 struct tzdbg_boot_info_t {
-	uint32_t wb_entry_cnt;	
-	uint32_t wb_exit_cnt;	
-	uint32_t pc_entry_cnt;	
-	uint32_t pc_exit_cnt;	
-	uint32_t warm_jmp_addr;	
-	uint32_t spare;	
+	uint32_t wb_entry_cnt;	/* Warmboot entry CPU Counter */
+	uint32_t wb_exit_cnt;	/* Warmboot exit CPU Counter */
+	uint32_t pc_entry_cnt;	/* Power Collapse entry CPU Counter */
+	uint32_t pc_exit_cnt;	/* Power Collapse exit CPU counter */
+	uint32_t warm_jmp_addr;	/* Last Warmboot Jump Address */
+	uint32_t spare;	/* Reserved for future use. */
 };
+/*
+ * Reset Info Table
+ */
 struct tzdbg_reset_info_t {
-	uint32_t reset_type;	
-	uint32_t reset_cnt;	
+	uint32_t reset_type;	/* Reset Reason */
+	uint32_t reset_cnt;	/* Number of resets occured/CPU */
 };
+/*
+ * Interrupt Info Table
+ */
 struct tzdbg_int_t {
+	/*
+	 * Type of Interrupt/exception
+	 */
 	uint16_t int_info;
+	/*
+	 * Availability of the slot
+	 */
 	uint8_t avail;
+	/*
+	 * Reserved for future use
+	 */
 	uint8_t spare;
+	/*
+	 * Interrupt # for IRQ and FIQ
+	 */
 	uint32_t int_num;
+	/*
+	 * ASCII text describing type of interrupt e.g:
+	 * Secure Timer, EBI XPU. This string is always null terminated,
+	 * supporting at most TZBSP_MAX_INT_DESC characters.
+	 * Any additional characters are truncated.
+	 */
 	uint8_t int_desc[TZBSP_MAX_INT_DESC];
-	uint64_t int_count[TZBSP_CPU_COUNT]; 
+	uint64_t int_count[TZBSP_CPU_COUNT]; /* # of times seen per CPU */
 };
+/*
+ * Diagnostic Table
+ */
 struct tzdbg_t {
 	uint32_t magic_num;
 	uint32_t version;
+	/*
+	 * Number of CPU's
+	 */
 	uint32_t cpu_count;
+	/*
+	 * Offset of VMID Table
+	 */
 	uint32_t vmid_info_off;
+	/*
+	 * Offset of Boot Table
+	 */
 	uint32_t boot_info_off;
+	/*
+	 * Offset of Reset info Table
+	 */
 	uint32_t reset_info_off;
+	/*
+	 * Offset of Interrupt info Table
+	 */
 	uint32_t int_info_off;
+	/*
+	 * Ring Buffer Offset
+	 */
 	uint32_t ring_off;
+	/*
+	 * Ring Buffer Length
+	 */
 	uint32_t ring_len;
+	/*
+	 * VMID to EE Mapping
+	 */
 	struct tzdbg_vmid_t vmid_info[TZBSP_DIAG_NUM_OF_VMID];
+	/*
+	 * Boot Info
+	 */
 	struct tzdbg_boot_info_t  boot_info[TZBSP_CPU_COUNT];
+	/*
+	 * Reset Info
+	 */
 	struct tzdbg_reset_info_t reset_info[TZBSP_CPU_COUNT];
 	uint32_t num_interrupts;
 	struct tzdbg_int_t  int_info[TZBSP_DIAG_INT_NUM];
-	uint8_t *ring_buffer;	
+	/*
+	 * We need at least 2K for the ring buffer
+	 */
+	uint8_t *ring_buffer;	/* TZ Ring Buffer */
 };
 
+/*
+ * Enumeration order for VMID's
+ */
 enum tzdbg_stats_type {
 	TZDBG_BOOT = 0,
 	TZDBG_RESET,
@@ -117,6 +201,9 @@ struct htc_tzlog_dev {
 
 struct htc_tzlog_dev *htc_tzlog;
 
+/*
+ * Debugfs data structure and functions
+ */
 
 static int _disp_tz_general_stats(void)
 {
@@ -296,7 +383,7 @@ static int _disp_tz_htc_log_stats(char __user *ubuf, size_t count, loff_t *offp)
 	int r_cursor, w_cursor, ret;
 
 	if (buf != 0) {
-		
+		/* update r_cursor */
 		r_cursor = *pr_cursor;
 		w_cursor = *pw_cursor;
 
@@ -451,6 +538,9 @@ static void tzdbgfs_exit(struct platform_device *pdev)
 	debugfs_remove_recursive(dent_dir);
 }
 
+/*
+ * Driver functions
+ */
 static int __devinit tz_log_probe(struct platform_device *pdev)
 {
 	struct resource *resource;
@@ -458,12 +548,20 @@ static int __devinit tz_log_probe(struct platform_device *pdev)
 	uint32_t tzdiag_phy_iobase;
 	uint32_t *ptr = NULL;
 
+	/*
+	 * Get address that stores the physical location of 4KB
+	 * diagnostic data
+	 */
 	resource = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!resource) {
 		dev_err(&pdev->dev,
 				"%s: ERROR Missing MEM resource\n", __func__);
 		return -ENXIO;
 	};
+	/*
+	 * Map address that stores the physical location of 4KB
+	 * diagnostic data
+	 */
 	virt_iobase = devm_ioremap_nocache(&pdev->dev, resource->start,
 				resource->end - resource->start + 1);
 	if (!virt_iobase) {
@@ -473,8 +571,14 @@ static int __devinit tz_log_probe(struct platform_device *pdev)
 			(resource->end - resource->start + 1));
 		return -ENXIO;
 	}
+	/*
+	 * Retrieve the address of 4KB diagnostic data
+	 */
 	tzdiag_phy_iobase = readl_relaxed(virt_iobase);
 
+	/*
+	 * Map the 4KB diagnostic information area
+	 */
 	tzdbg.virt_iobase = devm_ioremap_nocache(&pdev->dev,
 				tzdiag_phy_iobase, DEBUG_MAX_RW_BUF);
 

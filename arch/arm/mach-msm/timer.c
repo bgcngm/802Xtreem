@@ -74,6 +74,10 @@ enum {
 #define LOCAL_TIMER 0
 #define GLOBAL_TIMER 1
 
+/*
+ * global_timer_offset is added to the regbase of a timer to force the memory
+ * access to come from the CPU0 region.
+ */
 static int global_timer_offset;
 static int msm_global_timer;
 
@@ -301,6 +305,8 @@ static int msm_timer_set_next_event(unsigned long cycles,
 	__raw_writel(alarm, clock->regbase + TIMER_MATCH_VAL);
 
 	if (clock->flags & MSM_CLOCK_FLAGS_DELAYED_WRITE_POST) {
+		/* read the counter four extra times to make sure write posts
+		   before reading the time */
 		for (i = 0; i < 4; i++)
 			__raw_readl_no_log(clock->regbase + TIMER_COUNT_VAL);
 	}
@@ -390,6 +396,21 @@ void __iomem *msm_timer_get_timer0_base(void)
 #define MPM_SCLK_COUNT_VAL    0x0024
 
 #ifdef CONFIG_PM
+/*
+ * Retrieve the cycle count from sclk and optionally synchronize local clock
+ * with the sclk value.
+ *
+ * time_start and time_expired are callbacks that must be specified.  The
+ * protocol uses them to detect timeout.  The update callback is optional.
+ * If not NULL, update will be called so that it can update local clock.
+ *
+ * The function does not use the argument data directly; it passes data to
+ * the callbacks.
+ *
+ * Return value:
+ *      0: the operation failed
+ *      >0: the slow clock value after time-sync
+ */
 static void (*msm_timer_sync_timeout)(void);
 #if defined(CONFIG_MSM_DIRECT_SCLK_ACCESS)
 uint32_t msm_timer_get_sclk_ticks(void)
@@ -443,10 +464,12 @@ static uint32_t msm_timer_do_sync_to_sclk(
 }
 #elif defined(CONFIG_MSM_N_WAY_SMSM)
 
+/* Time Master State Bits */
 #define MASTER_BITS_PER_CPU        1
 #define MASTER_TIME_PENDING \
 	(0x01UL << (MASTER_BITS_PER_CPU * SMSM_APPS_STATE))
 
+/* Time Slave State Bits */
 #define SLAVE_TIME_REQUEST         0x0400
 #define SLAVE_TIME_POLL            0x0800
 #define SLAVE_TIME_INIT            0x1000
@@ -524,7 +547,7 @@ static uint32_t msm_timer_do_sync_to_sclk(
 		SLAVE_TIME_INIT);
 	return smem_clock_val;
 }
-#else 
+#else /* CONFIG_MSM_N_WAY_SMSM */
 static uint32_t msm_timer_do_sync_to_sclk(
 	void (*time_start)(struct msm_timer_sync_data_t *data),
 	bool (*time_expired)(struct msm_timer_sync_data_t *data),
@@ -592,16 +615,22 @@ static uint32_t msm_timer_do_sync_to_sclk(
 	smsm_change_state(SMSM_APPS_STATE, SMSM_TIMEWAIT, SMSM_TIMEINIT);
 	return smem_clock_val;
 }
-#endif 
+#endif /* CONFIG_MSM_N_WAY_SMSM */
 
+/*
+ * Callback function that initializes the timeout value.
+ */
 static void msm_timer_sync_to_sclk_time_start(
 	struct msm_timer_sync_data_t *data)
 {
-	
+	/* approx 2 seconds */
 	uint32_t delta = data->clock->freq << data->clock->shift << 1;
 	data->timeout = msm_read_timer_count(data->clock, LOCAL_TIMER) + delta;
 }
 
+/*
+ * Callback function that checks the timeout.
+ */
 static bool msm_timer_sync_to_sclk_time_expired(
 	struct msm_timer_sync_data_t *data)
 {
@@ -610,6 +639,10 @@ static bool msm_timer_sync_to_sclk_time_expired(
 	return ((int32_t) delta) > 0;
 }
 
+/*
+ * Callback function that updates local clock from the specified source clock
+ * value and frequency.
+ */
 static void msm_timer_sync_update(struct msm_timer_sync_data_t *data,
 	uint32_t src_clk_val, uint32_t src_clk_freq)
 {
@@ -624,6 +657,8 @@ static void msm_timer_sync_update(struct msm_timer_sync_data_t *data,
 	} else {
 		uint64_t temp;
 
+		/* separate multiplication and division steps to reduce
+		   rounding error */
 		temp = src_clk_val;
 		temp *= dst_clk->freq << dst_clk->shift;
 		do_div(temp, src_clk_freq);
@@ -649,6 +684,9 @@ static void msm_timer_sync_update(struct msm_timer_sync_data_t *data,
 	}
 }
 
+/*
+ * Synchronize GPT clock with sclk.
+ */
 static void msm_timer_sync_gpt_to_sclk(int exit_sleep)
 {
 	struct msm_clock *gpt_clk = &msm_clocks[MSM_CLOCK_GPT];
@@ -674,6 +712,9 @@ static void msm_timer_sync_gpt_to_sclk(int exit_sleep)
 		gpt_clk_state->in_sync = 1;
 }
 
+/*
+ * Synchronize clock with GPT clock.
+ */
 static void msm_timer_sync_to_gpt(struct msm_clock *clock, int exit_sleep)
 {
 	struct msm_clock *gpt_clk = &msm_clocks[MSM_CLOCK_GPT];
@@ -751,7 +792,7 @@ int64_t msm_timer_enter_idle(void)
 	alarm = clock_state->alarm;
 	delta = alarm - count;
 	if (delta <= -(int32_t)((clock->freq << clock->shift) >> 10)) {
-		
+		/* timer should have triggered 1ms ago */
 		printk(KERN_ERR "msm_timer_enter_idle: timer late %d, "
 			"reprogram it\n", delta);
 		msm_timer_reactivate_alarm(clock);
@@ -789,7 +830,7 @@ void msm_timer_exit_idle(int low_power)
 #else
 	gpt_clk_state->in_sync = gpt_clk_state->in_sync && enabled;
 #endif
-	
+	/* Make sure timer is actually enabled before we sync it */
 	wmb();
 	msm_timer_sync_gpt_to_sclk(1);
 
@@ -805,7 +846,7 @@ void msm_timer_exit_idle(int low_power)
 #else
 	clock_state->in_sync = clock_state->in_sync && enabled;
 #endif
-	
+	/* Make sure timer is actually enabled before we sync it */
 	wmb();
 	msm_timer_sync_to_gpt(clock, 1);
 
@@ -816,12 +857,18 @@ exit_idle_exit:
 	clock_state->stopped--;
 }
 
+/*
+ * Callback function that initializes the timeout value.
+ */
 static void msm_timer_get_sclk_time_start(
 	struct msm_timer_sync_data_t *data)
 {
 	data->timeout = 200000;
 }
 
+/*
+ * Callback function that checks the timeout.
+ */
 static bool msm_timer_get_sclk_time_expired(
 	struct msm_timer_sync_data_t *data)
 {
@@ -829,6 +876,17 @@ static bool msm_timer_get_sclk_time_expired(
 	return --data->timeout <= 0;
 }
 
+/*
+ * Retrieve the cycle count from the sclk and convert it into
+ * nanoseconds.
+ *
+ * On exit, if period is not NULL, it contains the period of the
+ * sclk in nanoseconds, i.e. how long the cycle count wraps around.
+ *
+ * Return value:
+ *      0: the operation failed; period is not set either
+ *      >0: time in nanoseconds
+ */
 int64_t msm_timer_get_sclk_time(int64_t *period)
 {
 	struct msm_timer_sync_data_t data;
@@ -902,6 +960,13 @@ static void __init msm_sched_clock_init(void)
 	setup_sched_clock(msm_read_sched_clock, 32 - clock->shift, clock->freq);
 }
 
+/**
+ * msm_enable_fast_timer - Enable fast timer
+ *
+ * Prevents low power idle, but the caller must call msm_disable_fast_timer
+ * before suspend completes.
+ * Reference counted.
+ */
 void msm_enable_fast_timer(void)
 {
 	u32 max;
@@ -925,6 +990,9 @@ done:
 	spin_unlock_irqrestore(&msm_fast_timer_lock, irq_flags);
 }
 
+/**
+ * msm_enable_fast_timer - Disable fast timer
+ */
 void msm_disable_fast_timer(void)
 {
 	unsigned long irq_flags;
@@ -939,6 +1007,11 @@ void msm_disable_fast_timer(void)
 	spin_unlock_irqrestore(&msm_fast_timer_lock, irq_flags);
 }
 
+/**
+ * msm_enable_fast_timer - Read fast timer
+ *
+ * Returns 32bit nanosecond time value.
+ */
 u32 msm_read_fast_timer(void)
 {
 	cycle_t ticks;
@@ -955,7 +1028,7 @@ int __cpuinit local_timer_setup(struct clock_event_device *evt)
 	static DEFINE_PER_CPU(bool, first_boot) = true;
 	struct msm_clock *clock = &msm_clocks[msm_global_timer];
 
-	
+	/* Use existing clock_event for cpu 0 */
 	if (!smp_processor_id())
 		return 0;
 
@@ -1004,7 +1077,7 @@ static struct local_timer_ops msm_lt_ops = {
 	local_timer_setup,
 	local_timer_stop,
 };
-#endif 
+#endif /* CONFIG_LOCAL_TIMERS */
 
 static void __init msm_timer_init(void)
 {
@@ -1105,10 +1178,10 @@ static void __init msm_timer_init(void)
 		}
 
 		ce->mult = div_sc(clock->freq, NSEC_PER_SEC, ce->shift);
-		
+		/* allow at least 10 seconds to notice that the timer wrapped */
 		ce->max_delta_ns =
 			clockevent_delta2ns(0xf0000000 >> clock->shift, ce);
-		
+		/* ticks gets rounded down by one */
 		ce->min_delta_ns =
 			clockevent_delta2ns(clock->write_delay + 4, ce);
 		ce->cpumask = cpumask_of(0);

@@ -53,7 +53,7 @@ static int diagcharmdm_close(struct inode *inode, struct file *file)
 
 	if (driver) {
 #ifdef CONFIG_DIAG_OVER_USB
-		
+		/* If the SD logging process exits, change logging to USB mode */
 		if (driver->mdm_logging_process_id == current->tgid) {
 			driver->logging_mode = USB_MODE;
 			diagfwd_connect();
@@ -63,12 +63,12 @@ static int diagcharmdm_close(struct inode *inode, struct file *file)
 			diagfwd_connect_bridge(0);
 #endif
 		}
-#endif 
+#endif /* DIAG over USB */
 
 		mutex_lock(&driver->diagcharmdm_mutex);
 
 		driver->ref_count--;
-		
+		/* On Client exit, try to destroy all 3 pools */
 		diagmem_exit(driver, POOL_TYPE_COPY);
 		diagmem_exit(driver, POOL_TYPE_HDLC);
 		diagmem_exit(driver, POOL_TYPE_WRITE_STRUCT);
@@ -103,7 +103,7 @@ static long diagcharmdm_ioctl(struct file *filp,
 		mutex_unlock(&driver->diagcharmdm_mutex);
 		if (driver->logging_mode == MEMORY_DEVICE_MODE) {
 			DIAG_INFO("diagcharmdm_ioctl enable\n");
-			
+			/* diagfwd_disconnect(); */
 #ifdef CONFIG_DIAGFWD_BRIDGE_CODE
 			diagfwd_cancel_hsic();
 			diagfwd_connect_bridge(0);
@@ -111,7 +111,7 @@ static long diagcharmdm_ioctl(struct file *filp,
 			driver->qxdm2sd_drop = 0;
 		} else if (driver->logging_mode == USB_MODE) {
 			DIAG_INFO("diagcharmdm_ioctl disable\n");
-			
+			/* diagfwd_connect(); */
 #ifdef CONFIG_DIAGFWD_BRIDGE_CODE
 			diag_clear_hsic_tbl();
 			diagfwd_cancel_hsic();
@@ -177,10 +177,10 @@ static int diagcharmdm_read(struct file *file, char __user *buf, size_t count,
 
 	if ((driver->mdmdata_ready[index] & USER_SPACE_DATA_TYPE) && (driver->
 				logging_mode == MEMORY_DEVICE_MODE)) {
-		
+		/*Copy the type of data being passed*/
 		data_type = driver->data_ready[index] & USER_SPACE_DATA_TYPE;
 		COPY_USER_SPACE_OR_EXIT(buf, data_type, 4);
-		
+		/* place holder for number of data field */
 		ret += 4;
 
 #if defined(CONFIG_DIAGFWD_BRIDGE_CODE)
@@ -204,7 +204,7 @@ static int diagcharmdm_read(struct file *file, char __user *buf, size_t count,
 						i, (unsigned int)hsic_buf_tbl[i].buf,
 						hsic_buf_tbl[i].length);
 				num_data++;
-				
+				/*Copy the length of data being passed*/
 				if (count < ret+4 || copy_to_user(buf+ret,
 					(void *)&(hsic_buf_tbl[i].length), 4)) {
 					num_data--;
@@ -214,7 +214,7 @@ static int diagcharmdm_read(struct file *file, char __user *buf, size_t count,
 				}
 				ret += 4;
 
-				
+				/*Copy the actual data being passed*/
 				if (count < ret+hsic_buf_tbl[i].length ||
 					copy_to_user(buf+ret, (void *)hsic_buf_tbl[i].buf,
 					hsic_buf_tbl[i].length)) {
@@ -227,17 +227,17 @@ static int diagcharmdm_read(struct file *file, char __user *buf, size_t count,
 				ret += hsic_buf_tbl[i].length;
 drop_hsic_mdm_1:
 
-				
+				/* Return the buffer to the pool */
 				diagmem_free(driver,
 					(unsigned char *)(hsic_buf_tbl[i].buf),
 					POOL_TYPE_HSIC);
 
-				
+				/* Call the write complete function */
 				diagfwd_write_complete_hsic(NULL);
 			}
 		}
 #endif
-		
+		/* copy number of data fields */
 		COPY_USER_SPACE_OR_EXIT(buf+4, num_data, 4);
 		ret -= 4;
 
@@ -247,6 +247,8 @@ drop_hsic_mdm_1:
 			queue_work(diag_bridge[HSIC].wq, &driver->diag_read_hsic_work);
 		goto exit;
 	} else if (driver->mdmdata_ready[index] & USER_SPACE_DATA_TYPE) {
+		/* In case, the thread wakes up and the logging mode is
+		   not memory device any more, the condition needs to be cleared */
 		driver->mdmdata_ready[index] ^= USER_SPACE_DATA_TYPE;
 	} else if (driver->mdmdata_ready[index] & USERMODE_DIAGFWD) {
 		data_type = USERMODE_DIAGFWD_LEGACY;
@@ -273,7 +275,7 @@ drop_hsic_mdm_1:
 				pr_debug("diag: HSIC copy to user, i: %d, buf: %x, len: %d\n",
 						i, (unsigned int)hsic_buf_tbl[i].buf,
 						hsic_buf_tbl[i].length);
-				
+				/*Copy the actual data being passed*/
 				if (count < ret+hsic_buf_tbl[i].length ||
 						copy_to_user(buf+ret, (void *)hsic_buf_tbl[i].buf,
 							hsic_buf_tbl[i].length)) {
@@ -283,12 +285,12 @@ drop_hsic_mdm_1:
 				}
 				ret += hsic_buf_tbl[i].length;
 drop_hsic_mdm_2:
-				
+				/* Return the buffer to the pool */
 				diagmem_free(driver,
 						(unsigned char *)(hsic_buf_tbl[i].buf),
 						POOL_TYPE_HSIC);
 
-				
+				/* Call the write complete function */
 				diagfwd_write_complete_hsic(NULL);
 			}
 		}
@@ -350,19 +352,19 @@ static int diagcharmdm_write(struct file *file, const char __user *buf,
 #ifdef CONFIG_DIAG_OVER_USB
 	if (((driver->logging_mode == USB_MODE) && (!driver->usb_connected)) ||
 			(driver->logging_mode == NO_LOGGING_MODE)) {
-		
+		/*Drop the diag payload */
 		return -EIO;
 	}
-#endif 
+#endif /* DIAG over USB */
 
-	
+	/* Get the packet type F3/log/event/Pkt response */
 	err = copy_from_user((&pkt_type), buf, 4);
-	
+	/*First 4 bytes indicate the type of payload - ignore these */
 	payload_size = count - 4;
 	if (pkt_type == USER_SPACE_DATA_TYPE) {
 		err = copy_from_user(driver->user_space_mdm_data, buf + 4,
 							 payload_size);
-		
+		/* Check masks for On-Device logging */
 		if (driver->mask_check) {
 			if (!mask_request_validate(driver->user_space_mdm_data)) {
 				DIAG_ERR("mask request Invalid ..cannot send to modem \n");
@@ -374,7 +376,7 @@ static int diagcharmdm_write(struct file *file, const char __user *buf,
 		DIAGFWD_9K_RAWDATA(driver->user_space_mdm_data, "9K", DIAG_DBG_WRITE);
 
 #ifdef CONFIG_DIAG_SDIO_PIPE
-		
+		/* send masks to 9k too */
 		if (driver->sdio_ch) {
 			wait_event_interruptible(driver->wait_q,
 				 (sdio_write_avail(driver->sdio_ch) >=
@@ -386,9 +388,9 @@ static int diagcharmdm_write(struct file *file, const char __user *buf,
 		}
 #endif
 #ifdef CONFIG_DIAGFWD_BRIDGE_CODE
-		
+		/* send masks to 9k too */
 		if (driver->hsic_ch && (payload_size > 0)) {
-			
+			/* wait sending mask updates if HSIC ch not ready */
 			if (driver->in_busy_hsic_write) {
 				driver->in_busy_hsic_write_wait = 1;
 				wait_event_interruptible(driver->wait_q,
@@ -401,6 +403,12 @@ static int diagcharmdm_write(struct file *file, const char __user *buf,
 			if (err) {
 				pr_err("diag: err sending mask to MDM: %d\n",
 									 err);
+				/*
+				* If the error is recoverable, then clear
+				* the write flag, so we will resubmit a
+				* write on the next frame.  Otherwise, don't
+				* resubmit a write on the next frame.
+				*/
 				if ((-ESHUTDOWN) != err)
 					driver->in_busy_hsic_write = 0;
 			}

@@ -17,6 +17,7 @@
 #include "diagchar.h"
 #include "diagfwd.h"
 #include "diagfwd_cntl.h"
+/* tracks which peripheral is undergoing SSR */
 static uint16_t reg_dirty;
 #define HDR_SIZ 8
 
@@ -126,7 +127,7 @@ static void diag_smd_cntl_send_req(int proc_num)
 	struct bindpkt_params *temp;
 	void *buf = NULL;
 	smd_channel_t *smd_ch = NULL;
-	
+	/* tracks which peripheral is sending registration */
 	uint16_t reg_mask = 0;
 
 	if (pkt_params == NULL) {
@@ -206,6 +207,9 @@ static void diag_smd_cntl_send_req(int proc_num)
 				temp -= pkt_params->count;
 				pkt_params->params = temp;
 				flag = 1;
+				/* peripheral undergoing SSR should not
+				 * record new registration
+				 */
 				if (!(reg_dirty & reg_mask))
 					diagchar_ioctl(NULL,
 					 DIAG_IOCTL_COMMAND_REG, (unsigned long)
@@ -222,7 +226,7 @@ static void diag_smd_cntl_send_req(int proc_num)
 	}
 	kfree(pkt_params);
 	if (flag) {
-		
+		/* Poll SMD CNTL channels to check for data */
 		if (proc_num == MODEM_PROC)
 			diag_smd_cntl_notify(NULL, SMD_EVENT_DATA);
 		else if (proc_num == LPASS_PROC)
@@ -251,7 +255,7 @@ static int diag_smd_cntl_probe(struct platform_device *pdev)
 {
 	int r = 0;
 
-	
+	/* open control ports only on 8960 & newer targets */
 	if (chk_apps_only()) {
 		if (pdev->id == SMD_APPS_MODEM)
 			r = smd_open("DIAG_CNTL", &driver->ch_cntl, driver,

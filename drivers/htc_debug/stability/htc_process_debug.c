@@ -35,7 +35,7 @@ void send_signal_debug_dump(int sig, struct task_struct *t)
 {
 
 	struct task_comm *tc;
-
+#if 0 
 	
 	if(sig == SIGKILL){
 		if((t->state & TASK_UNINTERRUPTIBLE) || (t->exit_state & EXIT_ZOMBIE)){
@@ -51,11 +51,15 @@ void send_signal_debug_dump(int sig, struct task_struct *t)
 			schedule_delayed_work(&show_block_state_struct, 1 * HZ);
 		}
 	}
-
+#endif
 	if (t->comm) {
 		read_lock(&task_comm_lock);
 		list_for_each_entry(tc, &task_comm_list, list) {
 			if (sig != SIGCHLD && tc->comm && (!strncmp(t->comm, tc->comm, TASK_COMM_LEN)) ) {
+				
+				if ((!strncmp(t->comm, "main", 4)) && t->parent->pid != 1 ) {
+					break;
+				}
 				printk("%s: %s(%d)[group %s(%d), parent %s(%d)] send signal %d to %s(%d)\n", __func__,
 					current->comm, current->pid,
 					(current->group_leader) ? current->group_leader->comm : "Unknown",
@@ -81,6 +85,10 @@ void do_group_exit_debug_dump(int exit_code)
 		read_lock(&task_comm_lock);
 		list_for_each_entry(tc, &task_comm_list, list) {
 			if (tc->comm && (!strncmp(t->comm, tc->comm, TASK_COMM_LEN)) ) {
+				
+				if ((!strncmp(t->comm, "main", 4)) && t->parent->pid != 1 ) {
+					break;
+				}
 				printk(KERN_INFO "%s: %s(%d)[group %s(%d) parent %s(%d)] call exit with code %d\n", __func__,
 				current->comm, current->pid,
 				(current->group_leader) ? current->group_leader->comm : "Unknown",

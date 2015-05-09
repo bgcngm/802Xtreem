@@ -27,7 +27,7 @@ static struct single_row_lut palladium_1500_fcc_sf = {
 static struct sf_lut palladium_1500_pc_sf = {
 	.rows		= 10,
 	.cols		= 5,
-	
+	/* row_entries are chargecycles */
 	.row_entries	= {100, 200, 300, 400, 500},
 	.percent	= {100, 90, 80, 70, 60, 50, 40, 30, 20, 10},
 	.sf		= {
@@ -47,7 +47,7 @@ static struct sf_lut palladium_1500_pc_sf = {
 static struct sf_lut palladium_1500_rbatt_sf = {
 	.rows		= 19,
 	.cols		= 5,
-	
+	/* row_entries are temperature */
 	.row_entries	= {-20, 0, 20, 40, 65},
 	.percent	= {100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50,
 				45, 40, 35, 30, 25, 20, 15, 10

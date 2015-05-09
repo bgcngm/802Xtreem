@@ -16,6 +16,7 @@
 
 #ifdef __KERNEL__
 
+/* Header files */
 #include <linux/wakelock.h>
 #include <linux/i2c.h>
 #include <linux/videodev2.h>
@@ -35,9 +36,11 @@
 #include <media/msm_gestures.h>
 #include <linux/iommu.h>
 
+/* HTC_START sungfeng 20120903 */
 #ifdef CONFIG_PERFLOCK
 #include <mach/perflock.h>
 #endif
+/* HTC_END */
 
 #define MSM_V4L2_DIMENSION_SIZE 96
 #define MAX_DEV_NAME_LEN 50
@@ -76,6 +79,7 @@ enum msm_cam_subdev_type {
 };
 
 
+/* msm queue management APIs*/
 
 #define msm_dequeue(queue, member) ({	   \
 	unsigned long flags;		  \
@@ -142,31 +146,35 @@ struct rdi_count_msg {
 	uint32_t count;
 };
 
+/* message id for v4l2_subdev_notify*/
 enum msm_camera_v4l2_subdev_notify {
-	NOTIFY_CID_CHANGE, 
-	NOTIFY_ISP_MSG_EVT, 
-	NOTIFY_VFE_MSG_OUT, 
-	NOTIFY_VFE_MSG_STATS,  
-	NOTIFY_VFE_MSG_COMP_STATS, 
-	NOTIFY_VFE_BUF_EVT, 
-	NOTIFY_AXI_RDI_SOF_COUNT, 
-	NOTIFY_ISPIF_STREAM, 
+	NOTIFY_CID_CHANGE, /* arg = msm_camera_csid_params */
+	NOTIFY_ISP_MSG_EVT, /* arg = enum ISP_MESSAGE_ID */
+	NOTIFY_VFE_MSG_OUT, /* arg = struct isp_msg_output */
+	NOTIFY_VFE_MSG_STATS,  /* arg = struct isp_msg_stats */
+	NOTIFY_VFE_MSG_COMP_STATS, /* arg = struct msm_stats_buf */
+	NOTIFY_VFE_BUF_EVT, /* arg = struct msm_vfe_resp */
+	NOTIFY_AXI_RDI_SOF_COUNT, /*arg = struct rdi_count_msg*/
+	NOTIFY_ISPIF_STREAM, /* arg = enable parameter for s_stream */
 	NOTIFY_VPE_MSG_EVT,
-	NOTIFY_PCLK_CHANGE, 
-	NOTIFY_CSIPHY_CFG, 
-	NOTIFY_CSID_CFG, 
-	NOTIFY_CSIC_CFG, 
-	NOTIFY_VFE_BUF_FREE_EVT, 
+	NOTIFY_PCLK_CHANGE, /* arg = pclk */
+	NOTIFY_CSIPHY_CFG, /* arg = msm_camera_csiphy_params */
+	NOTIFY_CSID_CFG, /* arg = msm_camera_csid_params */
+	NOTIFY_CSIC_CFG, /* arg = msm_camera_csic_params */
+	NOTIFY_VFE_BUF_FREE_EVT, /* arg = msm_camera_csic_params */
 	NOTIFY_VFE_IRQ,
 	NOTIFY_AXI_IRQ,
-	NOTIFY_GESTURE_EVT, 
-	NOTIFY_GESTURE_CAM_EVT, 
+	NOTIFY_GESTURE_EVT, /* arg = v4l2_event */
+	NOTIFY_GESTURE_CAM_EVT, /* arg = int */
 	NOTIFY_VFE_CAMIF_ERROR,
 	NOTIFY_VFE_VIOLATION,
 	NOTIFY_INVALID
 };
 
 enum isp_vfe_cmd_id {
+	/*
+	*Important! Command_ID are arranged in order.
+	*Don't change!*/
 	ISP_VFE_CMD_ID_STREAM_ON,
 	ISP_VFE_CMD_ID_STREAM_OFF,
 	ISP_VFE_CMD_ID_FRAME_BUF_RELEASE
@@ -185,8 +193,9 @@ enum msm_buffer_state {
 	MSM_BUFFER_STATE_DEQUEUED
 };
 
+/* buffer for one video frame */
 struct msm_frame_buffer {
-	
+	/* common v4l buffer stuff -- must be first */
 	struct vb2_buffer         vidbuf;
 	struct list_head		  list;
 	enum v4l2_mbus_pixelcode  pxlcode;
@@ -224,6 +233,12 @@ struct msm_mctl_pp_info {
 	struct msm_mctl_pp_ctrl pp_ctrl;
 
 };
+/* "Media Controller" represents a camera steaming session,
+ * which consists of a "sensor" device and an "isp" device
+ * (such as VFE, if needed), connected via an "IO" device,
+ * (such as IPIF on 8960, or none on 8660) plus other extra
+ * sub devices such as VPE and flash.
+ */
 
 struct msm_cam_media_controller {
 
@@ -237,64 +252,69 @@ struct msm_cam_media_controller {
 	int (*mctl_vbqueue_init)(struct msm_cam_v4l2_dev_inst *pcam,
 				struct vb2_queue *q, enum v4l2_buf_type type);
 	int (*mctl_ufmt_init)(struct msm_cam_media_controller *p_mctl);
- 	struct v4l2_subdev *sensor_sdev; 
+ 	struct v4l2_subdev *sensor_sdev; /* sensor sub device */
 
-	struct v4l2_subdev *csiphy_sdev; 
-	struct v4l2_subdev *csid_sdev; 
-	struct v4l2_subdev *csic_sdev; 
-	struct v4l2_subdev *ispif_sdev; 
-	struct v4l2_subdev *act_sdev; 
-	struct v4l2_subdev *gemini_sdev; 
-	struct v4l2_subdev *vpe_sdev; 
-	struct v4l2_subdev *axi_sdev; 
+	struct v4l2_subdev *csiphy_sdev; /*csiphy sub device*/
+	struct v4l2_subdev *csid_sdev; /*csid sub device*/
+	struct v4l2_subdev *csic_sdev; /*csid sub device*/
+	struct v4l2_subdev *ispif_sdev; /* ispif sub device */
+	struct v4l2_subdev *act_sdev; /* actuator sub device */
+	struct v4l2_subdev *gemini_sdev; /* gemini sub device */
+	struct v4l2_subdev *vpe_sdev; /* vpe sub device */
+	struct v4l2_subdev *axi_sdev; /* axi sub device */
 
-	struct msm_isp_ops *isp_sdev;	 
+	struct msm_isp_ops *isp_sdev;	 /* isp sub device : camif/VFE */
 	struct msm_cam_config_dev *config_device;
 
-	
-	uint8_t opencnt; 
-	const char *apps_id; 
+	/*mctl session control information*/
+	uint8_t opencnt; /*mctl ref count*/
+	const char *apps_id; /*ID for app that open this session*/
 	struct mutex lock;
-	
-	
+	/* Kernel 3.4 removes WAKE_LOCK_IDLE */
+	//struct wake_lock wake_lock; /*avoid low power mode when active*/
 	struct wake_lock wake_lock_suspend;
 
 	struct pm_qos_request pm_qos_req_list;
 	struct msm_mctl_pp_info pp_info;
-	struct msm_mctl_stats_t stats_info; 
-	uint32_t vfe_output_mode; 
+	struct msm_mctl_stats_t stats_info; /*stats pmem info*/
+	uint32_t vfe_output_mode; /* VFE output mode */
 
 	struct ion_client *client;
 	struct kref refcount;
+/* HTC_START */
 	atomic_t dropframe_enabled;
-	atomic_t snap_dropframe_num; 
-	atomic_t snap_dropframe; 
+	atomic_t snap_dropframe_num; /* num of snapshot frames to drop */
+	atomic_t snap_dropframe; /* whether to drop next snapshot frame */
+/* HTC_END */
 
-	
+	/*pcam ptr*/
 	struct msm_cam_v4l2_device *pcam_ptr;
 
-	
+	/*sensor info*/
 	struct msm_camera_sensor_info *sdata;
 	struct msm_actuator_ctrl *actctrl;
 
 
-	
+	/*IOMMU mapped IMEM addresses*/
 	uint32_t ping_imem_y;
 	uint32_t ping_imem_cbcr;
 	uint32_t pong_imem_y;
 	uint32_t pong_imem_cbcr;
 
+/* HTC_START sungfeng 20120903 */
 #ifdef CONFIG_PERFLOCK
 	struct perf_lock *cam_perf_lock;
 #endif
+/* HTC_END */
 	struct stats_htc_af htc_af_info;
 	atomic_t dispatch_command;
 };
 
+/* abstract camera device represents a VFE and connected sensor */
 struct msm_isp_ops {
 	char *config_dev_name;
 
-	
+	/*int (*isp_init)(struct msm_cam_v4l2_device *pcam);*/
 	int (*isp_open)(struct v4l2_subdev *sd,
 		struct msm_cam_media_controller *mctl);
 	int (*isp_config)(struct msm_cam_media_controller *pmctl,
@@ -306,7 +326,7 @@ struct msm_isp_ops {
 	int (*isp_pp_cmd)(struct msm_cam_media_controller *pmctl,
 		 struct msm_mctl_pp_cmd, void *data);
 
-	
+	/* vfe subdevice */
 	struct v4l2_subdev *sd;
 	struct v4l2_subdev *sd_vpe;
 };
@@ -328,14 +348,14 @@ struct msm_cam_v4l2_dev_inst {
 	spinlock_t vq_irqlock;
 	struct list_head free_vq;
 	struct v4l2_format vid_fmt;
-	
+	/* sensor pixel code*/
 	enum v4l2_mbus_pixelcode sensor_pxlcode;
 	struct msm_cam_v4l2_device *pcam;
 	int my_index;
 	int image_mode;
 	int path;
 	int buf_count;
-	
+	/* buffer offsets, if any */
 	struct msm_cam_buf_offset **buf_offset;
 	struct v4l2_crop crop;
 	int streamon;
@@ -344,11 +364,11 @@ struct msm_cam_v4l2_dev_inst {
 	struct img_plane_info plane_info;
 	int vbqueue_initialized;
     struct mutex inst_lock;
-	int no_free_buf_cnt; 
+	int no_free_buf_cnt; /* HTC_START */
 };
 
 struct msm_cam_mctl_node {
-	
+	/* MCTL V4l2 device */
 	struct v4l2_device v4l2_dev;
 	struct video_device *pvdev;
 	struct msm_cam_v4l2_dev_inst *dev_inst[MSM_DEV_INST_MAX];
@@ -358,15 +378,16 @@ struct msm_cam_mctl_node {
 	int use_count;
 };
 
+/* abstract camera device for each sensor successfully probed*/
 struct msm_cam_v4l2_device {
-	
+	/* device node information */
 	int vnode_id;
-	struct v4l2_device v4l2_dev; 
-	struct video_device *pvdev; 
-	struct msm_cam_mctl_node mctl_node; 
-	struct media_device media_dev; 
+	struct v4l2_device v4l2_dev; /* V4l2 device */
+	struct video_device *pvdev; /* registered as /dev/video*/
+	struct msm_cam_mctl_node mctl_node; /* node for buffer management */
+	struct media_device media_dev; /* node to get video node info*/
 
-	
+	/* device session information */
 	int use_count;
 
 
@@ -378,12 +399,12 @@ struct msm_cam_v4l2_device {
 	struct msm_cam_v4l2_dev_inst *dev_inst_map[MSM_MAX_IMG_MODE];
 	int op_mode;
 
-	
+	/* v4l2 format support */
 	struct msm_isp_color_fmt *usr_fmts;
 	int num_fmts;
 
-	struct v4l2_subdev *sensor_sdev; 
-	struct v4l2_subdev *act_sdev; 
+	struct v4l2_subdev *sensor_sdev; /* sensor sub device */
+	struct v4l2_subdev *act_sdev; /* actuator sub device */
 	struct msm_camera_sensor_info *sdata;
 	struct msm_actuator_ctrl actctrl;
 
@@ -394,20 +415,24 @@ static inline struct msm_cam_v4l2_device *to_pcam(
 	return container_of(v4l2_dev, struct msm_cam_v4l2_device, v4l2_dev);
 }
 
+/*pseudo v4l2 device and v4l2 event queue
+  for server and config cdevs*/
 struct v4l2_queue_util {
 	struct video_device *pvdev;
 	struct v4l2_fh  eventHandle;
 };
 
+/* abstract config device for all sensor successfully probed*/
 struct msm_cam_config_dev {
 	struct cdev config_cdev;
 	struct v4l2_queue_util config_stat_event_queue;
 	int use_count;
-	
+	/*struct msm_isp_ops* isp_subdev;*/
 	struct msm_cam_media_controller *p_mctl;
 	struct msm_mem_map_info mem_map;
 	int dev_num;
 };
+/* 2 for camera, 1 for gesture */
 #define MAX_NUM_ACTIVE_CAMERA 3
 
 
@@ -424,44 +449,50 @@ struct msm_cam_server_mctl_inst {
 	uint32_t handle;
 };
 
+/* HTC_START - for HW VCM work-around */
 struct cam_vcm_wa_ctrl {
 	void (*cam_do_vcm_on_cb)(void);
 	void (*cam_do_vcm_off_cb)(void);
 	void (*vcm_vreg_off)(void);
 	void (*actuator_power_off_af)(void);
 };
+/* HTC_END */
 
+/* abstract camera server device for all sensor successfully probed*/
 struct msm_cam_server_dev {
 
-	
+	/* config node device*/
 	struct platform_device *server_pdev;
-	
+	/* server node v4l2 device */
 	struct v4l2_device v4l2_dev;
 	struct video_device *video_dev;
 	struct media_device media_dev;
 
-	
+	/* info of sensors successfully probed*/
 	struct msm_camera_info camera_info;
-	
+	/* info of configs successfully created*/
 	struct msm_cam_config_dev_info config_info;
-	
+	/* active working camera device - only one allowed at this time*/
 	struct msm_cam_v4l2_device *pcam_active[MAX_NUM_ACTIVE_CAMERA];
-	
+	/* number of camera devices opened*/
 	atomic_t number_pcam_active;
 	struct v4l2_queue_util server_command_queue;
+	/* This queue used by the config thread to send responses back to the
+	 * control thread.  It is accessed only from a process context.
+	 */
 	struct msm_cam_server_queue server_queue[MAX_NUM_ACTIVE_CAMERA];
 	uint32_t server_evt_id;
 	struct msm_cam_server_mctl_inst mctl[MAX_NUM_ACTIVE_CAMERA];
 	uint32_t mctl_handle_cnt;
 
 	int use_count;
-	
+	/* all the registered ISP subdevice*/
 	struct msm_isp_ops *isp_subdev[MSM_MAX_CAMERA_CONFIGS];
-	
+	/* info of MCTL nodes successfully probed*/
 	struct msm_mctl_node_info mctl_node_info;
 	struct mutex server_lock;
 	struct mutex server_queue_lock;
-	
+	/*v4l2 subdevs*/
 	struct v4l2_subdev *csiphy_device[MAX_NUM_CSIPHY_DEV];
 	struct v4l2_subdev *csid_device[MAX_NUM_CSID_DEV];
 	struct v4l2_subdev *csic_device[MAX_NUM_CSIC_DEV];
@@ -474,14 +505,21 @@ struct msm_cam_server_dev {
 	struct msm_cam_media_controller *rdi0_mctl;
 	struct msm_cam_media_controller *pix0_mctl;
 
+/* HTC_START sungfeng 20120903 */
 #ifdef CONFIG_PERFLOCK
 	struct perf_lock cam_perf_lock;
 #endif
+/* HTC_END */
 };
 
+/* camera server related functions */
 
 
+/* ISP related functions */
 void msm_isp_vfe_dev_init(struct v4l2_subdev *vd);
+/*
+int msm_isp_register(struct msm_cam_v4l2_device *pcam);
+*/
 int msm_isp_register(struct msm_cam_server_dev *psvr);
 void msm_isp_unregister(struct msm_cam_server_dev *psvr);
 int msm_sensor_register(struct v4l2_subdev *);
@@ -502,8 +540,11 @@ int msm_mctl_reserve_free_buf(struct msm_cam_media_controller *pmctl,
 int msm_mctl_release_free_buf(struct msm_cam_media_controller *pmctl,
 				struct msm_cam_v4l2_dev_inst *pcam_inst,
 				int path, struct msm_free_buf *free_buf);
+/* HTC_START ben 20111111 HDR */
 int msm_mctl_return_free_buf(struct msm_cam_media_controller *pmctl,
 				int path, struct msm_free_buf *free_buf);
+/* HTC_END ben 20111111 HDR */
+/*Memory(PMEM) functions*/
 int msm_register_pmem(struct hlist_head *ptype, void __user *arg,
 				struct ion_client *client);
 int msm_pmem_table_del(struct hlist_head *ptype, void __user *arg,
@@ -576,9 +617,11 @@ int msm_mctl_pp_release_free_frame(
 int msm_mctl_pp_reserve_free_frame(
 	struct msm_cam_media_controller *p_mctl,
 	void __user *arg);
+//HTC_START chris 20120305
 int msm_mctl_pp_return_free_frame(
 	struct msm_cam_media_controller *p_mctl,
 	void __user *arg);
+//HTC_END chris 20120305
 int msm_mctl_set_pp_key(struct msm_cam_media_controller *p_mctl,
 				void __user *arg);
 int msm_mctl_pp_done(
@@ -601,9 +644,9 @@ void msm_release_ion_client(struct kref *ref);
 int msm_cam_register_subdev_node(struct v4l2_subdev *sd,
 			enum msm_cam_subdev_type sdev_type, uint8_t index);
 
-#if 1	
+#if 1	/* HTC_START  sync the previous project */
 int msm_rawchip_attr_node(void);
-#endif	
+#endif	/* HTC_END */
 uint32_t msm_camera_get_mctl_handle(void);
 struct msm_cam_media_controller *msm_camera_get_mctl(uint32_t handle);
 void msm_camera_free_mctl(uint32_t handle);
@@ -618,6 +661,6 @@ int msm_cam_server_open_mctl_session(struct msm_cam_v4l2_device *pcam,
 	int *p_active);
 int msm_cam_server_close_mctl_session(struct msm_cam_v4l2_device *pcam);
 
-#endif 
+#endif /* __KERNEL__ */
 
-#endif 
+#endif /* _MSM_H */

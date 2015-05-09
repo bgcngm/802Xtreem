@@ -34,7 +34,9 @@
 #include <net/ip_fib.h>
 #include <net/fib_rules.h>
 
+// ** [Start] HTC add iptables debug log
 #define FIB_RULE_DEBUG 1
+// ** [End] HTC add iptables debug log
 
 struct fib4_rule {
 	struct fib_rule		common;
@@ -254,9 +256,9 @@ nla_put_failure:
 
 static size_t fib4_rule_nlmsg_payload(struct fib_rule *rule)
 {
-	return nla_total_size(4) 
-	       + nla_total_size(4) 
-	       + nla_total_size(4); 
+	return nla_total_size(4) /* dst */
+	       + nla_total_size(4) /* src */
+	       + nla_total_size(4); /* flow */
 }
 
 static void fib4_rule_flush_cache(struct fib_rules_ops *ops)
@@ -328,7 +330,7 @@ fail:
 #ifdef FIB_RULE_DEBUG
 	printk(KERN_DEBUG "[NET][IPV4][RULE] %s : fib_rules_unregister\n", __func__);
 #endif 
-	
+	/* also cleans all rules already added */
 	fib_rules_unregister(ops);
 	return err;
 }

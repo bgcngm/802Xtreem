@@ -35,7 +35,7 @@ static struct class *simlock_class;
 static const struct file_operations simlock_fops;
 
 struct msg_s {
-	int size; 	
+	int size; 	/* msg size, return value */
 	unsigned int unlock;
 	char code[CODE_SIZE];
 };

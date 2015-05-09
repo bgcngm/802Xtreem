@@ -28,7 +28,7 @@
 #define QSD_REG(x)
 #define QUP_REG(x) (x)
 
-#define QUP_CONFIG                    0x0000 
+#define QUP_CONFIG                    0x0000 /* N & NO_INPUT/NO_OUPUT bits */
 #define QUP_ERROR_FLAGS_EN            0x030C
 #define QUP_ERR_MASK                  0x3
 #define SPI_OUTPUT_FIFO_WORD_CNT      0x010C
@@ -67,12 +67,14 @@
 #define SPI_INPUT_FIFO                QSD_REG(0x0200) QUP_REG(0x0218)
 #define SPI_STATE                     QSD_REG(SPI_OPERATIONAL) QUP_REG(0x0004)
 
+/* SPI_CONFIG fields */
 #define SPI_CFG_INPUT_FIRST           0x00000200
 #define SPI_NO_INPUT                  0x00000080
 #define SPI_NO_OUTPUT                 0x00000040
 #define SPI_CFG_LOOPBACK              0x00000100
 #define SPI_CFG_N                     0x0000001F
 
+/* SPI_IO_CONTROL fields */
 #define SPI_IO_C_FORCE_CS             0x00000800
 #define SPI_IO_C_CLK_IDLE_HIGH        0x00000400
 #define SPI_IO_C_MX_CS_MODE           0x00000100
@@ -82,6 +84,7 @@
 #define SPI_IO_C_TRISTATE_CS          0x00000002
 #define SPI_IO_C_NO_TRI_STATE         0x00000001
 
+/* SPI_IO_MODES fields */
 #define SPI_IO_M_OUTPUT_BIT_SHIFT_EN  QSD_REG(0x00004000) QUP_REG(0x00010000)
 #define SPI_IO_M_PACK_EN              QSD_REG(0x00002000) QUP_REG(0x00008000)
 #define SPI_IO_M_UNPACK_EN            QSD_REG(0x00001000) QUP_REG(0x00004000)
@@ -99,6 +102,7 @@
 #define OUTPUT_MODE_SHIFT             QSD_REG(8)          QUP_REG(10)
 #define INPUT_MODE_SHIFT              QSD_REG(10)         QUP_REG(12)
 
+/* SPI_OPERATIONAL fields */
 #define SPI_OP_MAX_INPUT_DONE_FLAG    0x00000800
 #define SPI_OP_MAX_OUTPUT_DONE_FLAG   0x00000400
 #define SPI_OP_INPUT_SERVICE_FLAG     0x00000200
@@ -117,6 +121,7 @@ enum msm_spi_state {
 	SPI_OP_STATE_PAUSE = 0x00000003,
 };
 
+/* SPI_ERROR_FLAGS fields */
 #define SPI_ERR_OUTPUT_OVER_RUN_ERR   0x00000020
 #define SPI_ERR_INPUT_UNDER_RUN_ERR   0x00000010
 #define SPI_ERR_OUTPUT_UNDER_RUN_ERR  0x00000008
@@ -124,6 +129,8 @@ enum msm_spi_state {
 #define SPI_ERR_CLK_OVER_RUN_ERR      0x00000002
 #define SPI_ERR_CLK_UNDER_RUN_ERR     0x00000001
 
+/* We don't allow transactions larger than 4K-64 or 64K-64 due to
+   mx_input/output_cnt register size */
 #define SPI_MAX_TRANSFERS             QSD_REG(0xFC0) QUP_REG(0xFC0)
 #define SPI_MAX_LEN                   (SPI_MAX_TRANSFERS * dd->bytes_per_word)
 
@@ -131,10 +138,14 @@ enum msm_spi_state {
 #define SPI_SUPPORTED_MODES  (SPI_CPOL | SPI_CPHA | SPI_CS_HIGH | SPI_LOOP)
 
 #define SPI_DELAY_THRESHOLD           1
+/* Default timeout is 10 milliseconds */
 #define SPI_DEFAULT_TIMEOUT           10
+/* 250 microseconds */
 #define SPI_TRYLOCK_DELAY             250
 
+/* Data Mover burst size */
 #define DM_BURST_SIZE                 16
+/* Data Mover commands should be aligned to 64 bit(8 bytes) */
 #define DM_BYTE_ALIGN                 8
 
 #define SPI_QUP_VERSION_NONE      0x0
@@ -154,27 +165,32 @@ static char const * const spi_cs_rsrcs[] = {
 };
 
 enum msm_spi_mode {
-	SPI_FIFO_MODE  = 0x0,  
-	SPI_BLOCK_MODE = 0x1,  
-	SPI_DMOV_MODE  = 0x2,  
-	SPI_BAM_MODE   = 0x3,  
-	SPI_MODE_NONE  = 0xFF, 
+	SPI_FIFO_MODE  = 0x0,  /* 00 */
+	SPI_BLOCK_MODE = 0x1,  /* 01 */
+	SPI_DMOV_MODE  = 0x2,  /* 10 */
+	SPI_BAM_MODE   = 0x3,  /* 11 */
+	SPI_MODE_NONE  = 0xFF, /* invalid value */
 };
 
+/* Structure for SPI CS GPIOs */
 struct spi_cs_gpio {
 	int  gpio_num;
 	bool valid;
 };
 
+/* Structures for Data Mover */
 struct spi_dmov_cmd {
-	dmov_box box;      
-	dmov_s single_pad; 
+	dmov_box box;      /* data aligned to max(dm_burst_size, block_size)
+							   (<= fifo_size) */
+	dmov_s single_pad; /* data unaligned to max(dm_burst_size, block_size)
+			      padded to fit */
 	dma_addr_t cmd_ptr;
 };
 
 static struct pm_qos_request qos_req_list;
 
 #ifdef CONFIG_DEBUG_FS
+/* Used to create debugfs entries */
 static const struct {
 	const char *name;
 	mode_t mode;
@@ -250,17 +266,17 @@ struct msm_spi {
 	bool                     suspended;
 	bool                     transfer_pending;
 	wait_queue_head_t        continue_suspend;
-	
+	/* DMA data */
 	enum msm_spi_mode        mode;
 	bool                     use_dma;
 	int                      tx_dma_chan;
 	int                      tx_dma_crci;
 	int                      rx_dma_chan;
 	int                      rx_dma_crci;
-	
+	/* Data Mover Commands */
 	struct spi_dmov_cmd      *tx_dmov_cmd;
 	struct spi_dmov_cmd      *rx_dmov_cmd;
-	
+	/* Physical address of the tx dmov box command */
 	dma_addr_t               tx_dmov_cmd_dma;
 	dma_addr_t               rx_dmov_cmd_dma;
 	struct msm_dmov_cmd      tx_hdr;
@@ -270,13 +286,13 @@ struct msm_spi {
 	int                      burst_size;
 	atomic_t                 rx_irq_called;
 	atomic_t                 tx_irq_called;
-	
+	/* Used to pad messages unaligned to block size */
 	u8                       *tx_padding;
 	dma_addr_t               tx_padding_dma;
 	u8                       *rx_padding;
 	dma_addr_t               rx_padding_dma;
 	u32                      unaligned_len;
-	
+	/* DMA statistics */
 	int                      stat_dmov_tx_err;
 	int                      stat_dmov_rx_err;
 	int                      stat_rx;
@@ -287,27 +303,28 @@ struct msm_spi {
 	struct dentry *dent_spi;
 	struct dentry *debugfs_spi_regs[ARRAY_SIZE(debugfs_spi_regs)];
 #endif
-	struct msm_spi_platform_data *pdata; 
-	
+	struct msm_spi_platform_data *pdata; /* Platform data */
+	/* Remote Spinlock Data */
 	bool                     use_rlock;
 	remote_mutex_t           r_lock;
 	uint32_t                 pm_lat;
-	
+	/* When set indicates multiple transfers in a single message */
 	bool                     multi_xfr;
 	bool                     done;
 	u32                      cur_msg_len;
-	
+	/* Used in FIFO mode to keep track of the transfer being processed */
 	struct spi_transfer     *cur_tx_transfer;
 	struct spi_transfer     *cur_rx_transfer;
-	
+	/* Temporary buffer used for WR-WR or WR-RD transfers */
 	u8                      *temp_buf;
-	
+	/* GPIO pin numbers for SPI clk, miso and mosi */
 	int                      spi_gpios[ARRAY_SIZE(spi_rsrcs)];
-	
+	/* SPI CS GPIOs for each slave */
 	struct spi_cs_gpio       cs_gpios[ARRAY_SIZE(spi_cs_rsrcs)];
 	int                      qup_ver;
 };
 
+/* Forward declaration */
 static irqreturn_t msm_spi_input_irq(int irq, void *dev_id);
 static irqreturn_t msm_spi_output_irq(int irq, void *dev_id);
 static irqreturn_t msm_spi_error_irq(int irq, void *dev_id);
@@ -390,6 +407,7 @@ static inline void msm_spi_clear_error_flags(struct msm_spi *dd)
 }
 
 #else
+/* In QUP the same interrupt line is used for input, output and error*/
 static inline int msm_spi_request_irq(struct msm_spi *dd,
 				struct platform_device *pdev,
 				struct spi_master *master)
@@ -424,6 +442,7 @@ static inline void msm_spi_ack_clk_err(struct msm_spi *dd)
 
 static inline void msm_spi_add_configs(struct msm_spi *dd, u32 *config, int n);
 
+/* QUP has no_input, no_output, and N bits at QUP_CONFIG */
 static inline void msm_spi_set_qup_config(struct msm_spi *dd, int bpw)
 {
 	u32 qup_config = readl_relaxed(dd->base + QUP_CONFIG);

@@ -33,6 +33,8 @@
 
 int __init m7china_init_keypad(void);
 
+/* Platform dependent definition */
+/*base on ""Project_M7#DCG_DTU_DUG_XB1_GPIO_Table_V04_20121212_1400(2).xls*/
 #define LCD_TE			GPIO(0)
 #define RAW_RST		GPIO(1)
 #define CAM2_RSTz		GPIO(2)
@@ -183,6 +185,7 @@ int __init m7china_init_keypad(void);
 #define TP_RSTz		PMGPIO(43)
 #define LCD_ID1		PMGPIO(44)
 
+/* Macros assume PMIC GPIOs and MPPs start at 1 */
 #define PM8921_GPIO_BASE		NR_GPIO_IRQS
 #define PM8921_GPIO_PM_TO_SYS(pm_gpio)	(pm_gpio - 1 + PM8921_GPIO_BASE)
 #define PM8921_MPP_BASE			(PM8921_GPIO_BASE + PM8921_NR_GPIOS)
@@ -202,6 +205,7 @@ int __init m7china_init_keypad(void);
 #define PM2QSC_PWR_EN		PM8921_GPIO_PM_TO_SYS(8)
 #define PM2QSC_KEYPADPWR	PM8921_GPIO_PM_TO_SYS(16)
 
+/* extra gpio for 1080p panel */
 #define BL_HW_EN_MPP_8		PM8921_MPP_PM_TO_SYS(8)
 #define LCM_N5V_EN_MPP_9	PM8921_MPP_PM_TO_SYS(9)
 #define LCM_P5V_EN_MPP_10	PM8921_MPP_PM_TO_SYS(10)
@@ -235,9 +239,11 @@ void m7china_init_mmc(void);
 int m7china_wifi_init(void);
 void m7china_init_gpiomux(void);
 void m7cdtu_init_pmic(void);
+/* HTC_START - for HW VCM work-around */
 void m7cdtu_init_pmic_register_cam_cb(void *cam_vcm_on_cb, void *cam_vcm_off_cb);
+/* HTC_END */
 
-#if 1	
+#if 1	// for pre-evt no camera
 extern struct platform_device m7china_msm_rawchip_device;
 #endif
 void m7china_init_cam(void);

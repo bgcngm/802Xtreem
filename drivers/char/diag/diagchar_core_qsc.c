@@ -53,7 +53,7 @@ static int diagcharqsc_close(struct inode *inode, struct file *file)
 
 	if (driver) {
 #ifdef CONFIG_DIAG_OVER_USB
-		
+		/* If the SD logging process exits, change logging to USB mode */
 		if (driver->qsc_logging_process_id == current->tgid) {
 			driver->logging_mode = USB_MODE;
 			diagfwd_connect();
@@ -63,12 +63,12 @@ static int diagcharqsc_close(struct inode *inode, struct file *file)
 			diagfwd_connect_bridge(0);
 #endif
 		}
-#endif 
+#endif /* DIAG over USB */
 
 		mutex_lock(&driver->diagcharqsc_mutex);
 
 		driver->ref_count--;
-		
+		/* On Client exit, try to destroy all 3 pools */
 		diagmem_exit(driver, POOL_TYPE_COPY);
 		diagmem_exit(driver, POOL_TYPE_HDLC);
 		diagmem_exit(driver, POOL_TYPE_WRITE_STRUCT);
@@ -103,9 +103,9 @@ static long diagcharqsc_ioctl(struct file *filp,
 		mutex_unlock(&driver->diagcharqsc_mutex);
 		if (driver->logging_mode == MEMORY_DEVICE_MODE) {
 			DIAG_INFO("diagcharqsc_ioctl enable\n");
-			
+			/* diagfwd_disconnect(); */
 #ifdef CONFIG_DIAGFWD_BRIDGE_CODE
-			
+			/* FIXME: Dyson porting */
 			#if 0
 			diagfwd_cancel_hsic();
 			#endif
@@ -114,9 +114,9 @@ static long diagcharqsc_ioctl(struct file *filp,
 			driver->qxdm2sd_drop = 0;
 		} else if (driver->logging_mode == USB_MODE) {
 			DIAG_INFO("diagcharqsc_ioctl disable\n");
-			
+			/* diagfwd_connect(); */
 #ifdef CONFIG_DIAGFWD_BRIDGE_CODE
-			
+			/* FIXME: Dyson porting */
 			#if 0
 			diag_clear_hsic_tbl();
 			diagfwd_cancel_hsic();
@@ -183,24 +183,24 @@ static int diagcharqsc_read(struct file *file, char __user *buf, size_t count,
 
 	if ((driver->qscdata_ready[index] & USER_SPACE_DATA_TYPE) && (driver->
 				logging_mode == MEMORY_DEVICE_MODE)) {
-		
+		/*Copy the type of data being passed*/
 		data_type = driver->data_ready[index] & USER_SPACE_DATA_TYPE;
 		COPY_USER_SPACE_OR_EXIT(buf, data_type, 4);
-		
+		/* place holder for number of data field */
 		ret += 4;
 
 		if (driver->in_busy_smux == 1) {
 			num_data++;
 
 			#if 0
-			
+			/* Copy the negative  token of data being passed */
 			COPY_USER_SPACE_OR_EXIT(buf+ret, mdm_token, 4);
 			#endif
 
-			
+			/* Copy the length of data being passed */
 			COPY_USER_SPACE_OR_EXIT(buf+ret,
 					(driver->write_ptr_mdm->length), 4);
-			
+			/* Copy the actual data being passed */
 			COPY_USER_SPACE_OR_EXIT(buf+ret,
 					*(driver->buf_in_smux),
 					driver->write_ptr_mdm->length);
@@ -208,7 +208,7 @@ static int diagcharqsc_read(struct file *file, char __user *buf, size_t count,
 			driver->in_busy_smux = 0;
 		}
 
-		
+		/* copy number of data fields */
 		COPY_USER_SPACE_OR_EXIT(buf+4, num_data, 4);
 		ret -= 4;
 
@@ -216,6 +216,8 @@ static int diagcharqsc_read(struct file *file, char __user *buf, size_t count,
 
 		goto exit;
 	} else if (driver->qscdata_ready[index] & USER_SPACE_DATA_TYPE) {
+		/* In case, the thread wakes up and the logging mode is
+		   not memory device any more, the condition needs to be cleared */
 		driver->qscdata_ready[index] ^= USER_SPACE_DATA_TYPE;
 	} else if (driver->qscdata_ready[index] & USERMODE_DIAGFWD) {
 		data_type = USERMODE_DIAGFWD_LEGACY;
@@ -223,7 +225,7 @@ static int diagcharqsc_read(struct file *file, char __user *buf, size_t count,
 		COPY_USER_SPACE_OR_EXIT(buf, data_type, 4);
 
 		if (driver->in_busy_smux == 1) {
-			
+			/* Copy the actual data being passed */
 			COPY_USER_SPACE_OR_EXIT(buf+ret,
 					*(driver->buf_in_smux),
 					driver->write_ptr_mdm->length);
@@ -288,19 +290,19 @@ static int diagcharqsc_write(struct file *file, const char __user *buf,
 #ifdef CONFIG_DIAG_OVER_USB
 	if (((driver->logging_mode == USB_MODE) && (!driver->usb_connected)) ||
 			(driver->logging_mode == NO_LOGGING_MODE)) {
-		
+		/*Drop the diag payload */
 		return -EIO;
 	}
-#endif 
+#endif /* DIAG over USB */
 
-	
+	/* Get the packet type F3/log/event/Pkt response */
 	err = copy_from_user((&pkt_type), buf, 4);
-	
+	/*First 4 bytes indicate the type of payload - ignore these */
 	payload_size = count - 4;
 	if (pkt_type == USER_SPACE_DATA_TYPE) {
 		err = copy_from_user(driver->user_space_qsc_data, buf + 4,
 							 payload_size);
-		
+		/* Check masks for On-Device logging */
 		if (driver->mask_check) {
 			if (!mask_request_validate(driver->user_space_qsc_data)) {
 				DIAG_ERR("mask request Invalid ..cannot send to modem \n");

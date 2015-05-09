@@ -139,7 +139,7 @@ static int msm_pmem_table_add(struct hlist_head *ptype,
 	if (IS_ERR_OR_NULL(region->handle))
 		goto out1;
 	if (ion_map_iommu(client, region->handle, CAMERA_DOMAIN, GEN_POOL,
-				  SZ_4K, 0, &paddr, &len, 0 , 0) < 0)
+				  SZ_4K, 0, &paddr, &len, 0 /* UNCACHED */, 0) < 0)
 		goto out2;
 
 	rc = ion_handle_get_flags(client, region->handle, &ionflag);
@@ -225,9 +225,11 @@ static int __msm_register_pmem(struct hlist_head *ptype,
 	case MSM_PMEM_IHIST:
 	case MSM_PMEM_SKIN:
 	case MSM_PMEM_AEC_AWB:
+//QCT - BAYER STATS - MB
 	case MSM_PMEM_BAYER_GRID:
 	case MSM_PMEM_BAYER_FOCUS:
 	case MSM_PMEM_BAYER_HIST:
+//QCT - BAYER STATS - MB
 		rc = msm_pmem_table_add(ptype, pinfo, client);
 		break;
 
@@ -255,9 +257,11 @@ static int __msm_pmem_table_del(struct hlist_head *ptype,
 	case MSM_PMEM_IHIST:
 	case MSM_PMEM_SKIN:
 	case MSM_PMEM_AEC_AWB:
+//QCT - BAYER STATS - MB
 	case MSM_PMEM_BAYER_GRID:
 	case MSM_PMEM_BAYER_FOCUS:
 	case MSM_PMEM_BAYER_HIST:
+//QCT - BAYER STATS - ME
 		hlist_for_each_entry_safe(region, node, n,
 				ptype, list) {
 
@@ -285,6 +289,7 @@ static int __msm_pmem_table_del(struct hlist_head *ptype,
 	return rc;
 }
 
+/* return of 0 means failure */
 uint8_t msm_pmem_region_lookup(struct hlist_head *ptype,
 	int pmem_type, struct msm_pmem_region *reg, uint8_t maxcount)
 {
@@ -398,6 +403,8 @@ unsigned long msm_pmem_stats_ptov_lookup(
 	hlist_for_each_entry_safe(region, node, n,
 	&mctl->stats_info.pmem_stats_list, list) {
 		if (addr == region->paddr && region->info.active) {
+			/* offset since we could pass vaddr inside a
+			 * registered pmem buffer */
 			*fd = region->info.fd;
 			region->info.active = 0;
 			return (unsigned long)(region->info.vaddr);
@@ -420,6 +427,8 @@ unsigned long msm_pmem_stats_ptov_lookup_2(
 	hlist_for_each_entry_safe(region, node, n,
 	&mctl->stats_info.pmem_stats_list, list) {
 		if (addr == region->paddr) {
+			/* offset since we could pass vaddr inside a
+			 * registered pmem buffer */
 			*fd = region->info.fd;
 			return (unsigned long)(region->vaddr);
 		}

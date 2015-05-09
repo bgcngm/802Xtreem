@@ -46,6 +46,6 @@ int _gpio_debug_int_type_get(void *data, u64 *val);
 int msm_dump_gpios(struct seq_file *m, int curr_len, char *gpio_buffer);
 #else
 int msm_dump_gpios(struct seq_file *m, int curr_len, char *gpio_buffer) {}
-#endif 
+#endif /* #ifdef CONFIG_GPIO_MSM_V2 */
 
 #endif

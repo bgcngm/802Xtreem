@@ -26,28 +26,38 @@
 #include "q6usm.h"
 #include "usfcdev.h"
 
+/* The driver version*/
 #define DRV_VERSION "1.4.0"
 #define USF_VERSION_ID 0x0140
 
-#define USF_TIMEOUT_JIFFIES (1*HZ) 
+/* Standard timeout in the asynchronous ops */
+#define USF_TIMEOUT_JIFFIES (1*HZ) /* 1 sec */
 
+/* Undefined USF device */
 #define USF_UNDEF_DEV_ID 0xffff
 
+/* RX memory mapping flag */
 #define USF_VM_WRITE 2
 
+/* Number of events, copied from the user space to kernel one */
 #define USF_EVENTS_PORTION_SIZE 20
 
+/* Indexes in range definitions */
 #define MIN_IND 0
 #define MAX_IND 1
 
+/* The coordinates indexes */
 #define X_IND 0
 #define Y_IND 1
 #define Z_IND 2
 
+/* Place for opreation result, received from QDSP6 */
 #define APR_RESULT_IND 1
 
+/* Place for US detection result, received from QDSP6 */
 #define APR_US_DETECT_RESULT_IND 0
 
+/* The driver states */
 enum usf_state_type {
 	USF_IDLE_STATE,
 	USF_OPENED_STATE,
@@ -56,6 +66,7 @@ enum usf_state_type {
 	USF_ERROR_STATE
 };
 
+/* The US detection status upon FW/HW based US detection results */
 enum usf_us_detect_type {
 	USF_US_DETECT_UNDEF,
 	USF_US_DETECT_YES,
@@ -63,61 +74,61 @@ enum usf_us_detect_type {
 };
 
 struct usf_xx_type {
-	
+	/* Name of the client - event calculator */
 	char client_name[USF_MAX_CLIENT_NAME_SIZE];
-	
+	/* The driver state in TX or RX direction */
 	enum usf_state_type usf_state;
-	
+	/* wait for q6 events mechanism */
 	wait_queue_head_t wait;
-	
+	/* IF with q6usm info */
 	struct us_client *usc;
-	
+	/* Q6:USM' Encoder/decoder configuration */
 	struct us_encdec_cfg encdec_cfg;
-	
+	/* Shared buffer (with Q6:USM) size */
 	uint32_t buffer_size;
-	
+	/* Number of the shared buffers (with Q6:USM) */
 	uint32_t buffer_count;
-	
+	/* Shared memory (Cyclic buffer with 1 gap) control */
 	uint32_t new_region;
 	uint32_t prev_region;
-	
+	/* Q6:USM's events handler */
 	void (*cb)(uint32_t, uint32_t, uint32_t *, void *);
-	
+	/* US detection result */
 	enum usf_us_detect_type us_detect_type;
-	
+	/* User's update info isn't acceptable */
 	u8 user_upd_info_na;
 };
 
 struct usf_type {
-	
+	/* TX device component configuration & control */
 	struct usf_xx_type usf_tx;
-	
+	/* RX device component configuration & control */
 	struct usf_xx_type usf_rx;
-	
-	
+	/* Index into the opened device container */
+	/* To prevent mutual usage of the same device */
 	uint16_t dev_ind;
-	
+	/* Event types, supported by device */
 	uint16_t event_types;
-	
+	/*  The input devices are "input" module registered clients */
 	struct input_dev *input_ifs[USF_MAX_EVENT_IND];
-	
+	/*  The event source */
 	int event_src;
-	
+	/* Bitmap of types of events, conflicting to USF's ones */
 	uint16_t conflicting_event_types;
-	
+	/* Bitmap of types of events from devs, conflicting with USF */
 	uint16_t conflicting_event_filters;
 };
 
 struct usf_input_dev_type {
-	
+	/* Input event type, supported by the input device */
 	uint16_t event_type;
-	
+	/* Input device name */
 	const char *input_dev_name;
-	
+	/* Input device registration function */
 	int (*prepare_dev)(uint16_t, struct usf_type *,
 			    struct us_input_info_type *,
 			   const char *);
-	
+	/* Input event notification function */
 	void (*notify_event)(struct usf_type *,
 			     uint16_t,
 			     struct usf_event_type *
@@ -125,14 +136,17 @@ struct usf_input_dev_type {
 };
 
 
+/* The MAX number of the supported devices */
 #define MAX_DEVS_NUMBER	1
 
+/* The opened devices container */
 static const int s_event_src_map[] = {
-	BTN_TOOL_PEN, 
-	0,            
-	0,            
+	BTN_TOOL_PEN, /* US_INPUT_SRC_PEN*/
+	0,            /* US_INPUT_SRC_FINGER */
+	0,            /* US_INPUT_SRC_UNDEF */
 };
 
+/* The opened devices container */
 static int s_opened_devs[MAX_DEVS_NUMBER];
 
 #define USF_NAME_PREFIX "usf_"
@@ -146,7 +160,7 @@ static struct input_dev *allocate_dev(uint16_t ind, const char *name)
 	if (in_dev == NULL) {
 		pr_err("%s: input_allocate_device() failed\n", __func__);
 	} else {
-		
+		/* Common part configuration */
 		in_dev->name = name;
 		in_dev->phys = NULL;
 		in_dev->id.bustype = BUS_HOST;
@@ -235,7 +249,7 @@ static int prepare_keyboard_input_device(
 
 	usf_info->input_ifs[ind] = in_dev;
 	in_dev->evbit[0] |= BIT_MASK(EV_KEY);
-	
+	/* All keys are permitted */
 	memset(in_dev->keybit, 0xff, sizeof(in_dev->keybit));
 
 	return 0;
@@ -455,13 +469,13 @@ static int config_xx(struct usf_xx_type *usf_xx, struct us_xx_info_type *config)
 		return -EINVAL;
 	}
 
-	
+	/* q6usm allocation & configuration */
 	usf_xx->buffer_size = config->buf_size;
 	usf_xx->buffer_count = config->buf_num;
 	usf_xx->encdec_cfg.cfg_common.bits_per_sample =
 				config->bits_per_sample;
 	usf_xx->encdec_cfg.cfg_common.sample_rate = config->sample_rate;
-	
+	/* AFE port e.g. AFE_PORT_ID_SLIMBUS_MULTI_CHAN_1_RX */
 	usf_xx->encdec_cfg.cfg_common.dev_id = config->dev_id;
 
 	usf_xx->encdec_cfg.cfg_common.ch_cfg = config->port_cnt;
@@ -475,9 +489,9 @@ static int config_xx(struct usf_xx_type *usf_xx, struct us_xx_info_type *config)
 
 	usf_xx->encdec_cfg.format_id = config->stream_format;
 	usf_xx->encdec_cfg.params_size = config->params_data_size;
-	usf_xx->user_upd_info_na = 1; 
+	usf_xx->user_upd_info_na = 1; /* it's used in US_GET_TX_UPDATE */
 
-	if (config->params_data_size > 0) { 
+	if (config->params_data_size > 0) { /* transparent data copy */
 		usf_xx->encdec_cfg.params = kzalloc(config->params_data_size,
 						    GFP_KERNEL);
 		if (usf_xx->encdec_cfg.params == NULL) {
@@ -630,8 +644,8 @@ static int register_input_device(struct usf_type *usf_info,
 					__func__,
 					s_usf_input_devs[ind].input_dev_name);
 			}
-		} 
-	} 
+		} /* supported event */
+	} /* event types loop */
 
 	ret = usf_register_conflicting_events(
 			input_info->conflicting_event_types);
@@ -679,15 +693,15 @@ static void handle_input_event(struct usf_type *usf_info,
 
 			if ((if_ind >= USF_MAX_EVENT_IND) ||
 			    (usf_info->input_ifs[if_ind] == NULL))
-				continue; 
+				continue; /* event isn't supported */
 
 			if (s_usf_input_devs[if_ind].notify_event)
 				(*s_usf_input_devs[if_ind].notify_event)(
 								usf_info,
 								if_ind,
 								p_event);
-		} 
-	} 
+		} /* loop in the portion */
+	} /* all events loop */
 }
 
 static int usf_start_tx(struct usf_xx_type *usf_xx)
@@ -697,7 +711,7 @@ static int usf_start_tx(struct usf_xx_type *usf_xx)
 	pr_debug("%s: tx: q6usm_run; rc=%d\n", __func__, rc);
 	if (!rc) {
 		if (usf_xx->buffer_count >= USM_MIN_BUF_CNT) {
-			
+			/* supply all buffers */
 			rc = q6usm_read(usf_xx->usc,
 					usf_xx->buffer_count);
 			pr_debug("%s: q6usm_read[%d]\n",
@@ -715,7 +729,7 @@ static int usf_start_tx(struct usf_xx_type *usf_xx)
 	}
 
 	return rc;
-} 
+} /* usf_start_tx */
 
 static int usf_start_rx(struct usf_xx_type *usf_xx)
 {
@@ -727,7 +741,7 @@ static int usf_start_rx(struct usf_xx_type *usf_xx)
 		usf_xx->usf_state = USF_WORK_STATE;
 
 	return rc;
-} 
+} /* usf_start_rx */
 
 static int usf_set_us_detection(struct usf_type *usf, unsigned long arg)
 {
@@ -797,7 +811,7 @@ static int usf_set_us_detection(struct usf_type *usf, unsigned long arg)
 		return rc;
 	}
 
-	
+	/* Get US detection result */
 	if (detect_info.detect_timeout == USF_INFINITIVE_TIMEOUT) {
 		rc = wait_event_interruptible(usf_xx->wait,
 						(usf_xx->us_detect_type !=
@@ -812,7 +826,7 @@ static int usf_set_us_detection(struct usf_type *usf, unsigned long arg)
 					(usf_xx->us_detect_type !=
 					 USF_US_DETECT_UNDEF),
 					timeout);
-	
+	/* In the case of timeout, "no US" is assumed */
 	if (rc < 0) {
 		pr_err("%s: Getting US detection failed rc[%d]\n",
 		       __func__, rc);
@@ -834,7 +848,7 @@ static int usf_set_us_detection(struct usf_type *usf, unsigned long arg)
 		kfree(p_usm_detect_info);
 
 	return rc;
-} 
+} /* usf_set_us_detection */
 
 static int usf_set_tx_info(struct usf_type *usf, unsigned long arg)
 {
@@ -898,7 +912,7 @@ static int usf_set_tx_info(struct usf_type *usf, unsigned long arg)
 		usf_xx->usf_state = USF_CONFIGURED_STATE;
 
 	return rc;
-} 
+} /* usf_set_tx_info */
 
 static int usf_set_rx_info(struct usf_type *usf, unsigned long arg)
 {
@@ -946,7 +960,7 @@ static int usf_set_rx_info(struct usf_type *usf, unsigned long arg)
 	}
 
 	return rc;
-} 
+} /* usf_set_rx_info */
 
 
 static int usf_get_tx_update(struct usf_type *usf, unsigned long arg)
@@ -970,7 +984,7 @@ static int usf_get_tx_update(struct usf_type *usf, unsigned long arg)
 				   upd_tx_info.event_counter,
 				   upd_tx_info.event);
 
-		
+		/* Release available regions */
 		rc = q6usm_read(usf_xx->usc,
 				upd_tx_info.free_region);
 		if (rc)
@@ -978,7 +992,7 @@ static int usf_get_tx_update(struct usf_type *usf, unsigned long arg)
 	} else
 		usf_xx->user_upd_info_na = 0;
 
-	
+	/* Get data ready regions */
 	if (upd_tx_info.timeout == USF_INFINITIVE_TIMEOUT) {
 		rc = wait_event_interruptible(usf_xx->wait,
 			   (usf_xx->prev_region !=
@@ -1053,7 +1067,7 @@ static int usf_get_tx_update(struct usf_type *usf, unsigned long arg)
 	}
 
 	return rc;
-} 
+} /* usf_get_tx_update */
 
 static int usf_set_rx_update(struct usf_xx_type *usf_xx, unsigned long arg)
 {
@@ -1067,7 +1081,7 @@ static int usf_set_rx_update(struct usf_xx_type *usf_xx, unsigned long arg)
 		return -EFAULT;
 	}
 
-	
+	/* Send available data regions */
 	if (upd_rx_info.ready_region !=
 	    usf_xx->buffer_count) {
 		rc = q6usm_write(
@@ -1077,7 +1091,7 @@ static int usf_set_rx_update(struct usf_xx_type *usf_xx, unsigned long arg)
 			return rc;
 	}
 
-	
+	/* Get free regions */
 	rc = wait_event_timeout(
 		usf_xx->wait,
 		!q6usm_is_write_buf_full(
@@ -1111,7 +1125,7 @@ static int usf_set_rx_update(struct usf_xx_type *usf_xx, unsigned long arg)
 	}
 
 	return rc;
-} 
+} /* usf_set_rx_update */
 
 static void usf_release_input(struct usf_type *usf)
 {
@@ -1130,7 +1144,7 @@ static void usf_release_input(struct usf_type *usf)
 			 __func__,
 			 s_usf_input_devs[ind].input_dev_name);
 	}
-} 
+} /* usf_release_input */
 
 static int usf_stop_tx(struct usf_type *usf)
 {
@@ -1140,7 +1154,7 @@ static int usf_stop_tx(struct usf_type *usf)
 	usf_disable(usf_xx);
 
 	return 0;
-} 
+} /* usf_stop_tx */
 
 static int usf_get_version(unsigned long arg)
 {
@@ -1154,7 +1168,7 @@ static int usf_get_version(unsigned long arg)
 		return -EFAULT;
 	}
 
-	
+	/* version_info.buf is pointer to place for the version string */
 	rc = copy_to_user(version_info.pbuf,
 			  DRV_VERSION,
 			  version_info.buf_size);
@@ -1174,7 +1188,7 @@ static int usf_get_version(unsigned long arg)
 	}
 
 	return rc;
-} 
+} /* usf_get_version */
 
 static long usf_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
@@ -1221,7 +1235,7 @@ static long usf_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		}
 
 		break;
-	} 
+	} /* US_SET_TX_INFO */
 
 	case US_SET_RX_INFO: {
 		usf_xx = &usf->usf_rx;
@@ -1235,7 +1249,7 @@ static long usf_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		}
 
 		break;
-	} 
+	} /* US_SET_RX_INFO */
 
 	case US_GET_TX_UPDATE: {
 		struct usf_xx_type *usf_xx = &usf->usf_tx;
@@ -1247,7 +1261,7 @@ static long usf_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			rc = -EBADFD;
 		}
 		break;
-	} 
+	} /* US_GET_TX_UPDATE */
 
 	case US_SET_RX_UPDATE: {
 		struct usf_xx_type *usf_xx = &usf->usf_rx;
@@ -1260,7 +1274,7 @@ static long usf_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			rc = -EBADFD;
 		}
 		break;
-	} 
+	} /* US_SET_RX_UPDATE */
 
 	case US_STOP_TX: {
 		usf_xx = &usf->usf_tx;
@@ -1273,7 +1287,7 @@ static long usf_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			return -EBADFD;
 		}
 		break;
-	} 
+	} /* US_STOP_TX */
 
 	case US_STOP_RX: {
 		usf_xx = &usf->usf_rx;
@@ -1286,7 +1300,7 @@ static long usf_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			return -EBADFD;
 		}
 		break;
-	} 
+	} /* US_STOP_RX */
 
 	case US_SET_DETECTION: {
 		struct usf_xx_type *usf_xx = &usf->usf_tx;
@@ -1299,12 +1313,12 @@ static long usf_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			rc = -EBADFD;
 		}
 		break;
-	} 
+	} /* US_SET_DETECTION */
 
 	case US_GET_VERSION: {
 		rc = usf_get_version(arg);
 		break;
-	} 
+	} /* US_GET_VERSION */
 
 	default:
 		pr_err("%s: unsupported IOCTL command [%d]\n",
@@ -1320,7 +1334,7 @@ static long usf_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		release_xx(usf_xx);
 
 	return rc;
-} 
+} /* usf_ioctl */
 
 static int usf_mmap(struct file *file, struct vm_area_struct *vms)
 {
@@ -1328,7 +1342,7 @@ static int usf_mmap(struct file *file, struct vm_area_struct *vms)
 	int dir = OUT;
 	struct usf_xx_type *usf_xx = &usf->usf_tx;
 
-	if (vms->vm_flags & USF_VM_WRITE) { 
+	if (vms->vm_flags & USF_VM_WRITE) { /* RX buf mapping */
 		dir = IN;
 		usf_xx = &usf->usf_rx;
 	}

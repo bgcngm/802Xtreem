@@ -88,9 +88,9 @@ struct msm_fb_data_type {
 	boolean sw_currently_refreshing;
 	boolean sw_refreshing_enable;
 	boolean hw_refresh;
-	
+	/* HTC_CSP_START */
 	boolean init_mipi_lcd;
-	
+	/* HTC_CSP_END */
 #ifdef CONFIG_FB_MSM_OVERLAY
 	int overlay_play_enable;
 #endif
@@ -103,7 +103,7 @@ struct msm_fb_data_type {
 	boolean pan_waiting;
 	struct completion pan_comp;
 
-	
+	/* vsync */
 	boolean use_mdp_vsync;
 	__u32 vsync_gpio;
 	__u32 total_lcd_lines;
@@ -224,7 +224,7 @@ struct msm_fb_data_type {
 	unsigned char *copy_splash_phys;
 	uint32 sec_mapped;
 	uint32 sec_active;
-	
+	/* For CABC dimming */
 	struct workqueue_struct *dimming_wq;
 	struct work_struct dimming_work;
 	struct timer_list dimming_update_timer;
@@ -274,4 +274,4 @@ int load_565rle_image(char *filename, bool bf_supported);
 #endif
 
 #define DEFAULT_BRIGHTNESS 143
-#endif 
+#endif /* MSM_FB_H */

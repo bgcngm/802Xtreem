@@ -23,6 +23,7 @@
 
 static int release_buf;
 
+/*************** queue helper ****************/
 inline void msm_gemini_q_init(char const *name, struct msm_gemini_q *q_p)
 {
 	GMN_DBG("%s:%d] %s\n", __func__, __LINE__, name);
@@ -101,7 +102,7 @@ inline int msm_gemini_q_in_buf(struct msm_gemini_q *q_p,
 
 inline int msm_gemini_q_wait(struct msm_gemini_q *q_p)
 {
-	int tm = MAX_SCHEDULE_TIMEOUT; 
+	int tm = MAX_SCHEDULE_TIMEOUT; /* 500ms */
 	int rc;
 
 	GMN_DBG("%s:%d] %s wait\n", __func__, __LINE__, q_p->name);
@@ -172,6 +173,7 @@ inline void msm_gemini_q_cleanup(struct msm_gemini_q *q_p)
 	q_p->unblck = 0;
 }
 
+/*************** event queue ****************/
 
 int msm_gemini_framedone_irq(struct msm_gemini_device *pgmn_dev,
 	struct msm_gemini_core_buf *buf_in)
@@ -258,6 +260,7 @@ void msm_gemini_err_irq(struct msm_gemini_device *pgmn_dev,
 	return;
 }
 
+/*************** output queue ****************/
 
 int msm_gemini_we_pingpong_irq(struct msm_gemini_device *pgmn_dev,
 	struct msm_gemini_core_buf *buf_in)
@@ -367,6 +370,7 @@ int msm_gemini_output_buf_enqueue(struct msm_gemini_device *pgmn_dev,
 	return 0;
 }
 
+/*************** input queue ****************/
 
 int msm_gemini_fe_pingpong_irq(struct msm_gemini_device *pgmn_dev,
 	struct msm_gemini_core_buf *buf_in)
@@ -542,7 +546,7 @@ int __msm_gemini_open(struct msm_gemini_device *pgmn_dev)
 
 	mutex_lock(&pgmn_dev->lock);
 	if (pgmn_dev->open_count) {
-		
+		/* only open once */
 		GMN_PR_ERR("%s:%d] busy\n", __func__, __LINE__);
 		mutex_unlock(&pgmn_dev->lock);
 		return -EBUSY;
@@ -699,12 +703,12 @@ int msm_gemini_start(struct msm_gemini_device *pgmn_dev, void * __user arg)
 		if (buf_out_free[i]) {
 			msm_gemini_core_we_buf_update(buf_out_free[i]);
 		} else if (i == 1) {
-			
+			/* set the pong to same address as ping */
 			buf_out_free[0]->y_len >>= 1;
 			buf_out_free[0]->y_buffer_addr +=
 				buf_out_free[0]->y_len;
 			msm_gemini_core_we_buf_update(buf_out_free[0]);
-			
+			/* since ping and pong are same buf release only once*/
 			release_buf = 0;
 		} else {
 			GMN_DBG("%s:%d] no output buffer\n",

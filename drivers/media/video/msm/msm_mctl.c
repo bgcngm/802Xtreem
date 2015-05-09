@@ -753,16 +753,19 @@ static int msm_mctl_open(struct msm_cam_media_controller *p_mctl,
 			goto sensor_sdev_failed;
 		}
 
-		if (s_ctrl->func_tbl->sensor_mode_init == NULL) {
+		if(s_ctrl->sensor_id_info->sensor_id != 0x4581){
+		
+			if (s_ctrl->func_tbl->sensor_mode_init == NULL) {
 				rc = -EFAULT;
 				goto sensor_sdev_failed;
-		}
+			}
 
-		s_ctrl->first_init=0;
-		rc = s_ctrl->func_tbl->sensor_mode_init (s_ctrl, MSM_SENSOR_REG_INIT, 0);
-		if (rc < 0) {
-			pr_err("%s: sensor_mode_init failed: %d\n", __func__, rc);
-			goto sensor_sdev_failed;
+			s_ctrl->first_init=0;
+			rc = s_ctrl->func_tbl->sensor_mode_init (s_ctrl, MSM_SENSOR_REG_INIT, 0);
+			if (rc < 0) {
+				pr_err("%s: sensor_mode_init failed: %d\n", __func__, rc);
+				goto sensor_sdev_failed;
+			}
 		}
 
 		

@@ -23,6 +23,7 @@
 #include <mach/rt5501.h>
 #include "../sound/soc/msm/msm-pcm-routing.h"
 #include "../sound/soc/msm/msm-compr-q6.h"
+//include "board-m7china.h"
 #if defined(CONFIG_MACH_M7_DCG)
 #include "board-m7dcg.h"
 #elif defined(CONFIG_MACH_M7_DTU)
@@ -118,6 +119,10 @@ int apq8064_get_24b_audio(void)
 	return 1;
 }
 
+/*
+* For M7 China sku, such as DUG/DCG/DTU, NXP tfa9887's power source has been
+* changed to PMIC L23 (VREG_SPK_1V8).
+*/
 static int m7china_aud_speaker_vdd_enable(char *power_vreg_name, unsigned volt)
 {
 	struct regulator *aud_spk_amp_power;
@@ -143,9 +148,9 @@ static int m7china_aud_speaker_vdd_enable(char *power_vreg_name, unsigned volt)
 	}
 
 #if defined(CONFIG_MACH_DLP_DTU) || defined(CONFIG_MACH_DLP_DUG) || defined(CONFIG_MACH_DLP_DWG)
-	if (system_rev >= XB) { 
-		
-	} else { 
+	if (system_rev >= XB) { /* VREG_SPK_1V8 use LVS2 for board after XB (include XB) */
+		/* LVS don't need to set voltage */
+	} else { /* VREG_SPK_1V8 use L23 for board before XB */
 		ret = regulator_set_voltage(aud_spk_amp_power, power_vreg_volt, power_vreg_volt);
 		if (ret < 0) {
 			pr_err("[AUD]%s: unable to set %s voltage to %d rc:%d\n",
@@ -205,10 +210,12 @@ static int __init m7china_audio_init(void)
 	htc_register_pcm_routing_ops(&rops);
 	htc_register_compr_q6_ops(&cops);
 	acoustic_register_ops(&acoustic);
+/* Due to this file is common for all 8064 china, we add flag to divide projects */
+/* DLP#China use differnet regulator source for VREG_SPK_1V8 */
 #if defined(CONFIG_MACH_DLP_DTU) || defined(CONFIG_MACH_DLP_DUG) || defined(CONFIG_MACH_DLP_DWG)
-	if (system_rev >= XB) 
+	if (system_rev >= XB) /* VREG_SPK_1V8 use LVS2 for board after XB (include XB) */
 		m7china_aud_speaker_vdd_enable("tfa9887_vdd_LVS2", 1800000);
-	else 
+	else /* VREG_SPK_1V8 use L23 for board before XB */
 		m7china_aud_speaker_vdd_enable("tfa9887_vdd_L23", 1800000);
 #else
 	m7china_aud_speaker_vdd_enable("tfa9887_vdd", 1800000);

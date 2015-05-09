@@ -86,16 +86,20 @@ int32_t msm_camera_i2c_rxdata(struct msm_camera_i2c_client *client,
 
 int32_t msm_camera_i2c_txdata(struct msm_camera_i2c_client *client,
 	unsigned char *txdata, int length);
+// HTC_START
 int32_t msm_camera_i2c_read_b(struct msm_camera_i2c_client *client,
 	uint16_t addr, uint16_t *data);
+// HTC_END
 int32_t msm_camera_i2c_read(struct msm_camera_i2c_client *client,
 	uint16_t addr, uint16_t *data,
 	enum msm_camera_i2c_data_type data_type);
 
 int32_t msm_camera_i2c_read_seq(struct msm_camera_i2c_client *client,
 	uint16_t addr, uint8_t *data, uint16_t num_byte);
+// HTC_START
 int32_t msm_camera_i2c_write_b(struct msm_camera_i2c_client *client,
 	uint16_t addr, uint16_t data );
+// HTC_END
 int32_t msm_camera_i2c_write(struct msm_camera_i2c_client *client,
 	uint16_t addr, uint16_t data,
 	enum msm_camera_i2c_data_type data_type);
@@ -130,8 +134,12 @@ int32_t msm_sensor_write_enum_conf_array(struct msm_camera_i2c_client *client,
 
 int32_t msm_sensor_write_all_conf_array(struct msm_camera_i2c_client *client,
 	struct msm_camera_i2c_conf_array *array, uint16_t size);
+//HTC_START  20121005 Horng add for RUMBAS autorator special case
 int32_t msm_camera_i2c_read_seq_rumbas(struct msm_camera_i2c_client *client,
 	uint16_t addr, uint8_t *data, uint16_t num_byte);
+//HTC_END
+// HTC_START 20121112 mike.cy add for custom Tx
 int32_t msm_camera_i2c_txdata_rumbas(struct msm_camera_i2c_client *client,
 	unsigned char *txdata, int length);
+// HTC_END
 #endif

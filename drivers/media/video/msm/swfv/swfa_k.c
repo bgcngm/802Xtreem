@@ -55,7 +55,7 @@ int swfa_FeatureAnalysis(uint8_t* pCurBuffer, int nImgWidth, int nImgHeight, int
 		return 0;
 	}
 
-	
+	//check if need refine ROI or not
 	if(bRefineROI==0){
 		nNewROIX = nROIX;
 		nNewROIY = nROIY;
@@ -94,8 +94,8 @@ int swfa_Transform(uint8_t* pCurBuffer, int nNewROIX, int nNewROIY, int nImgWidt
 	int nHalfWLHeight=0;
 	uint8_t *pY1 = Y1;
 	uint8_t *pBuf = pCurBuffer;
-	
-	
+	//unsigned int nTmp;
+	//int nTmp1;
 
 	if(!Y1){
 		pr_err("[swfa] %s: memory allocate error\n", __func__);
@@ -116,6 +116,19 @@ int swfa_Transform(uint8_t* pCurBuffer, int nNewROIX, int nNewROIY, int nImgWidt
 			pBuf+=4;
 		}
 	}
+	/*nTmp = nHalfWLHeight/2 * nImgWidth;
+	nTmp1 = nHalfWLHeight/2 * nImgWidth/2;
+	pTarget = swfaBuffer;
+	for(y=0; y<nHalfWLHeight/2; y++)
+	{
+		pY1 = Y1 + 4*y*nImgWidth;
+		for(x=0; x<nImgWidth/2; x++)
+		{
+			*pTarget=((*pY1) + (*(pY1+nImgWidth)))>>1;
+			*((pTarget++)+nTmp1) = abs((*pY1)-(*(pY1+nImgWidth)));
+			++pY1;
+		}
+	}*/
 	return 1;
 }
 
@@ -170,7 +183,7 @@ void swfa_DeleteBuf(int nBufWidth, int nBufHeight)
 
 static int __init swfa_init(void)
 {
-	
+	//For Blur Detection
 	Y1=0;
 	m_nCurROIWidth = -1;
 	m_nCurROIHeight = -1;

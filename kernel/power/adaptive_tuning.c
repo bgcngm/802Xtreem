@@ -67,7 +67,7 @@ static void notify_uspace_work_fn(struct work_struct *work)
 {
 	struct sleep_data *sleep_info = &core_sleep_info;
 
-	
+	/* Notify polling threads on change of value */
 	sysfs_notify(sleep_info->kobj, NULL, "timer_expired");
 }
 
@@ -207,7 +207,7 @@ static int __init msm_sleep_info_init(void)
 		}
 	}
 
-	
+	/* Create sysfs object */
 	err = add_sysfs_objects(sleep_info);
 	if (err) {
 		printk(KERN_INFO "msm_sleep_stats: Failed to initialize sleep stats");

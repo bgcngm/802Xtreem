@@ -496,6 +496,7 @@ static long snd_pcm_ioctl_compat(struct file *file, unsigned int cmd, unsigned l
 	case SNDRV_PCM_IOCTL_XRUN:
 	case SNDRV_PCM_IOCTL_LINK:
 	case SNDRV_PCM_IOCTL_UNLINK:
+	case SNDRV_PCM_IOCTL_ENABLE_EFFECT:
 		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
 			return snd_pcm_playback_ioctl1(file, substream, cmd, argp);
 		else

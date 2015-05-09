@@ -23,10 +23,12 @@
 #include <asm/ioctls.h>
 #include "audio_utils.h"
 
+//htc audio ++
 #undef pr_info
 #undef pr_err
 #define pr_info(fmt, ...) pr_aud_info(fmt, ##__VA_ARGS__)
 #define pr_err(fmt, ...) pr_aud_err(fmt, ##__VA_ARGS__)
+//htc audio --
 
 static int audio_in_pause(struct q6audio_in  *audio)
 {
@@ -45,9 +47,9 @@ static int audio_in_flush(struct q6audio_in  *audio)
 	int rc;
 
 	pr_debug("%s:session id %d: flush\n", __func__, audio->ac->session);
-	
+	/* Flush if session running */
 	if (audio->enabled) {
-		
+		/* Implicitly issue a pause to the encoder before flushing */
 		rc = audio_in_pause(audio);
 		if (rc < 0) {
 			pr_err("%s:session id %d: pause cmd failed rc=%d\n",
@@ -61,6 +63,8 @@ static int audio_in_flush(struct q6audio_in  *audio)
 				__func__, audio->ac->session, rc);
 			return rc;
 		}
+		/* 2nd arg: 0 -> run immediately
+		   3rd arg: 0 -> msw_ts, 4th arg: 0 ->lsw_ts */
 		q6asm_run(audio->ac, 0x00, 0x00, 0x00);
 		pr_debug("Rerun the session\n");
 	}
@@ -68,12 +72,12 @@ static int audio_in_flush(struct q6audio_in  *audio)
 	audio->wflush = 1;
 	memset(audio->out_frame_info, 0, sizeof(audio->out_frame_info));
 	wake_up(&audio->read_wait);
-	
+	/* get read_lock to ensure no more waiting read thread */
 	mutex_lock(&audio->read_lock);
 	audio->rflush = 0;
 	mutex_unlock(&audio->read_lock);
 	wake_up(&audio->write_wait);
-	
+	/* get write_lock to ensure no more waiting write thread */
 	mutex_lock(&audio->write_lock);
 	audio->wflush = 0;
 	mutex_unlock(&audio->write_lock);
@@ -87,14 +91,18 @@ static int audio_in_flush(struct q6audio_in  *audio)
 	return 0;
 }
 
+/* must be called with audio->lock held */
 int audio_in_enable(struct q6audio_in  *audio)
 {
 	if (audio->enabled)
 		return 0;
 
+	/* 2nd arg: 0 -> run immediately
+		3rd arg: 0 -> msw_ts, 4th arg: 0 ->lsw_ts */
 	return q6asm_run(audio->ac, 0x00, 0x00, 0x00);
 }
 
+/* must be called with audio->lock held */
 int audio_in_disable(struct q6audio_in  *audio)
 {
 	int rc = 0;
@@ -187,6 +195,7 @@ int audio_in_buf_alloc(struct q6audio_in *audio)
 
 	return rc;
 }
+/* ------------------- device --------------------- */
 long audio_in_ioctl(struct file *file,
 				unsigned int cmd, unsigned long arg)
 {
@@ -205,14 +214,19 @@ long audio_in_ioctl(struct file *file,
 	mutex_lock(&audio->lock);
 	switch (cmd) {
 	case AUDIO_FLUSH: {
+		/* Make sure we're stopped and we wake any threads
+		* that might be blocked holding the read_lock.
+		* While audio->stopped read threads will always
+		* exit immediately.
+		*/
 		rc = audio_in_flush(audio);
 		if (rc < 0)
 			pr_err("%s:session id %d: Flush Fail rc=%d\n",
 					__func__, audio->ac->session, rc);
-		else { 
+		else { /* Register back the flushed read buffer with DSP */
 			int cnt = 0;
 			while (cnt++ < audio->str_cfg.buffer_count)
-				q6asm_read(audio->ac); 
+				q6asm_read(audio->ac); /* Push buffer to DSP */
 			pr_debug("register the read buffer\n");
 		}
 		break;
@@ -242,6 +256,8 @@ long audio_in_ioctl(struct file *file,
 			rc = -EFAULT;
 			break;
 		}
+		/* Minimum single frame size,
+		   but with in maximum frames number */
 		if ((cfg.buffer_size < (audio->min_frame_size+ \
 			sizeof(struct meta_out_dsp))) ||
 			(cfg.buffer_count < FRAME_NUM)) {
@@ -286,6 +302,8 @@ long audio_in_ioctl(struct file *file,
 			break;
 		}
 
+		/* Restrict the num of frames per buf to coincide with
+		 * default buf size */
 		if (cfg.frames_per_buf > audio->max_frames_per_buf) {
 			rc = -EFAULT;
 			break;
@@ -354,7 +372,7 @@ long audio_in_ioctl(struct file *file,
 		break;
 	}
 	default:
-		
+		/* call codec specific ioctl */
 		rc = audio->enc_ioctl(file, cmd, arg);
 	}
 	mutex_unlock(&audio->lock);
@@ -398,7 +416,7 @@ ssize_t audio_in_read(struct file *file,
 			pr_debug("%s:session id %d: driver in stop state or"
 				"flush,No more buf to read", __func__,
 				audio->ac->session);
-			rc = 0;
+			rc = 0;/* End of File */
 			break;
 		}
 		if (!(atomic_read(&audio->out_count)) &&
@@ -442,7 +460,7 @@ ssize_t audio_in_read(struct file *file,
 				}
 				bytes_to_copy =
 					(size + audio->out_frame_info[idx][1]);
-				
+				/* Number of frames information copied */
 				buf += sizeof(unsigned char);
 				count -= sizeof(unsigned char);
 			} else {
@@ -527,17 +545,22 @@ ssize_t audio_in_write(struct file *file,
 			rc = -EBUSY;
 			break;
 		}
+		/* if no PCM data, might have only eos buffer
+		   such case do not hold cpu buffer */
 		if ((buf == start) && (count == mfield_size)) {
 			char eos_buf[sizeof(struct meta_in)];
-			
+			/* Processing begining of user buffer */
 			if (copy_from_user(eos_buf, buf, mfield_size)) {
 				rc = -EFAULT;
 				break;
 			}
+			/* Check if EOS flag is set and buffer has
+			 * contains just meta field
+			 */
 			extract_meta_info(eos_buf, &msw_ts, &lsw_ts,
 						&nflags);
 			buf += mfield_size;
-			
+			/* send the EOS and return */
 			pr_debug("%s:session id %d: send EOS"
 				"0x%8x\n", __func__,
 				audio->ac->session, nflags);
@@ -553,11 +576,14 @@ ssize_t audio_in_write(struct file *file,
 		cpy_ptr = data;
 		if (audio->buf_cfg.meta_info_enable) {
 			if (buf == start) {
-				
+				/* Processing beginning of user buffer */
 				if (copy_from_user(cpy_ptr, buf, mfield_size)) {
 					rc = -EFAULT;
 					break;
 				}
+				/* Check if EOS flag is set and buffer has
+				* contains just meta field
+				*/
 				extract_meta_info(cpy_ptr, &msw_ts, &lsw_ts,
 						&nflags);
 				buf += mfield_size;

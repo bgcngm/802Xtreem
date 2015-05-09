@@ -1,3 +1,4 @@
+/* SSD_RIL: header for dsda functions and definitions. */
 #ifndef __QSC_DSDA
 #define __QSC_DSDA
 

@@ -1,3 +1,6 @@
+/*
+ * Definitions for tpa6185 speaker amp chip.
+ */
 #ifndef TPA6185_H
 #define TPA6185_H
 
@@ -15,14 +18,14 @@ struct tpa6185_platform_data {
 	unsigned char spkr_cmd[7];
 	unsigned char hsed_cmd[7];
 	unsigned char rece_cmd[7];
-	
+	/* for spk enable gpio on cpu */
 	uint32_t gpio_tpa6185_spk_en_cpu;
 };
 
 struct tpa6185_config_data {
 	unsigned int data_len;
 	unsigned int mode_num;
-	unsigned char *cmd_data;  
+	unsigned char *cmd_data;  /* [mode][mode_kind][reserve][cmds..] */
 };
 
 enum TPA6185_Mode {

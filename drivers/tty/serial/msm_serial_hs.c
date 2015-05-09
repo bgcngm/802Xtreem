@@ -342,21 +342,22 @@ void dump_uart_ringbuffer(void)
 	msm_hs_dump_register(&msm_uport->uport);
 #endif
 
+	raw = kmalloc(RING_SIZE, GFP_KERNEL);
+	if (!raw)
+	{
+		printk(KERN_ERR "%s: tmp buffer couldn't be allocated.\n", __func__);
+		return;
+	}
+
 	spin_lock_irqsave(&DbgBuf.lock, flags);
 	if( DbgBuf.raw[RING_INDEX(DbgBuf.head-1)] != '\0' )
 	{
 		spin_unlock_irqrestore(&DbgBuf.lock, flags);
 		printk(KERN_ERR "%s: RingBuffer is not correct.\n", __func__);
+		kfree(raw);
 		return;
 	}
 
-	raw = kmalloc(RING_SIZE, GFP_KERNEL);
-	if(!raw)
-	{
-		spin_unlock_irqrestore(&DbgBuf.lock, flags);
-		printk(KERN_ERR "%s: tmp buffer couldn't be allocated.\n", __func__);
-		return;
-	}
 	memcpy(raw, DbgBuf.raw + DbgBuf.head, RING_SIZE-DbgBuf.head);
 	memcpy(raw+RING_SIZE-DbgBuf.head, DbgBuf.raw, DbgBuf.head);
 	spin_unlock_irqrestore(&DbgBuf.lock, flags);

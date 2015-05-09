@@ -24,15 +24,20 @@
 #include <asm/ioctls.h>
 #include "audio_utils.h"
 
+//htc audio ++
 #undef pr_info
 #undef pr_err
 #define pr_info(fmt, ...) pr_aud_info(fmt, ##__VA_ARGS__)
 #define pr_err(fmt, ...) pr_aud_err(fmt, ##__VA_ARGS__)
+//htc audio --
 
+/* Buffer with meta*/
 #define PCM_BUF_SIZE		(4096 + sizeof(struct meta_in))
 
+/* Maximum 10 frames in buffer with meta */
 #define FRAME_SIZE		(1 + ((32+sizeof(struct meta_out_dsp)) * 10))
 
+/* ------------------- device --------------------- */
 static long amrnb_in_ioctl(struct file *file,
 				unsigned int cmd, unsigned long arg)
 {
@@ -93,7 +98,7 @@ static long amrnb_in_ioctl(struct file *file,
 			break;
 		}
 		while (cnt++ < audio->str_cfg.buffer_count)
-			q6asm_read(audio->ac); 
+			q6asm_read(audio->ac); /* Push buffer to DSP */
 		rc = 0;
 		pr_debug("%s:session id %d: AUDIO_START success enable[%d]\n",
 				__func__, audio->ac->session, audio->enabled);
@@ -132,6 +137,9 @@ static long amrnb_in_ioctl(struct file *file,
 			rc = -EINVAL;
 			break;
 		}
+		/* AMR NB encoder accepts values between 0-7
+		   while openmax provides value between 1-8
+		   as per spec */
 		enc_cfg->band_mode = (cfg.band_mode - 1);
 		enc_cfg->dtx_enable = (cfg.dtx_enable ? 1 : 0);
 		enc_cfg->frame_format = 0;
@@ -159,7 +167,7 @@ static int amrnb_in_open(struct inode *inode, struct file *file)
 			"driver\n", __func__);
 		return -ENOMEM;
 	}
-	
+	/* Allocate memory for encoder config param */
 	audio->enc_cfg = kzalloc(sizeof(struct msm_audio_amrnb_enc_config_v2),
 				GFP_KERNEL);
 	if (audio->enc_cfg == NULL) {
@@ -177,6 +185,9 @@ static int amrnb_in_open(struct inode *inode, struct file *file)
 	init_waitqueue_head(&audio->read_wait);
 	init_waitqueue_head(&audio->write_wait);
 
+	/* Settings will be re-config at AUDIO_SET_CONFIG,
+	* but at least we need to have initial config
+	*/
 	audio->str_cfg.buffer_size = FRAME_SIZE;
 	audio->str_cfg.buffer_count = FRAME_NUM;
 	audio->min_frame_size = 32;
@@ -201,7 +212,7 @@ static int amrnb_in_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 	}
 
-	
+	/* open amrnb encoder in T/NT mode */
 	if ((file->f_mode & FMODE_WRITE) &&
 		(file->f_mode & FMODE_READ)) {
 		audio->feedback = NON_TUNNEL_MODE;
@@ -225,7 +236,7 @@ static int amrnb_in_open(struct inode *inode, struct file *file)
 			rc = -ENODEV;
 			goto fail;
 		}
-		
+		/* register for tx overflow (valid for tunnel mode only) */
 		rc = q6asm_reg_tx_overflow(audio->ac, 0x01);
 		if (rc < 0) {
 			pr_err("%s:session id %d: TX Overflow registration"

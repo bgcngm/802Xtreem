@@ -56,4 +56,4 @@ static inline int msm_cpuidle_unregister_notifier(unsigned int cpu,
 { return -ENODEV; }
 #endif
 
-#endif 
+#endif /* __ARCH_ARM_MACH_MSM_CPUIDLE_H */

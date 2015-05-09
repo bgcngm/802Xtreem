@@ -28,6 +28,9 @@ static DECLARE_WORK(smux_loopback_work, smux_loopback_rx_worker);
 static struct kfifo smux_loop_pkt_fifo;
 static DEFINE_SPINLOCK(hw_fn_lock);
 
+/**
+ * Initialize loopback framework (called by n_smux.c).
+ */
 int smux_loopback_init(void)
 {
 	int ret = 0;
@@ -46,6 +49,14 @@ int smux_loopback_init(void)
 	return ret;
 }
 
+/**
+ * Simulate a write to the TTY hardware by duplicating
+ * the TX packet and putting it into the RX queue.
+ *
+ * @pkt     Packet to write
+ *
+ * @returns 0 on success
+ */
 int smux_tx_loopback(struct smux_pkt_t *pkt_ptr)
 {
 	struct smux_pkt_t *send_pkt;
@@ -53,10 +64,10 @@ int smux_tx_loopback(struct smux_pkt_t *pkt_ptr)
 	int i;
 	int ret;
 
-	
+	/* duplicate packet */
 	send_pkt = smux_alloc_pkt();
 
-	
+	/* pkt alloc fail */
 	if (!send_pkt) {
 		pr_err("%s: send_pkt alloc fail.\n", __func__);
 		ret = -ENOMEM;
@@ -74,7 +85,7 @@ int smux_tx_loopback(struct smux_pkt_t *pkt_ptr)
 				pkt_ptr->hdr.payload_len);
 	}
 
-	
+	/* queue duplicate as pseudo-RX data */
 	spin_lock_irqsave(&hw_fn_lock, flags);
 	i = kfifo_avail(&smux_loop_pkt_fifo);
 	if (i < sizeof(struct smux_pkt_t *)) {
@@ -100,6 +111,11 @@ out:
 	return ret;
 }
 
+/**
+ * Receive loopback byte processor.
+ *
+ * @pkt  Incoming packet
+ */
 static void smux_loopback_rx_byte(struct smux_pkt_t *pkt)
 {
 	static int simulated_retry_cnt;
@@ -107,7 +123,7 @@ static void smux_loopback_rx_byte(struct smux_pkt_t *pkt)
 
 	switch (pkt->hdr.flags) {
 	case SMUX_WAKEUP_REQ:
-		
+		/* reply with ACK after appropriate delays */
 		++simulated_retry_cnt;
 		if (simulated_retry_cnt >= smux_simulate_wakeup_delay) {
 			pr_err("%s: completed %d of %d\n",
@@ -117,25 +133,30 @@ static void smux_loopback_rx_byte(struct smux_pkt_t *pkt)
 			simulated_retry_cnt = 0;
 			smux_rx_state_machine(&ack, 1, 0);
 		} else {
-			
+			/* force retry */
 			pr_err("%s: dropping wakeup request %d of %d\n",
 					__func__, simulated_retry_cnt,
 					smux_simulate_wakeup_delay);
 		}
 		break;
 	case SMUX_WAKEUP_ACK:
-		
+		/* this shouldn't happen since we don't send requests */
 		pr_err("%s: wakeup ACK unexpected\n", __func__);
 		break;
 
 	default:
-		
+		/* invalid character */
 		pr_err("%s: invalid character 0x%x\n",
 				__func__, (unsigned)pkt->hdr.flags);
 		break;
 	}
 }
 
+/**
+ * Simulated remote hardware used for local loopback testing.
+ *
+ * @work Not used
+ */
 static void smux_loopback_rx_worker(struct work_struct *work)
 {
 	struct smux_pkt_t *pkt;
@@ -173,7 +194,7 @@ static void smux_loopback_rx_worker(struct work_struct *work)
 			if (pkt->hdr.flags & SMUX_CMD_OPEN_ACK)
 				break;
 
-			
+			/* Reply with Open ACK */
 			smux_init_pkt(&reply_pkt);
 			reply_pkt.hdr.lcid = lcid;
 			reply_pkt.hdr.cmd = SMUX_CMD_OPEN_LCH;
@@ -184,7 +205,7 @@ static void smux_loopback_rx_worker(struct work_struct *work)
 			smux_serialize(&reply_pkt, data, &len);
 			smux_rx_state_machine(data, len, 0);
 
-			
+			/* Send Remote Open */
 			smux_init_pkt(&reply_pkt);
 			reply_pkt.hdr.lcid = lcid;
 			reply_pkt.hdr.cmd = SMUX_CMD_OPEN_LCH;
@@ -205,7 +226,7 @@ static void smux_loopback_rx_worker(struct work_struct *work)
 			if (pkt->hdr.flags == SMUX_CMD_CLOSE_ACK)
 				break;
 
-			
+			/* Reply with Close ACK */
 			smux_init_pkt(&reply_pkt);
 			reply_pkt.hdr.lcid = lcid;
 			reply_pkt.hdr.cmd = SMUX_CMD_CLOSE_LCH;
@@ -215,7 +236,7 @@ static void smux_loopback_rx_worker(struct work_struct *work)
 			smux_serialize(&reply_pkt, data, &len);
 			smux_rx_state_machine(data, len, 0);
 
-			
+			/* Send Remote Close */
 			smux_init_pkt(&reply_pkt);
 			reply_pkt.hdr.lcid = lcid;
 			reply_pkt.hdr.cmd = SMUX_CMD_CLOSE_LCH;
@@ -233,7 +254,7 @@ static void smux_loopback_rx_worker(struct work_struct *work)
 				break;
 			}
 
-			
+			/* Echo back received data */
 			smux_init_pkt(&reply_pkt);
 			reply_pkt.hdr.lcid = lcid;
 			reply_pkt.hdr.cmd = SMUX_CMD_DATA;
@@ -252,7 +273,7 @@ static void smux_loopback_rx_worker(struct work_struct *work)
 				break;
 			}
 
-			
+			/* Echo back received status */
 			smux_init_pkt(&reply_pkt);
 			reply_pkt.hdr.lcid = lcid;
 			reply_pkt.hdr.cmd = SMUX_CMD_STATUS;
@@ -265,7 +286,7 @@ static void smux_loopback_rx_worker(struct work_struct *work)
 			break;
 
 		case SMUX_CMD_PWR_CTL:
-			
+			/* reply with ack */
 			smux_init_pkt(&reply_pkt);
 			reply_pkt.hdr.lcid = SMUX_BROADCAST_LCID;
 			reply_pkt.hdr.cmd = SMUX_CMD_PWR_CTL;

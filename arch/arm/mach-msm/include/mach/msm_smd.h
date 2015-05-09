@@ -23,7 +23,7 @@
 
 typedef struct smd_channel smd_channel_t;
 
-#define SMD_MAX_CH_NAME_LEN 20 
+#define SMD_MAX_CH_NAME_LEN 20 /* includes null char at end */
 
 #define SMD_EVENT_DATA 1
 #define SMD_EVENT_OPEN 2
@@ -31,6 +31,14 @@ typedef struct smd_channel smd_channel_t;
 #define SMD_EVENT_STATUS 4
 #define SMD_EVENT_REOPEN_READY 5
 
+/*
+ * SMD Processor ID's.
+ *
+ * For all processors that have both SMSM and SMD clients,
+ * the SMSM Processor ID and the SMD Processor ID will
+ * be the same.  In cases where a processor only supports
+ * SMD, the entry will only exist in this enum.
+ */
 enum {
 	SMD_APPS = SMSM_APPS,
 	SMD_MODEM = SMSM_MODEM,
@@ -67,21 +75,44 @@ enum {
 
 };
 
+/*
+ * SMD IRQ Configuration
+ *
+ * Used to initialize IRQ configurations from platform data
+ *
+ * @irq_name: irq_name to query platform data
+ * @irq_id: initialized to -1 in platform data, stores actual irq id on
+ *		successful registration
+ * @out_base: if not null then settings used for outgoing interrupt
+ *		initialied from platform data
+ */
 
 struct smd_irq_config {
-	
+	/* incoming interrupt config */
 	const char *irq_name;
 	unsigned long flags;
 	int irq_id;
 	const char *device_name;
 	const void *dev_id;
 
-	
+	/* outgoing interrupt config */
 	uint32_t out_bit_pos;
 	void __iomem *out_base;
 	uint32_t out_offset;
 };
 
+/*
+ * SMD subsystem configurations
+ *
+ * SMD subsystems configurations for platform data. This contains the
+ * M2A and A2M interrupt configurations for both SMD and SMSM per
+ * subsystem.
+ *
+ * @subsys_name: name of subsystem passed to PIL
+ * @irq_config_id: unique id for each subsystem
+ * @edge: maps to actual remote subsystem edge
+ *
+ */
 struct smd_subsystem_config {
 	unsigned irq_config_id;
 	const char *subsys_name;
@@ -92,10 +123,23 @@ struct smd_subsystem_config {
 
 };
 
+/*
+ * Subsystem Restart Configuration
+ *
+ * @disable_smsm_reset_handshake
+ */
 struct smd_subsystem_restart_config {
 	int disable_smsm_reset_handshake;
 };
 
+/*
+ * Shared Memory Regions
+ *
+ * the array of these regions is expected to be in ascending order by phys_addr
+ *
+ * @phys_addr: physical base address of the region
+ * @size: size of the region in bytes
+ */
 struct smd_smem_regions {
 	void *phys_addr;
 	unsigned size;
@@ -110,13 +154,18 @@ struct smd_platform {
 };
 
 #ifdef CONFIG_MSM_SMD
+/* warning: notify() may be called before open returns */
 int smd_open(const char *name, smd_channel_t **ch, void *priv,
 	     void (*notify)(void *priv, unsigned event));
 
 int smd_close(smd_channel_t *ch);
 
+/* passing a null pointer for data reads and discards */
 int smd_read(smd_channel_t *ch, void *data, int len);
 int smd_read_from_cb(smd_channel_t *ch, void *data, int len);
+/* Same as smd_read() but takes a data buffer from userspace
+ * The function might sleep.  Only safe to call from user context
+ */
 int smd_read_user_buffer(smd_channel_t *ch, void *data, int len);
 
 /* Write to stream channels may do a partial write and return
@@ -125,19 +174,31 @@ int smd_read_user_buffer(smd_channel_t *ch, void *data, int len);
 ** it will return the requested length written or an error.
 */
 int smd_write(smd_channel_t *ch, const void *data, int len);
+/* Same as smd_write() but takes a data buffer from userspace
+ * The function might sleep.  Only safe to call from user context
+ */
 int smd_write_user_buffer(smd_channel_t *ch, const void *data, int len);
 
 int smd_write_avail(smd_channel_t *ch);
 int smd_read_avail(smd_channel_t *ch);
 
+/* Returns the total size of the current packet being read.
+** Returns 0 if no packets available or a stream channel.
+*/
 int smd_cur_packet_size(smd_channel_t *ch);
 
 
 #if 0
+/* these are interruptable waits which will block you until the specified
+** number of bytes are readable or writable.
+*/
 int smd_wait_until_readable(smd_channel_t *ch, int bytes);
 int smd_wait_until_writable(smd_channel_t *ch, int bytes);
 #endif
 
+/* these are used to get and set the IF sigs of a channel.
+ * DTR and RTS can be set; DSR, CTS, CD and RI can be read.
+ */
 int smd_tiocmget(smd_channel_t *ch);
 int smd_tiocmset(smd_channel_t *ch, unsigned int set, unsigned int clear);
 int
@@ -162,6 +223,21 @@ void smd_enable_read_intr(smd_channel_t *ch);
  */
 void smd_disable_read_intr(smd_channel_t *ch);
 
+/* Starts a packet transaction.  The size of the packet may exceed the total
+ * size of the smd ring buffer.
+ *
+ * @ch: channel to write the packet to
+ * @len: total length of the packet
+ *
+ * Returns:
+ *      0 - success
+ *      -ENODEV - invalid smd channel
+ *      -EACCES - non-packet channel specified
+ *      -EINVAL - invalid length
+ *      -EBUSY - transaction already in progress
+ *      -EAGAIN - no enough memory in ring buffer to start transaction
+ *      -EPERM - unable to sucessfully start transaction due to write error
+ */
 int smd_write_start(smd_channel_t *ch, int len);
 
 /* Writes a segment of the packet for a packet transaction.
@@ -190,12 +266,41 @@ int smd_write_segment(smd_channel_t *ch, void *data, int len, int user_buf);
  */
 int smd_write_end(smd_channel_t *ch);
 
+/*
+ * Returns a pointer to the subsystem name or NULL if no
+ * subsystem name is available.
+ *
+ * @type - Edge definition
+ */
 const char *smd_edge_to_subsystem(uint32_t type);
 
+/*
+ * Returns a pointer to the subsystem name given the
+ * remote processor ID.
+ *
+ * @pid     Remote processor ID
+ * @returns Pointer to subsystem name or NULL if not found
+ */
 const char *smd_pid_to_subsystem(uint32_t pid);
 
+/*
+ * Checks to see if a new packet has arrived on the channel.  Only to be
+ * called with interrupts disabled.
+ *
+ * @ch: channel to check if a packet has arrived
+ *
+ * Returns:
+ *      0 - packet not available
+ *      1 - packet available
+ *      -EINVAL - NULL parameter or non-packet based channel provided
+ */
 int smd_is_pkt_avail(smd_channel_t *ch);
 
+/*
+ * SMD initialization function that registers for a SMD platform driver.
+ *
+ * returns success on successful driver registration.
+ */
 int __init msm_smd_init(void);
 
 #else

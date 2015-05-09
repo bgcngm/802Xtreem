@@ -22,6 +22,7 @@ struct wcnss_prealloc {
 	void *ptr;
 };
 
+/* pre-alloced mem for WLAN driver */
 static struct wcnss_prealloc wcnss_allocs[] = {
 	{0, 8  * 1024, NULL},
 	{0, 8  * 1024, NULL},
@@ -70,7 +71,7 @@ void *wcnss_prealloc_get(unsigned int size)
 			continue;
 
 		if (wcnss_allocs[i].size > size) {
-			
+			/* we found the slot */
 			wcnss_allocs[i].occupied = 1;
 			mutex_unlock(&alloc_lock);
 			return wcnss_allocs[i].ptr;

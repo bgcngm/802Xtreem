@@ -28,10 +28,10 @@ struct rpm_clk {
 	const int rpm_status_id;
 	const bool active_only;
 	unsigned last_set_khz;
-	
+	/* 0 if active_only. Otherwise, same as last_set_khz. */
 	unsigned last_set_sleep_khz;
 	bool enabled;
-	bool branch; 
+	bool branch; /* true: RPM only accepts 1 for ON and 0 for OFF */
 	unsigned factor;
 	struct clk_rpmrs_data *rpmrs_data;
 

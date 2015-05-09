@@ -131,7 +131,7 @@ static int tps61310_i2c_command(uint8_t address, uint8_t data)
 					err |= tps61310_i2c_command(0x07, 0x46);
 					err |= tps61310_i2c_command(0x04, 0x10);
 				} else {
-					
+					/* voltage drop monitor*/
 					err |= tps61310_i2c_command(0x07, 0xF6);
 				}
 				if (err)
@@ -154,6 +154,9 @@ static int flashlight_turn_off(void)
 	tps61310_i2c_command(0x02, 0x08);
 	tps61310_i2c_command(0x01, 0x00);
 	FLT_INFO_LOG("%s %d\n", __func__,this_tps61310->mode_status);
+	/* Avoid current overflow consumption while flash with 1.5A,
+	 *  enable/disable moden function
+	 */
 	if (this_tps61310->power_save) {
 		status = this_tps61310->mode_status;
 		if (status == 2 || (status >= 10 && status <=16)) {
@@ -204,7 +207,7 @@ int tps61310_flashlight_control(int mode)
 			err |= tps61310_i2c_command(0x07, 0x46);
 			err |= tps61310_i2c_command(0x04, 0x10);
 		} else {
-			
+			/* voltage drop monitor*/
 			err |= tps61310_i2c_command(0x07, 0xF6);
 		}
 	}
@@ -692,25 +695,25 @@ static void fl_lcdev_brightness_set(struct led_classdev *led_cdev,
 			mode = FL_MODE_TORCH;
 	} else if (brightness > LED_HALF && brightness <= LED_FULL) {
 		if (brightness == (LED_HALF + 1))
-			mode = FL_MODE_PRE_FLASH; 
+			mode = FL_MODE_PRE_FLASH; /* pre-flash mode */
 		else if (brightness == (LED_HALF + 3))
-			mode = FL_MODE_FLASH_LEVEL1; 
+			mode = FL_MODE_FLASH_LEVEL1; /* Flashlight mode LEVEL1*/
 		else if (brightness == (LED_HALF + 4))
-			mode = FL_MODE_FLASH_LEVEL2; 
+			mode = FL_MODE_FLASH_LEVEL2; /* Flashlight mode LEVEL2*/
 		else if (brightness == (LED_HALF + 5))
-			mode = FL_MODE_FLASH_LEVEL3; 
+			mode = FL_MODE_FLASH_LEVEL3; /* Flashlight mode LEVEL3*/
 		else if (brightness == (LED_HALF + 6))
-			mode = FL_MODE_FLASH_LEVEL4; 
+			mode = FL_MODE_FLASH_LEVEL4; /* Flashlight mode LEVEL4*/
 		else if (brightness == (LED_HALF + 7))
-			mode = FL_MODE_FLASH_LEVEL5; 
+			mode = FL_MODE_FLASH_LEVEL5; /* Flashlight mode LEVEL5*/
 		else if (brightness == (LED_HALF + 8))
-			mode = FL_MODE_FLASH_LEVEL6; 
+			mode = FL_MODE_FLASH_LEVEL6; /* Flashlight mode LEVEL6*/
 		else if (brightness == (LED_HALF + 9))
-			mode = FL_MODE_FLASH_LEVEL7; 
+			mode = FL_MODE_FLASH_LEVEL7; /* Flashlight mode LEVEL7*/
 		else
-			mode = FL_MODE_FLASH; 
+			mode = FL_MODE_FLASH; /* Flashlight mode */
 	} else
-		
+		/* off and else */
 		mode = FL_MODE_OFF;
 
 	if ((mode != FL_MODE_OFF) && switch_state == 0){
@@ -785,7 +788,7 @@ static int tps61310_probe(struct i2c_client *client,
 	if (!tps61310_work_queue)
 		goto err_create_tps61310_work_queue;
 
-	
+	/* Register led class device */
 	tps61310->fl_lcdev.name           = FLASHLIGHT_NAME;
 	tps61310->fl_lcdev.brightness_set = fl_lcdev_brightness_set;
 	tps61310->strb0                   = pdata->tps61310_strb0;
@@ -820,7 +823,7 @@ static int tps61310_probe(struct i2c_client *client,
 	if (err < 0) {
 		FLT_ERR_LOG("%s, create function_switch sysfs fail\n", __func__);
 	}
-	
+	/* initial register set as shutdown mode */
 	tps61310_i2c_command(0x01, 0x00);
 
 	if (this_tps61310->enable_FLT_1500mA) {
@@ -828,10 +831,10 @@ static int tps61310_probe(struct i2c_client *client,
 		tps61310_i2c_command(0x07, 0x46);
 		tps61310_i2c_command(0x04, 0x10);
 	} else {
-		
+		/* voltage drop monitor*/
 		tps61310_i2c_command(0x07, 0xF6);
 	}
-	
+	/* Disable Tx-mask for issue of can flash while using lower band radio */
 	if (this_tps61310->disable_tx_mask)
 		tps61310_i2c_command(0x03, 0xC0);
 	if (this_tps61310->reset)

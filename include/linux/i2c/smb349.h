@@ -17,6 +17,7 @@
 #include <mach/htc_charger.h>
 #endif
 
+/* Register definitions */
 #define SMB_CHG_CURR_REG			0x00
 #define CHG_OTHER_CURRENT_REG		0x01
 #define VAR_FUNC_REG			0x02
@@ -49,39 +50,52 @@
 #define STATUS_D_REG				0x3E
 #define STATUS_E_REG				0x3F
 
+/* Status bits and masks */
 #define CHG_STATUS_MASK		SMB349_MASK(2, 1)
 #define CHG_ENABLE_STATUS_BIT		BIT(0)
 
+/* Control bits and masks */
+/*  BIT |7|6|5|4|		*/
 #define FAST_CHG_CURRENT_MASK			SMB349_MASK(4, 4)
+///#define PRE_CHG_CURRENT_MASK			SMB349_MASK(4, 4)
 
 
+/*  BIT |2|		*/
 #define SUSPEND_MODE_MASK				SMB349_MASK(1, 2)
 
 #define CHARGING_ENABLE_MASK				SMB349_MASK(1, 1)
 #define VOLIATILE_WRITE_PERMISSIOIN_MASK		SMB349_MASK(1, 7)
 #define CURRENT_TERMINATION_MASK			SMB349_MASK(1, 6)
 
+/*  BIT |4|		*/
 #define OTG_ENABLE_MASK				SMB349_MASK(1, 4)
 #define AICL_MASK				SMB349_MASK(1, 4)
 #define USBCS_MASK				SMB349_MASK(1, 4)
 
+/*  BIT |3|2|1|0|		*/
 #define AC_INPUT_CURRENT_LIMIT_MASK		SMB349_MASK(4, 0)
 #define DC_INPUT_CURRENT_LIMIT_MASK		SMB349_MASK(4, 0)
 
+/*  BIT |7|6|5|		*/
 #define PRE_CHG_CURRENT_MASK			SMB349_MASK(3, 5)
 
 #define USB_HC_MODE_MASK			SMB349_MASK(1, 0)
 #define TERMINATION_CURRENT_MASK		SMB349_MASK(3, 2)
 
+/*  BIT |1|		*/
 #define USB_1_5_MODE_MASK			SMB349_MASK(1, 1)
 
+/*  BIT |7|		*/
 #define IS_SUSPEND_MODE_MASK			SMB349_MASK(1, 7)
 
+/*  BIT |3|2|		*/
 #define OTG_CURRENT_MASK			SMB349_MASK(2, 2)
 
 
+/*  BIT |6|5|		*/
 #define PIN_CONTROL_ACTIVE_MASK			SMB349_MASK(2, 5)
 
+/*  BIT |7|6|		*/
 #define PRE_CHG_TO_FAST_CHG_THRESH_MASK		SMB349_MASK(2, 6)
 #define SWITCH_FREQ_MASK			SMB349_MASK(2, 6)
 #define OTG_I2C_PIN_MASK			SMB349_MASK(2, 6)
@@ -108,6 +122,8 @@
 #define USBCS_REGISTER_MODE			0
 #define CURR_TERM_END_CHG_BIT			BIT(6)
 
+/*************************************************/
+//        IRQ and STATUS
 #define SMB349_HOT_TEMPERATURE_HARD_LIMIT_IRQ			7
 #define SMB349_HOT_TEMPERATURE_HARD_LIMIT_STATUS                6
 #define SMB349_COLD_TEMPERATURE_HARD_LIMIT_IRQ                  5
@@ -144,6 +160,14 @@
 #define SMB349_CHARGE_TIMEOUT_IRQ                               1
 #define SMB349_CHARGE_TIMEOUT_STATUS                            0
 
+/*
+#define SMB349_CIN_OVER_VOLTAGE_IRQ				7
+#define SMB349_DCIN_OVER_VOLTAGE_STATUS				6
+#define SMB349_DCIN_UNDER_VOLTAGE_IRQ				5
+#define SMB349_DCIN_UNDER_VOLTAGE_STATUS			4
+#define SMB349_AFVC_ACTIVE_IRQ					3
+#define SMB349_AFVC_ACTIVE_STATUS				2
+*/
 #define SMB349_DCIN_OVER_VOLTAGE_STATUS				2
 
 #define SMB349_OTG_OVER_CURRENT_LIMIT_IRQ			7
@@ -154,6 +178,7 @@
 #define SMB349_OTG_DETECTION_STATUS                     	2
 #define SMB349_POWER_OK_IRQ					1
 #define SMB349_POWER_OK_STATUS					0
+/*************************************************/
 
 
 #define SMB349_FAST_CHG_MIN_MA	1000
@@ -167,6 +192,7 @@
 #define SMB349_OTG_I2C_CONTROL		0x0
 #define SMB349_OTG_PIN_CONTROL		0x1
 
+/* 0x0a */
 #define SMB34X_OTG_CURR_LIMIT_SHIFT	2
 #define SMB349_SWITCH_FREQ_SHIFT	6
 
@@ -181,15 +207,25 @@
 
 
 
+/*  	011011b		*/
 #define	SMB349_FLOAT_VOL_4000_MV	0x1B
+/*  	100101b		*/
 #define	SMB349_FLOAT_VOL_4200_MV	0x25
+/*  	100110b		*/
 #define	SMB349_FLOAT_VOL_4220_MV	0x26
+/*  	100111b		*/
 #define	SMB349_FLOAT_VOL_4240_MV	0x27
+/*  	101000b		*/
 #define	SMB349_FLOAT_VOL_4260_MV	0x28
+/*  	101001b		*/
 #define	SMB349_FLOAT_VOL_4280_MV	0x29
+/*  	101010b		*/
 #define	SMB349_FLOAT_VOL_4300_MV	0x2A
+/*  	101011b		*/
 #define	SMB349_FLOAT_VOL_4320_MV	0x2B
+/*  	101100b		*/
 #define	SMB349_FLOAT_VOL_4340_MV	0x2C
+/*	101101b		*/
 #define	SMB349_FLOAT_VOL_4350_MV	0x2D
 
 
@@ -204,6 +240,7 @@
 #define SMB349_PIN_CONTROL_ACTIVE_HIGH		0x2
 #define SMB349_PIN_CONTROL_ACTIVE_LOW		0x3
 
+/*  AICL RESULT */
 #define		AICL_RESULT_500MA	0x0
 #define		AICL_RESULT_900MA       0x1
 #define		AICL_RESULT_1000MA      0x2
@@ -233,6 +270,7 @@
 #define AICL_DISABLE		0
 
 
+/* FAST CHARGE current */
 #define		FAST_CHARGE_500MA	0x0
 #define		FAST_CHARGE_600MA       0x1
 #define		FAST_CHARGE_700MA       0x2
@@ -270,6 +308,7 @@
 
 
 
+/* DC Input current limit */
 #define		DC_INPUT_500MA		0x0
 #define		DC_INPUT_900MA		0x1
 #define		DC_INPUT_1000MA		0x2
@@ -287,6 +326,7 @@
 #define		DC_INPUT_3000MA		0xe
 #define		DC_INPUT_3500MA		0xf
 
+/* pre-charge input current limit */
 #define		PRECHG_CURR_100MA		0x0
 #define		PRECHG_CURR_150MA		0x1
 #define		PRECHG_CURR_200MA		0x2
@@ -320,6 +360,13 @@ struct smb349_chg_int_notifier {
 	void (*func)(int int_reg, int value);
 };
 
+/**
+ * struct smb349_platform_data
+ * structure to pass board specific information to the smb137b charger driver
+ * @chg_current_ma:		maximum fast charge current in mA
+ * @en_n_gpio:		gpio to enable or disable charging
+ * @chg_susp_gpio:	put active low to allow chip to suspend and disable I2C
+ */
 struct smb349_platform_data {
 	int chg_susp_gpio;
 	int chg_stat_gpio;
@@ -346,6 +393,8 @@ int smb349_eoc_notify(enum htc_extchg_event_type main_event);
 int smb349_event_notify(enum htc_extchg_event_type extchg_event);
 int smb349_temp_notify(enum htc_extchg_event_type main_event);
 int smb349_enable_5v_output(bool mhl_in);
+///int _smb349_enable_charging(bool enable);
+/// int smb349_set_pwrsrc(unsigned int mode);
 int smb349_config(void);
 void smb349_dbg(void);
 int  smb349_dump_reg(u8 reg);
@@ -365,6 +414,7 @@ int smb349_masked_write(int reg, u8 mask, u8 val);
 int smb349_not_allow_charging_cycle_end(void);
 int smb349_enable_pwrsrc(bool enable);
 int smb349_set_hsml_target_ma(int target_ma);
+///int _smb349_enable_pwrsrc(bool enable);
 int smb349_set_pwrsrc_and_charger_enable(enum htc_power_source_type src, bool chg_enable, bool pwrsrc_enable);
 int smb349_set_hc_mode(unsigned int enable);
 int smb349_switch_usbcs_mode(int mode);
@@ -380,7 +430,9 @@ int smb349_get_charging_src(int *result);
 int smb349_get_charging_enabled(int *result);
 int smb349_is_charger_overvoltage(int* result);
 int smb349_charger_get_attr_text(char *buf, int size);
+/* hook func for pmic8921 ext_usb charger + */
 int smb349_start_charging(void *ctx);
 int smb349_stop_charging(void *ctx);
 bool smb349_is_trickle_charging(void *ctx);
-#endif		
+/* hook func for pmic8921 ext_usb charger - */
+#endif		//__SMB349_H__
